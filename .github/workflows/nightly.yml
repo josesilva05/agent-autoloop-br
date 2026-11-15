@@ -1,5 +1,5 @@
 name: nightly
-# A run asked for by commit is listed under the branch's newest commit, so its name says which one it checked.
+# Uma execução solicitada por commit aparece listada sob o commit mais recente do branch, então o nome dela diz qual foi verificado.
 run-name: ${{ inputs.commit && format('nightly {0}', inputs.commit) || 'nightly' }}
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       commit:
-        description: 要检查的提交，不填就是这个分支最新的
+        description: Commit a verificar; se ficar vazio, usa o mais recente deste branch
         required: false
   pull_request:
     paths:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 jobs:
-  # The long simulation, the real kills and the broken kernel conditions: too slow to hold up every merge.
+  # A simulação longa, as mortes reais de processo e as condições de kernel corrompido: lentas demais para travar cada merge.
   deep:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -32,11 +32,11 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci
-      # A pull request that changes this file or sim/ gets the kills and the mutations; the long runs wait for the schedule.
+      # Um pull request que altera este arquivo ou sim/ recebe as mortes de processo e as mutações; as execuções longas esperam o agendamento.
       - if: github.event_name != 'pull_request'
         run: npm test
       - run: npm run test:deep
-  # The install says Node 24 or newer, and every other check runs on 24.
+  # A instalação exige Node 24 ou mais novo, e todas as outras verificações rodam em 24.
   newest-node:
     strategy:
       fail-fast: false

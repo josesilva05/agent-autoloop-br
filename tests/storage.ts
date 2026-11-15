@@ -1,4 +1,4 @@
-// Fixture resets only; production writes go through decide/commit/evolve.
+// Só para reset de fixture; escritas de produção passam por decide/commit/evolve.
 import { fixtureClear } from "./hub.ts";
 import type { Table } from "../kernel/evolve.ts";
 export { all, one } from "../host/runtime.ts";
