@@ -1,5 +1,6 @@
-// Failure modes: a body declared far too large is read anyway, so a request nobody has checked yet holds a connection for
-// nothing; a client told no is left on a connection that still expects the rest of its body, which breaks its next request.
+// Modos de falha: um corpo declarado grande demais é lido mesmo assim, então uma requisição que ninguém verificou ainda
+// segura uma conexão à toa; um cliente que recebeu uma negativa é deixado numa conexão que ainda espera o resto do corpo
+// dele, o que quebra a próxima requisição.
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { connect, type AddressInfo } from "node:net";
@@ -15,7 +16,7 @@ after(runtime.close);
 const key = hub.addKey("source", "app");
 const MB = 1024 * 1024;
 
-test("a body declared far too large isn't read at all", async () => {
+test("um corpo declarado grande demais não é lido de jeito nenhum", async () => {
   let read = 0;
   const body = new ReadableStream({
     pull(controller) {
@@ -32,10 +33,10 @@ test("a body declared far too large isn't read at all", async () => {
     } as RequestInit),
   );
   assert.equal(answer.status, 413);
-  assert.ok(read <= MB, `read ${read} bytes`);
+  assert.ok(read <= MB, `leu ${read} bytes`);
 });
 
-test("a refused request that never sent its body gets its answer and a closed connection", async () => {
+test("uma requisição recusada que nunca enviou o corpo recebe a resposta e uma conexão fechada", async () => {
   const server = serve(0);
   await once(server, "listening");
   const { port } = server.address() as AddressInfo;

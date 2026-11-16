@@ -1,4 +1,4 @@
-// What's waiting for delivery, as events: each labelled item, with an id that stays the same until something changes.
+// O que aguarda entrega, em forma de eventos: cada item marcado, com um id que permanece o mesmo até algo mudar.
 import { github, pages } from "./github.ts";
 import { hasLabel, unattendedFailure } from "./handoff.ts";
 import { pendingEvents } from "./input.ts";
@@ -17,7 +17,7 @@ export async function poll(repo: string, dispatch = false) {
       rows.push({
         number: issue.number,
         head: pr?.head.sha ?? "",
-        // One item without a readable record must not hold up the others.
+        // Um único item sem registro legível não pode travar os outros.
         labelEvent: marked?.id ?? 0,
         kind: pr ? "pull_request" : "issues",
       });
@@ -51,15 +51,19 @@ if (import.meta.main) {
   const [, , first, ...rest] = process.argv;
   const dispatch = first === "--dispatch";
   const repos = dispatch ? rest : [first];
-  if (!repos.length) throw new Error("请指定至少一个 owner/name 仓库");
+  if (!repos.length) throw new Error("Informe pelo menos um repositório owner/name");
   const results = await Promise.allSettled(repos.map((repo) => poll(repo, dispatch)));
   const events = results
     .flatMap((result, index) => {
       if (result.status === "fulfilled") return result.value;
       if (!dispatch) throw result.reason;
-      console.error(`${repos[index]} 的交付标签暂时读不到，下轮再查`);
+      console.error(
+        `Não foi possível ler os rótulos de entrega de ${repos[index]} por agora; verifique de novo na próxima rodada`,
+      );
       return [];
     })
     .slice(0, 100);
-  console.log(`看过了，${events.length} 件待处理\n\`\`\`agent-autoloop\n${JSON.stringify({ events })}\n\`\`\``);
+  console.log(
+    `Verificado, ${events.length} itens pendentes\n\`\`\`agent-autoloop\n${JSON.stringify({ events })}\n\`\`\``,
+  );
 }

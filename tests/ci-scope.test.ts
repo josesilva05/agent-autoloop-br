@@ -1,8 +1,8 @@
-// How much CI a change gets. Failure cases: a change to kernel code or to the simulation's parts skips the short simulation;
-// a change that can't touch what the long runs cover waits for them; a change to what only the long runs exercise never runs
-// them; code, or text a test reads, counts as text and runs nothing; a file nobody has sorted out yet skips the tests; a move
-// out of kernel/ counts only where it landed; what reaches main skips the tests, so a commit whose run was cancelled or replaced is never checked; a diff
-// that can't be read means less checking rather than more.
+// De quanto CI uma mudança recebe. Casos de falha: uma mudança no código do kernel ou nas partes da simulação pular a simulação
+// curta; uma mudança que não pode tocar no que as execuções longas cobrem esperar por elas; uma mudança no que só as execuções
+// longas exercitam nunca as executar; código, ou texto que um teste lê, contar como texto e não executar nada; um arquivo que
+// ninguém classificou ainda pular os testes; uma movimentação para fora de kernel/ contar só onde ele foi parar; o que chega em main
+// pular os testes, então um commit cuja execução foi cancelada ou substituída nunca é verificado; um diff ilegível significar menos verificação em vez de mais.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -15,7 +15,7 @@ const dir = mkdtempSync(join(tmpdir(), "agent-autoloop-ci-scope-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 let repos = 0;
-/** A repository whose HEAD is what GitHub checks out for a PR: a merge of the change into main. */
+/** Um repositório cujo HEAD é o que o GitHub baixa para um PR: um merge da mudança em main. */
 function merged(change: (root: string) => void) {
   const root = join(dir, `repo-${++repos}`);
   mkdirSync(root);
@@ -60,7 +60,7 @@ const touching = (...files: string[]) =>
 
 for (const [files, expected] of [
   [["README.md"], "docs"],
-  [["README.en.md", "INSTALL.md", "SECURITY.md", "CONTRIBUTING.md", "AGENTS.md", "LICENSE"], "docs"],
+  [["INSTALL.md", "SECURITY.md", "CONTRIBUTING.md", "AGENTS.md", "LICENSE"], "docs"],
   [["docs/protocol.md", ".github/pull_request_template.md"], "docs"],
   [["docs/plugins.md"], "normal"],
   [["worker/worker.ts", "cli/main.ts", "host/up.ts", "plugins/feishu/channel.ts", "tests/http.test.ts"], "normal"],
@@ -81,12 +81,12 @@ for (const [files, expected] of [
   [["sim/enumerate.ts"], "full"],
   [["README.md", "kernel/decide.ts", "sim/enumerate.ts"], "full"],
 ] as const) {
-  test(`a PR changing ${files.join(", ")} gets ${expected}`, () => {
+  test(`um PR que altera ${files.join(", ")} recebe ${expected}`, () => {
     assert.equal(scope(touching(...files)), `scope=${expected}`);
   });
 }
 
-test("moving a file out of kernel/ counts where it left", () => {
+test("mover um arquivo para fora de kernel/ conta o lado de onde ele saiu", () => {
   const root = merged((at) => {
     mkdirSync(join(at, "docs"));
     renameSync(join(at, "kernel", "moved.ts"), join(at, "docs", "moved.md"));
@@ -94,16 +94,16 @@ test("moving a file out of kernel/ counts where it left", () => {
   assert.equal(scope(root), "scope=kernel");
 });
 
-test("whatever reaches main gets the quick tests, text included, and a run asked for by hand the full run", () => {
+test("o que chega em main recebe os testes rápidos, texto inclusive, e uma execução pedida à mão recebe a completa", () => {
   assert.equal(scope(touching("README.md"), "push"), "scope=normal");
   assert.equal(scope(touching("kernel/decide.ts"), "push"), "scope=normal");
   assert.equal(scope(touching("README.md"), "workflow_dispatch"), "scope=full");
 });
 
-test("a diff that can't be read means the full run", () => {
+test("um diff que não pode ser lido significa a execução completa", () => {
   const root = join(dir, "first-commit");
   mkdirSync(root);
-  assert.equal(scope(root), "scope=full", "not a repository at all");
+  assert.equal(scope(root), "scope=full", "nem é um repositório");
   execFileSync("git", ["init", "-q"], { cwd: root });
-  assert.equal(scope(root), "scope=full", "nothing committed");
+  assert.equal(scope(root), "scope=full", "nada commitado");
 });

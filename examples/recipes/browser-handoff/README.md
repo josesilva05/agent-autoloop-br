@@ -1,44 +1,44 @@
-# Claude 委托 Codex 处理浏览器
+# Claude delega o navegador ao Codex
 
-主任务负责业务，Codex 只处理网页，主任务拿到证据后收尾。支持同一浏览器会话的后续操作；需要本人恢复连接、登录或验证时结束这一轮，交回飞书卡片，等本人回答后继续。
+A tarefa principal cuida do negócio, o Codex cuida apenas da página, e a tarefa principal fecha o caso depois de receber as evidências. Há suporte a operações posteriores na mesma sessão do navegador; quando é preciso o titular restabelecer a conexão, o login ou a autenticação, esta rodada se encerra, o cartão volta pelo Feishu e a continuação vem depois da resposta do titular.
 
-## 怎么启用
+## Como ativar
 
-1. 把本目录复制到 `~/.agent-autoloop/work/browser-handoff/`，仅本人可读。把 `SKILL.md` 放到 `~/.claude/skills/claude-browser-handoff/`。主任务改用 Codex 时，Skill 放到 `~/.codex/skills/claude-browser-handoff/`，并修改规则的 `use`；默认仍是 Claude 主任务。
-2. 配置一个**已经能使用浏览器的 Codex 入口**，将它的实际命令数组填进 `browser.json.command`。本地已有 `codex-browser` 时填它的绝对路径。`/path/to/browser-entry` 是占位符；本模板不安装浏览器桥接、不修改桌面应用内部数据库，也不复制某台电脑的 SSH 别名、模型档位或 Chrome 进程清理逻辑。
-3. 在 `browser.json` 填目标网址、核实项、允许操作。默认是只读的 `example.com` 验收，不提交表单、不发消息。`allowedActions` 是给 Agent 的任务范围，不是系统沙箱。操作范围须由本人或项目可信维护约定确定，不能从外部事件自动生成。配置里不放登录凭据；实际业务网址和会话编号留在私有目录。
-4. 合并 `rules.json` 中的 `sources`、`agents`、`channels`、`rules`，替换接单电脑、目录和飞书本人 open_id；复用已有飞书通道与密钥，不另开事件监听。运行 `agent-autoloop check`。
-5. 权限：`edit`。这只表示 Claude 的 `acceptEdits` 模式，**不保证能执行任意浏览器入口命令**。用接单程序相同的后台方式核实调用权限；入口未获准时先按本人的既有授权配置，不自动改成 `full`。浏览器助手的操作范围和账号权限也不由这个字段授予。
+1. Copie este diretório para `~/.agent-autoloop/work/browser-handoff/`, legível apenas pelo titular. Coloque o `SKILL.md` em `~/.claude/skills/claude-browser-handoff/`. Se a tarefa principal passar a usar o Codex, coloque o Skill em `~/.codex/skills/claude-browser-handoff/` e altere o `use` da regra; o padrão continua sendo o Claude como tarefa principal.
+2. Configure uma **entrada do Codex que já consiga usar o navegador** e coloque o array de comando real dela em `browser.json.command`. Se já existir um `codex-browser` local, use o caminho absoluto dele. `/path/to/browser-entry` é um espaço reservado; este modelo não instala ponte de navegador, não altera o banco de dados interno do aplicativo de desktop e não copia apelidos SSH, perfis de modelo nem lógica de limpeza de processos do Chrome de nenhuma máquina.
+3. Preencha em `browser.json` a URL de destino, os itens a verificar e as operações permitidas. O padrão é uma verificação somente leitura em `example.com`, sem enviar formulários nem mensagens. `allowedActions` é o escopo da tarefa dada ao Agent, não um sandbox do sistema. O escopo das operações deve ser definido pelo titular ou pelas combinações confiáveis de manutenção do projeto, e não pode ser gerado automaticamente a partir de eventos externos. Não coloque credenciais de login na configuração; as URLs de negócio reais e os números de sessão ficam no diretório privado.
+4. Mescle os `sources`, `agents`, `channels` e `rules` do `rules.json`, trocando o computador do worker, os diretórios e o open_id do titular no Feishu; reaproveite o canal Feishu e a chave já existentes, sem abrir outra escuta de eventos. Execute `agent-autoloop check`.
+5. Permissão: `edit`. Isso indica apenas o modo `acceptEdits` do Claude e **não garante que qualquer comando de entrada do navegador poderá ser executado**. Verifique a permissão de chamada usando o mesmo modo em segundo plano do worker; se a entrada não estiver autorizada, configure-a primeiro a partir das autorizações já existentes do titular, sem mudar automaticamente para `full`. O escopo de operação e as permissões de conta do assistente de navegador também não são concedidos por esse campo.
 
-## 浏览器入口约定
+## Convenção da entrada do navegador
 
-入口接受一个完整任务参数：`browser-entry "网页任务"`；续办接受 `browser-entry --resume <会话 ID> "后续任务"`。返回实际页面证据、操作结果和阻塞，末尾提供 `[Codex 会话 ID：实际编号]`。使用别的入口时，应提供同样的调用与返回约定。
+A entrada recebe um único argumento com a tarefa completa: `browser-entry "tarefa de página"`; a continuação recebe `browser-entry --resume <ID de sessão> "tarefa seguinte"`. Ela devolve as evidências reais da página, o resultado das operações e os bloqueios, com `[ID de sessão do Codex: número real]` no fim. Ao usar outra entrada, ofereça a mesma convenção de chamada e de retorno.
 
-`handoff.ts` 只负责把可信配置作为一个参数传递，保留标准输出、错误与退出码；不做重试，不把“命令启动了”当成完成。已有入口可以在浏览器所在电脑执行，也可以自行通过 SSH 转交；用户要先核实该电脑能访问目标 URL，远端浏览器不能把本机的 `localhost` 当作接单电脑。
+O `handoff.ts` só passa a configuração confiável como um argumento, preservando a saída padrão, o erro e o código de saída; não há nova tentativa, e "o comando foi iniciado" não é tratado como conclusão. Uma entrada já existente pode ser executada no computador onde está o navegador, ou repassada por SSH por sua conta; antes, verifique se aquela máquina consegue acessar a URL de destino — um navegador remoto não pode tratar o `localhost` dele como se fosse o computador do worker.
 
-Codex 后台 [`codex exec`](https://developers.openai.com/codex/noninteractive/) 可以使用自己配置的 [MCP 工具](https://developers.openai.com/codex/mcp/)，但不能据此推断它拥有桌面应用的 Chrome 连接。只安装 Codex CLI 不够，必须实际验收所选入口；本模板是任务交接方式，不是浏览器连接驱动。
+O [`codex exec`](https://developers.openai.com/codex/noninteractive/) do Codex em segundo plano pode usar as suas [ferramentas MCP](https://developers.openai.com/codex/mcp/) configuradas, mas disso não se pode deduzir que ele tenha a conexão com o Chrome do aplicativo de desktop. Só instalar o Codex CLI não basta: é preciso verificar de fato a entrada escolhida; este modelo é uma forma de passar tarefas adiante, não um driver de conexão com o navegador.
 
-## 启用前验证
+## Verificação antes de ativar
 
-在模板目录运行：
+No diretório do modelo, execute:
 
 ```bash
 node handoff.ts browser.json
-node handoff.ts browser.json --resume <上一步返回的实际会话-ID>
+node handoff.ts browser.json --resume <ID-de-sessão real devolvido no passo anterior>
 ```
 
-第一次核对实际页面标题、可见主标题和链接；页面没有正文主标题就如实记录。第二次核对在原会话继续；已经完成时应返回已有证据，不为了续办重做操作。检查它保留原有标签并关闭自己新建的标签。再通过 Claude 的后台启动方式调用同一个脚本，确认它确实拿到了证据和会话编号。HTTP 查询不能代替网页验收。
+Na primeira vez, confira o título real da página, o título principal visível no corpo e os links; se a página não tiver título principal no corpo, registre isso com sinceridade. Na segunda, confira que a continuação acontece na sessão original; se algo já estiver concluído, ela deve devolver as evidências existentes, sem refazer operações só para continuar. Verifique se as abas que já existiam são preservadas e se as abertas por ela são fechadas. Depois chame o mesmo script pelo modo de inicialização em segundo plano do Claude e confirme que ele realmente recebeu as evidências e o número da sessão. Consultas HTTP não substituem a verificação de página.
 
-在专用测试中台向来源 `browser-tasks` 发送稳定编号的 `browser.verify` 事件即可触发；同一次请求重发保留 `id`，例如：
+Numa central de teste dedicada, envie à fonte `browser-tasks` um evento `browser.verify` com um número estável para disparar a regra; um reenvio do mesmo pedido preserva o `id`, por exemplo:
 
 ```json
-{"id":"browser-check-1","type":"browser.verify","subject":"site-check","summary":"核实已配置的网页"}
+{"id":"browser-check-1","type":"browser.verify","subject":"site-check","summary":"Verificar a página configurada"}
 ```
 
-事件不携带入口命令、目标路径或权限。涉及需要本人操作的阻塞，用 Skill 中的 `ask` 结束本轮；已有卡片时不重复交接，不另约定时复查。本人回答后只继续未完成的网页步骤。
+O evento não carrega o comando de entrada, o caminho de destino nem permissões. Para bloqueios que exigem uma ação do titular, encerre a rodada com o `ask` do Skill; se já houver cartão, não repita a delegação nem combine uma nova reverificação por horário. Depois da resposta do titular, continue apenas os passos de página que faltavam.
 
-## 放进已有业务
+## Encaixar no negócio existente
 
-反馈处理、网站巡检等任务可以直接加载这份 Skill：把本目录的 `handoff.ts` 和本人配置的 `browser.json` 放到它的私有工作目录，在可信主任务规则中写明位置，不必再创建一套调度。主任务先完成能做的业务，再委托网页核实，最后交回中台回执；浏览器助手不再次委派、不独立结案。
+Tarefas como tratamento de feedback e inspeção de sites podem carregar este Skill diretamente: coloque o `handoff.ts` deste diretório e o `browser.json` configurado pelo titular no diretório de trabalho privado dela e indique o local na regra confiável da tarefa principal, sem precisar criar mais um agendamento. A tarefa principal conclui primeiro o negócio que consegue fazer, depois delega a verificação da página e por fim devolve o recibo à central; o assistente de navegador não delega de novo nem encerra casos por conta própria.
 
-自动检查使用假浏览器入口，验证参数传递、会话续办和失败传播，不启动真实 Chrome。发布样例只含示例网址与占位符；每个使用者仍需验证自己的浏览器连接和 Claude 调用权限。
+Os testes automatizados usam uma entrada de navegador falsa para verificar a passagem de argumentos, a continuação de sessão e a propagação de falhas, sem iniciar um Chrome real. Os exemplos publicados contêm apenas URLs de exemplo e espaços reservados; cada pessoa continua tendo de verificar a própria conexão com o navegador e a própria permissão de chamada do Claude.

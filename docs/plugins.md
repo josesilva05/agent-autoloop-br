@@ -1,139 +1,139 @@
-# 写插件
+# Escrever plugins
 
-先看 [README 的内置插件目录](../README.md#插件体系四个方向都能自由替换)选择已有实现；需要扩展时，从下面三个可运行的最小模板开始，替换业务部分：
+Primeiro veja o [catálogo de plugins integrados no README](../README.md#sistema-de-plugins-os-quatro-lados-são-substituíveis) para escolher uma implementação existente; quando precisar estender, comece pelos três modelos mínimos e executáveis abaixo e substitua a parte de negócio:
 
-| 模板                                                       | 已经演示了什么                                             | 你要替换什么                   |
-| ---------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------ |
-| [Agent 模板](../examples/plugins/hello-agent/agent.ts)     | 用 `printf` 模拟执行，读取输出、会话编号和「收下了提示词」 | 新 Agent 的启动命令和输出解析  |
-| [通道模板](../examples/plugins/hello-channel/channel.ts)   | 领卡片、写到文件、报告送达；通过命令行回答                 | 目标平台的发送、更新和回答回调 |
-| [事件插件模板](../examples/plugins/hello-source/source.ts) | 验证 HMAC-SHA256 签名，把模拟订单转换成事件                | 业务系统的验签方式和字段映射   |
+| Modelo | O que já demonstra | O que você deve substituir |
+| ------ | ------------------ | -------------------------- |
+| [Modelo de Agent](../examples/plugins/hello-agent/agent.ts) | Usa `printf` para simular a execução e lê a saída, o número da sessão e o "recebeu o prompt" | O comando de inicialização do novo Agent e a análise da saída |
+| [Modelo de canal](../examples/plugins/hello-channel/channel.ts) | Busca cartões, escreve em arquivo e reporta a entrega; responde pela linha de comando | O envio, a atualização e o callback de resposta da plataforma de destino |
+| [Modelo de plugin de eventos](../examples/plugins/hello-source/source.ts) | Valida a assinatura HMAC-SHA256 e converte pedidos simulados em eventos | O modo de validação de assinatura do sistema de negócio e o mapeamento de campos |
 
-事件插件、接单程序、通道和命令行共用同一套 HTTP + JSON 接口。只用 Shell 接协议，可以看 [接单脚本](../examples/worker.sh) 和 [通道脚本](../examples/channel.sh)：设置中台地址与密钥后运行，需要 `curl`、`jq`。它们适合演示短任务；长任务使用内置接单程序的心跳、停止和恢复能力。
+O plugin de eventos, o worker, o canal e a linha de comando compartilham a mesma interface HTTP + JSON. Para conectar o protocolo usando apenas Shell, veja o [script de worker](../examples/worker.sh) e o [script de canal](../examples/channel.sh): defina o endereço da central e a chave antes de executar; eles precisam de `curl` e `jq`. Servem para demonstrar tarefas curtas; para tarefas longas, use os recursos de heartbeat, parada e retomada do worker integrado.
 
-一个插件就是一个目录，入口为 `agent.ts`、`channel.ts` 或 `source.ts`。只用 `node:` 模块和自己目录里的文件，类型在插件里声明；不要相对引用引擎源码：装在 `~/.agent-autoloop/plugins/` 的插件，相对路径到不了引擎。内置插件和引擎放在一起发布，才能直接引 `worker/agents.ts` 里的 `findProgram`、`tail` 这些小工具，引擎不反过来引插件。
+Um plugin é um diretório, com ponto de entrada `agent.ts`, `channel.ts` ou `source.ts`. Use apenas módulos `node:` e arquivos do próprio diretório, e declare os tipos dentro do plugin; não referencie o código-fonte do motor por caminho relativo: um plugin instalado em `~/.agent-autoloop/plugins/` não alcança o motor por caminho relativo. Os plugins integrados são publicados junto com o motor, e só por isso podem importar diretamente utilitários como `findProgram` e `tail` de `worker/agents.ts`; o motor, por sua vez, nunca referencia plugins.
 
-用 `agent-autoloop add <git 地址>` 安装到 `~/.agent-autoloop/plugins/<仓库名>`，也接受本地 Git 仓库。插件名就是那个目录名：仓库名转成小写，只能用小写字母、数字和 `-`，别的名字会被拒绝，并说出它算出来的名字；规则的 `use` 和来源的 `adapter` 都写这个名字。它只克隆，不装依赖、不跑安装脚本、不自动更新。加载时会执行插件，安装目录的同名插件优先。
+Instale com `agent-autoloop add <endereço git>` em `~/.agent-autoloop/plugins/<nome do repositório>`; repositórios Git locais também são aceitos. O nome do plugin é o nome desse diretório: o nome do repositório é convertido para minúsculas e só pode conter letras minúsculas, dígitos e `-`. Qualquer outro nome é rejeitado, e a mensagem informa o nome que ele calculou. É esse nome que vai no `use` da regra e no `adapter` da fonte. O comando apenas clona: não instala dependências, não roda scripts de instalação e não atualiza automaticamente. O plugin é executado no carregamento, e um plugin de mesmo nome no diretório de instalação tem prioridade.
 
-## 先跑起来
+## Comece executando
 
-在引擎目录运行这条命令：它把三个例子分别装进临时中台，实际走完验签、派活、运行、通知和报告，退出后清理。
+Execute este comando no diretório do motor: ele instala os três exemplos em centrais temporárias, percorre de verdade a validação de assinatura, o despacho, a execução, a notificação e o relatório, e limpa tudo ao sair.
 
 ```bash
 node --disable-warning=ExperimentalWarning --test --test-name-pattern='agent-autoloop add' tests/example-plugins.test.ts
 ```
 
-## Agent 插件
+## Plugin de Agent
 
-从 [hello-agent/agent.ts](../examples/plugins/hello-agent/agent.ts) 开始。它用 `printf` 代替模型，克隆到别处也能运行。收下提示词和结束时各打一行，`read` 从第一行就知道这一轮接上了原会话，第二行是它的最后一条消息。
+Comece por [hello-agent/agent.ts](../examples/plugins/hello-agent/agent.ts). Ele usa `printf` no lugar de um modelo e continua funcionando se for clonado para outro lugar. Imprime uma linha ao receber o prompt e outra ao terminar: pela primeira linha, `read` sabe que esta rodada retomou a sessão original, e a segunda linha é a última mensagem dele.
 
-| 导出对象的方法               | 作用                                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `command(turn)`              | 返回命令参数数组；参数不作为 shell 代码执行                                                                                   |
-| `read(stdout, code, stderr)` | 返回 `text`、`session`、`usage`、`sessionUsage`、`error`、`finished`、`started`；运行中 `code` 为 `null`                      |
-| `link(session)`              | 可选，打开这个会话的链接。回执写错时，`read` 返回了 `session` 的插件都只重写回执，和有没有链接无关                            |
-| `check(program)`             | 可选，`doctor` 问它这个 Agent 现在能不能用：能用返回 `null`，否则返回下一步怎么做。参数是规则里给它写的 `program`，没写就不传 |
+| Método do objeto exportado | Função |
+| -------------------------- | ------ |
+| `command(turn)` | Retorna o array de argumentos do comando; os argumentos não são executados como código de shell |
+| `read(stdout, code, stderr)` | Retorna `text`, `session`, `usage`, `sessionUsage`, `error`, `finished` e `started`; durante a execução, `code` é `null` |
+| `link(session)` | Opcional: o link para abrir esta sessão. Quando o recibo vem escrito errado, todo plugin cujo `read` retornou `session` apenas reescreve o recibo, independentemente de haver link ou não |
+| `check(program)` | Opcional: o `doctor` pergunta a ele se este Agent está utilizável agora — retorna `null` se estiver e, caso contrário, retorna o que fazer em seguida. O argumento é o `program` escrito para ele na regra; se não houver, nada é passado |
 
-`turn` 一定有的是 `prompt`、`session`、`resume`、`cwd`、`access`、`contextFile`、`folder`，另外五个只有规则里给这个 Agent 写了才有：`model`、`effort`、`tier`、`command`、`program`。`resume` 是这一轮要接回的原会话，新开一轮时是 `null`。`contextFile` 是资料文件，受限 CLI 需要允许读取 `folder`。`program` 是内置插件换成的启动程序，第三方插件用不上，收下也可以不理。`tier` 是服务档位，用的是那个 CLI 自己的叫法，现在只有内置的 Codex 插件用它（传成 `-c service_tier="…"`，`priority` 就是 Codex 应用里的 Fast），别的插件收下不理。那五个都按「可能没有」来读，内置插件就是这么写的：`...(turn.model ? ["--model", turn.model] : [])`、`turn.command ?? []`。`read` 要能处理未写完的输出；CLI 真正完成后才返回 `text`。`read` 抛错或什么也不返回时，还在跑的接着跑，结束后这一轮算没跑成，留在原会话重派。
+Em `turn` sempre existem `prompt`, `session`, `resume`, `cwd`, `access`, `contextFile` e `folder`; os outros cinco só existem se a regra os tiver definido para este Agent: `model`, `effort`, `tier`, `command` e `program`. `resume` é a sessão original que esta rodada deve retomar, e é `null` quando uma rodada nova é aberta. `contextFile` é o arquivo de dados, e um CLI restrito precisa ter permissão de leitura em `folder`. `program` é o programa de inicialização que o plugin integrado substitui; plugins de terceiros não o usam, e podem recebê-lo e ignorá-lo. `tier` é a faixa de serviço, com a denominação do próprio CLI: hoje só o plugin integrado do Codex a utiliza (passada como `-c service_tier="…"`, em que `priority` equivale ao Fast do aplicativo Codex), e os demais plugins a recebem e ignoram. Leia esses cinco como "podem não existir", que é exatamente como os plugins integrados fazem: `...(turn.model ? ["--model", turn.model] : [])`, `turn.command ?? []`. `read` precisa saber lidar com saída ainda incompleta; só retorne `text` quando o CLI realmente terminar. Se `read` lançar um erro ou não retornar nada, o que ainda está em execução continua; ao terminar, a rodada é contada como falha e permanece na sessão original para novo despacho.
 
-支持 `resume` 的插件，从 Agent 收下提示词起都要返回 `started: true`，包括运行中和出错之后。否则干到一半断了，也会被当成会话接不上，开新会话把业务重做一遍。返回了 `session` 就要按 `turn.resume` 接回原会话：没跑成的重派和写错回执的重写都靠它；接不回去的 CLI 不要返回 `session`。
+Um plugin que suporta `resume` deve retornar `started: true` desde o momento em que o Agent recebe o prompt, inclusive durante a execução e depois de um erro. Caso contrário, uma interrupção no meio do trabalho também será tratada como sessão impossível de retomar, abrindo uma sessão nova e refazendo o serviço. Se você retorna `session`, deve retomar a sessão original conforme `turn.resume`: o novo despacho após falha e a reescrita de recibos errados dependem disso. Um CLI que não consegue retomar não deve retornar `session`.
 
-`usage` 是这次启动用掉的量。`input` 算全部输入，`cached` 是其中从缓存读的部分；CLI 报的输入不含缓存时（Claude Code、DSH 就是这样），插件把缓存读写加回 `input`，各家才能放在一起比。有的 CLI 只给整个会话累计到现在的数（Codex 的 Token、Claude Code 的费用），这几项放进 `sessionUsage`，同时要返回 `session`。接单程序启动前记下这个会话上次的累计值，结束后相减，和 `usage` 合起来上报；这些记录放在 `~/.agent-autoloop/worker/usage/`，接单程序中途重启也不会多算。
+`usage` é o volume consumido por esta inicialização. `input` conta toda a entrada, e `cached` é a parte dela lida do cache; quando o CLI reporta a entrada sem incluir o cache (é o caso de Claude Code e DSH), o plugin soma de volta a leitura e a escrita de cache em `input`, para que os diferentes provedores possam ser comparados entre si. Alguns CLI só informam o acumulado da sessão inteira até agora (os Tokens do Codex, o custo do Claude Code): esses itens vão em `sessionUsage`, e `session` deve ser retornado junto. O worker anota o acumulado anterior dessa sessão antes de iniciar, subtrai ao terminar e reporta o resultado somado a `usage`; esses registros ficam em `~/.agent-autoloop/worker/usage/`, de modo que uma reinicialização do worker no meio do caminho não conta a mais.
 
-没有记录的续接（换了电脑、升级前就有的会话）或累计值变小时，这几项这次不报，不猜；下一次续接恢复正常。其他程序在同一个会话里用掉的量分不出来，比如本人打开链接接着聊，会算进下一次续接。CLI 改成只报单次时，插件要把这几项改回 `usage`，不要靠数字大小去猜。
+Em continuações sem registro (troca de computador, sessões anteriores à atualização) ou quando o acumulado diminui, esses itens não são reportados desta vez, sem adivinhar; a continuação seguinte volta ao normal. O volume consumido por outros programas na mesma sessão não pode ser separado: quando o titular abre o link e continua a conversa, por exemplo, isso entra na conta da continuação seguinte. Se o CLI passar a reportar apenas o valor de cada execução, o plugin deve mover esses itens de volta para `usage`, sem tentar adivinhar pelo tamanho dos números.
 
-在规则里选择这个插件：
+Escolha este plugin na regra:
 
 ```json
 { "name": "Hello", "worker": "my-computer", "use": "hello-agent", "access": "read" }
 ```
 
-Codex 的 Windows elevated 沙箱使用专用账号；插件给该账号组增加本轮 `context.json` 的读权限，不更改账号或沙箱模式。Codex 自己也会给用户目录下的文件夹（含数据目录）加这个账号组的读权限，见 [SECURITY](../SECURITY.md)。
+O sandbox Windows elevated do Codex usa uma conta dedicada; o plugin concede a esse grupo de contas permissão de leitura sobre o `context.json` desta rodada, sem alterar a conta nem o modo de sandbox. O próprio Codex também concede a esse grupo de contas permissão de leitura nas pastas do diretório do usuário (incluindo o diretório de dados); veja [SECURITY](../SECURITY.md).
 
-Windows 原生运行支持 `.exe`/`.com`、PowerShell `.ps1` 和 npm 生成的 `.cmd` 包装（直接执行其 JS 入口或 `.exe`，保留中文、多行及引号）。其他 `.bat`/`.cmd` 不作为 shell 源码启动，请用可执行程序或 `node script.js`。Unix 沿用登录 shell 查找命令，Windows 按 PATH 和 PATHEXT 找；Agent 自己也必须支持当前系统。文中的 shell、curl/jq 教程在 Unix 或 WSL 运行。
+A execução nativa no Windows suporta `.exe`/`.com`, `.ps1` do PowerShell e wrappers `.cmd` gerados pelo npm (executando diretamente o ponto de entrada JS ou o `.exe`, preservando texto não-ASCII, várias linhas e aspas). Outros `.bat`/`.cmd` não são iniciados como código-fonte de shell; use um executável ou `node script.js`. O Unix continua procurando comandos pelo shell de login, e o Windows procura por PATH e PATHEXT; o próprio Agent também precisa suportar o sistema atual. Os tutoriais de shell, curl e jq deste documento rodam em Unix ou WSL.
 
-只需要打印最后一条消息时，用内置 `command` 加参数数组即可，不必写插件。参数里可以用 `{prompt}`、`{model}`、`{effort}`、`{cwd}`、`{context}`，每个参数只替换一轮，替换进去的提示词原样传给程序：提示词里写着 `{cwd}` 或 `$&`，到程序那边也还是这几个字，不会被再替换一次。每个 Agent 进程（包括内置插件配的 `program` 脚本）都能读到环境变量 `AGENT_AUTOLOOP_CONTEXT`（资料文件）和 `AGENT_AUTOLOOP_RUN`（第几轮）。同一轮重试、重写回执时编号不变；回答和到期的复查是新的一轮，编号不同。
+Quando basta imprimir a última mensagem, use o `command` integrado com um array de argumentos — não é preciso escrever um plugin. Nos argumentos podem aparecer `{prompt}`, `{model}`, `{effort}`, `{cwd}` e `{context}`; cada argumento é substituído uma única vez, e o prompt inserido é passado ao programa exatamente como está: se o prompt contém `{cwd}` ou `$&`, o programa recebe esses mesmos caracteres, sem uma segunda substituição. Todo processo de Agent (incluindo scripts `program` configurados pelos plugins integrados) consegue ler as variáveis de ambiente `AGENT_AUTOLOOP_CONTEXT` (arquivo de dados) e `AGENT_AUTOLOOP_RUN` (nº da rodada). O número não muda em novas tentativas da mesma rodada nem na reescrita do recibo; respostas e reverificações vencidas são uma rodada nova, com número diferente.
 
-DeepSeek Harness 有内置 `dsh` 插件，规则里写 `use: "dsh"`，要 0.2.2 或更新，`agent-autoloop doctor` 会查。现在 npm 的 `latest` 还是旧版，要这样装：`npm install -g @deepseek-ai/dsh@next --allow-scripts=koffi,node-pty,@deepseek-ai/dsh-subprocess-local`。新版 npm 默认不跑依赖的安装脚本，不放行这三个包，装完看着正常，一跑才出错。从旧版升上来的，0.2.2 可能读不到 `~/.dsh/.credentials.yaml` 里的 `refs`，报 `MISSING_CREDENTIAL`：把密钥放进环境变量，Linux 的系统服务放 `~/.config/environment.d/*.conf`。只上报 Token，不上报费用。有用户在 WSL2 上用 0.2.2-rc.1 和第三方 OpenAI 兼容服务实测跑通了问答、用量和 `resume`。它以 `dsh headless --json` 跑一轮，从 `session` 事件拿会话编号，用 `--session-id` 续接，把 `step_end` 的用量汇总为 Token，`final` 事件才算跑完；`access` 每次都映射成 `--permission-mode`，要人批准的调用用 `--approval-policy never` 直接拒绝。规则里的 `model`、`effort` 不起作用，用 DSH 自己的配置。没有可打开的桌面会话链接。DSH 默认把会话日志上传给 DeepSeek，见[它的说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md)。
+O DeepSeek Harness tem o plugin integrado `dsh`; escreva `use: "dsh"` na regra. É necessário 0.2.2 ou mais recente, e o `agent-autoloop doctor` verifica isso. Hoje o `latest` do npm ainda é uma versão antiga, então instale assim: `npm install -g @deepseek-ai/dsh@next --allow-scripts=koffi,node-pty,@deepseek-ai/dsh-subprocess-local`. O npm novo não executa por padrão os scripts de instalação das dependências; se esses três pacotes não forem liberados, a instalação parece normal e o erro só aparece ao rodar. Quem vem de uma versão antiga pode ter um 0.2.2 incapaz de ler o `refs` de `~/.dsh/.credentials.yaml`, reportando `MISSING_CREDENTIAL`: coloque a chave em uma variável de ambiente e, para serviços de sistema no Linux, em `~/.config/environment.d/*.conf`. Reporta apenas Tokens, não custos. Um usuário relatou ter validado na prática, em WSL2 com 0.2.2-rc.1 e um serviço compatível com OpenAI de terceiros, perguntas e respostas, uso e `resume`. Ele executa uma rodada com `dsh headless --json`, obtém o número da sessão no evento `session`, retoma com `--session-id`, soma o uso de `step_end` em Tokens e só considera a rodada concluída no evento `final`; `access` é mapeado sempre para `--permission-mode`, e chamadas que exigiriam aprovação humana são recusadas diretamente com `--approval-policy never`. `model` e `effort` da regra não têm efeito: vale a configuração do próprio DSH. Não há link de sessão de desktop para abrir. Por padrão o DSH envia os logs de sessão à DeepSeek; veja [a documentação dele](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md).
 
-ZCode 有内置 `zcode` 插件，规则里写 `use: "zcode"`。它启动随桌面版安装的 CLI，跑 `zcode -p … --json`，一轮结束后打印一个 JSON 对象：从 `sessionId` 取会话编号，`response` 是最后一条消息，`usage` 里的 `inputTokens`、`outputTokens`、`cacheReadTokens` 是这一轮的 Token；下一轮用 `--resume sess_…` 续接。`access` 映射成它自己的模式：`read`→`plan`、`edit`→`edit`、`full`→`yolo`。Windows 上的 CLI 是 `.cjs` 包，Agent 写 `"program": "路径\\zcode.cjs"`，插件会用 node 启动它；写一个别的可执行文件也可以。规则里的 `model`、`effort` 不起作用，模型和提供方由 ZCode 自己的配置决定；CLI 用 `-p` 返回空时，先在 ZCode 里换一个能用的提供方。只上报 Token，不上报费用；没有可打开的桌面会话链接。
+O ZCode tem o plugin integrado `zcode`; escreva `use: "zcode"` na regra. Ele inicia o CLI instalado junto com a versão de desktop, roda `zcode -p … --json` e, ao final da rodada, imprime um objeto JSON: o número da sessão vem de `sessionId`, `response` é a última mensagem e `inputTokens`, `outputTokens` e `cacheReadTokens` dentro de `usage` são os Tokens da rodada; a rodada seguinte retoma com `--resume sess_…`. `access` é mapeado para os modos dele: `read`→`plan`, `edit`→`edit`, `full`→`yolo`. No Windows o CLI é um pacote `.cjs`: escreva `"program": "caminho\\zcode.cjs"` no Agent e o plugin o iniciará com node; também vale indicar outro executável. `model` e `effort` da regra não têm efeito — modelo e provedor são definidos pela configuração do próprio ZCode; se o CLI retornar vazio com `-p`, troque primeiro para um provedor funcional no ZCode. Reporta apenas Tokens, não custos; não há link de sessão de desktop para abrir.
 
-### 浏览器接入
+### Acesso ao navegador
 
-浏览器工具装在运行 Agent 的电脑上，由该 CLI 的工具配置或项目 Skill 提供。Codex 插件启动的是后台 [`codex exec`](https://developers.openai.com/codex/noninteractive/)；可以使用它已配置的 [MCP 工具](https://developers.openai.com/codex/mcp/)，不能只凭桌面应用能打开网页就认定后台也能访问同一浏览器。
+As ferramentas de navegador ficam instaladas no computador que roda o Agent e são fornecidas pela configuração de ferramentas do CLI ou por um Skill do projeto. O plugin do Codex inicia o [`codex exec`](https://developers.openai.com/codex/noninteractive/) em segundo plano; é possível usar as [ferramentas MCP](https://developers.openai.com/codex/mcp/) já configuradas nele, mas não se pode concluir que o segundo plano acessa o mesmo navegador só porque o aplicativo de desktop consegue abrir páginas.
 
-Claude 委托 Codex 的完整规则、Skill 和参数调用脚本见[浏览器交接模板](../examples/recipes/browser-handoff/README.md)。入口命令、目标与允许操作由本人配置；网页助手返回证据和会话编号，主任务负责业务与回执。
+As regras completas, o Skill e o script de invocação com parâmetros para o Claude delegar ao Codex estão no [modelo de passagem para o navegador](../examples/recipes/browser-handoff/README.md). O comando de entrada, o alvo e as operações permitidas são configurados pelo titular; o assistente web retorna evidências e o número da sessão, e a tarefa principal cuida do negócio e do recibo.
 
-已有专用浏览器入口时，在规则的 `prompt` 或 `skill` 写明实际命令、会话接续方式和允许的操作。只交网页步骤，返回看到的内容、操作结果和阻塞原因；主任务负责业务和中台回执。浏览器入口不是必装组件，中台不捆绑某台电脑的脚本，也不自动修改 CLI 的工具配置。
+Quando já existir uma entrada dedicada de navegador, escreva no `prompt` ou no `skill` da regra o comando real, o modo de continuação da sessão e as operações permitidas. Entregue apenas os passos web, retornando o que foi visto, o resultado das operações e o motivo do bloqueio; a tarefa principal cuida do negócio e do recibo à central. A entrada de navegador não é um componente obrigatório: a central não embute scripts de um computador específico nem modifica automaticamente a configuração de ferramentas do CLI.
 
-需要网页验收的任务，要用同一后台启动方式实际打开目标页面，核对内容并接续一次会话。缺少可用入口或需要本人恢复连接、登录、验证时，保留未验收项，用现有 `ask` 等待恢复；不要写“没跑成”触发重派，也不能把 HTTP 查询当作已经完成网页验收。
+Tarefas que exigem aceite pela web precisam abrir de fato a página de destino com o mesmo modo de inicialização em segundo plano, conferir o conteúdo e continuar a sessão uma vez. Se não houver entrada disponível, ou se for preciso que o titular restabeleça a conexão, faça login ou valide algo, mantenha os itens não aceitos e use o `ask` existente para esperar a retomada; não escreva "FALHOU:" para disparar um novo despacho, nem trate uma consulta HTTP como se o aceite pela web já tivesse sido feito.
 
-## 通道插件
+## Plugin de canal
 
-从 [hello-channel/channel.ts](../examples/plugins/hello-channel/channel.ts) 开始。它把卡片写进文件，用命令行回答。
+Comece por [hello-channel/channel.ts](../examples/plugins/hello-channel/channel.ts). Ele escreve os cartões em um arquivo e responde pela linha de comando.
 
-默认导出异步函数，参数是 `{ hub, options, log, signal }`；`options` 来自 `config.json`，不含中台密钥。
+A exportação padrão é uma função assíncrona com os parâmetros `{ hub, options, log, signal }`; `options` vem de `config.json` e não inclui a chave da central.
 
-| 调用                                  | 作用                                      |
-| ------------------------------------- | ----------------------------------------- |
-| `hub.nextCard(50)`                    | 长轮询领卡片，没卡片返回 `{ card: null }` |
-| `hub.delivered(id, version, ref)`     | 报告送达，保存外部消息编号                |
-| `hub.failed(id, version, error)`      | 报告发送失败                              |
-| `hub.answer(id, { choice, by, ref })` | 转交回答；核对回答人和原消息              |
+| Chamada | Função |
+| ------- | ------ |
+| `hub.nextCard(50)` | Busca cartões com long polling; sem cartões, retorna `{ card: null }` |
+| `hub.delivered(id, version, ref)` | Reporta a entrega e salva o número externo da mensagem |
+| `hub.failed(id, version, error)` | Reporta falha de envio |
+| `hub.answer(id, { choice, by, ref })` | Encaminha a resposta; confere quem respondeu e a mensagem original |
 
-`ref` 为空就发新消息，有值就更新原消息；不能更新时只报告。没报告的卡片一分钟后重派。`signal` 中止时退出；函数在此之前返回或抛错，都记日志并在 30 秒后重启，所以它要一直运行。插件和中台在同一个进程里：没接住的错误只记日志，不让中台退出。
+Com `ref` vazio, envia uma mensagem nova; com valor, atualiza a mensagem original; quando não dá para atualizar, apenas reporta. Cartões não reportados voltam a ser despachados depois de um minuto. Saia quando `signal` for abortado; se a função retornar ou lançar um erro antes disso, o fato é registrado no log e ela reinicia após 30 segundos — por isso ela deve permanecer em execução. O plugin e a central vivem no mesmo processo: erros não capturados são apenas registrados no log, sem derrubar a central.
 
-在 `rules.json` 登记通道、用 `agent-autoloop key new channel cards` 取密钥，再把下面这项放进 `config.json` 的 `channels`，重启中台：
-
-```json
-{ "cards": { "use": "hello-channel", "key": "通道密钥", "file": "/tmp/cards.txt" } }
-```
-
-能收回调的通道要在规则里设置 `answerers`，没设时通道里谁都能回答，`doctor` 会提醒；只能发文字的通道设置 `links: true`，发送 `card.link`。拿到链接的人能回答这张卡片。
-
-通道和中台共用一个 Node 进程，外部调用应异步等待。内置飞书通道的用户查询、发送和更新均异步调用 CLI，发送期间中台仍能接收事件和心跳。
-
-## 事件插件
-
-从 [hello-source/source.ts](../examples/plugins/hello-source/source.ts) 开始。它检查 `x-shop-signature` 中的 HMAC-SHA256，再把订单变成事件。
-
-默认导出同步函数，参数为 `{ headers, body, secret }`。先验签，再解析原文；返回事件数组，无事返回 `[]`，拒绝请求就抛异常。事件插件只翻译，不发请求。
-
-在 `rules.json` 登记来源：
+Registre o canal em `rules.json`, obtenha a chave com `agent-autoloop key new channel cards` e coloque o item abaixo em `channels` no `config.json`; depois reinicie a central:
 
 ```json
-{ "shop": { "name": "商店", "adapter": "hello-source" } }
+{ "cards": { "use": "hello-channel", "key": "chave do canal", "file": "/tmp/cards.txt" } }
 ```
 
-请求地址是 `/v1/in/shop`；秘密放在 `secrets.env` 的 `AGENT_AUTOLOOP_SECRET_SHOP`（来源名转大写，`-` 换成 `_`；改完重启中台），不写进规则。事件必须有稳定的 `id` 和合法的 `type`，可带 `subject`、`summary`、`detail`、`link`，上限见[协议](protocol.md#来源把世界变成事件)。
+Um canal que recebe callbacks deve definir `answerers` na regra; sem isso, qualquer pessoa no canal pode responder, e o `doctor` avisa. Um canal que só envia texto deve definir `links: true` e enviar o `card.link`. Quem obtiver o link consegue responder àquele cartão.
 
-来源能直接发标准 JSON 时不必写插件，用来源密钥调用 `POST /v1/events` 即可，之后用同一把密钥 `GET /v1/events/<编号>` 查它做到哪了（见[协议](protocol.md#来源把世界变成事件)）。
+O canal e a central compartilham um único processo Node, então chamadas externas devem ser aguardadas de forma assíncrona. O canal integrado do Feishu consulta usuários, envia e atualiza chamando o CLI de modo assíncrono; durante o envio, a central continua recebendo eventos e heartbeats.
 
-## access 实际能做什么
+## Plugin de eventos
 
-`access` 由插件翻译，不是中台提供的系统沙箱。以下是未额外放宽本机权限时的行为。
+Comece por [hello-source/source.ts](../examples/plugins/hello-source/source.ts). Ele verifica o HMAC-SHA256 em `x-shop-signature` e então converte pedidos em eventos.
 
-| 插件             | `read`                                                           | `edit`                                                                       | `full`                                                 |
-| ---------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Codex            | `read-only`：能跑 shell，不能写文件，命令默认不能联网            | `workspace-write`：能跑 shell、写工作目录和临时目录，命令默认不能联网        | `danger-full-access`：能写文件、跑 shell、联网，无审批 |
-| Claude Code      | `plan`：能读文件和运行只读命令；其他命令取决于自动审批及本机规则 | `acceptEdits`：再允许目录内文件编辑和常见文件操作；任意 shell 或联网仍需放行 | `bypassPermissions`：跳过工具审批，没有额外系统隔离    |
-| DeepSeek Harness | `read-only`：不能写文件，读文件和联网不受限                      | `workspace-write`：命令和文件改动限于工作目录和临时目录，读文件和联网不受限  | `danger-full-access`：不受限制                         |
-| ZCode            | `plan`：只读规划，不写文件                                       | `edit`：自动应用编辑，shell 命令直接执行                                     | `yolo`：不审批，不受限制                               |
-| ACP              | Agent 来问时，同意读和搜索                                       | 再同意工作目录内的编辑                                                       | 同意它来问的所有操作                                   |
+A exportação padrão é uma função síncrona com os parâmetros `{ headers, body, secret }`. Valide a assinatura primeiro e só depois analise o conteúdo; retorne um array de eventos, `[]` quando não houver nada, e lance uma exceção para recusar a requisição. O plugin de eventos apenas traduz, não faz requisições.
 
-Codex 的三个档位已用插件命令实跑；ZCode 已用真实 CLI 跑通 `edit` 模式、提问和回答后的会话续接，`plan`、`yolo` 按它的 `--mode` 说明整理；DeepSeek Harness 和 Claude Code 分别依据 [DSH 文档](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md)和[官方权限说明](https://code.claude.com/docs/en/permission-modes)整理，没有调用模型实跑。Codex 的命令网络限制与托管搜索、MCP 不是同一个边界，详见[官方沙箱说明](https://learn.chatgpt.com/docs/agent-approvals-security)。用户的 CLI 配置可能改变上述能力；`read` 也不代表读不到本机密钥。
+Registre a fonte em `rules.json`:
 
-ACP 的 `access` 只管 Agent 主动来问的操作。规范允许 Agent 不询问就执行，这种操作 `access` 拦不住，要用 Agent 自己的模式限制，比如 `command` 里写 `env INITIAL_AGENT_MODE=read-only …`。ACP 的 `model`、`effort`、`tier` 不生效，也要在 Agent 自己那边设置。
+```json
+{ "shop": { "name": "Loja", "adapter": "hello-source" } }
+```
 
-场景模板据此选权限：早报用 `edit` 写本地文件，issue 用 `edit` 改代码并让固定脚本联网取正文，告警用 `read` 看代码和事件附带的调用栈。反馈处理、飞书摘要和邮件分诊用 `edit`，网站排查用 `read`；固定巡检、飞书读取和邮箱读取脚本负责联网，摘要与分诊 Agent 只读完整快照。`command` 和固定脚本以本机账号运行，不受 `access` 约束。
+O endereço da requisição é `/v1/in/shop`; o segredo fica em `AGENT_AUTOLOOP_SECRET_SHOP` no `secrets.env` (nome da fonte em maiúsculas, com `-` trocado por `_`; reinicie a central após alterar), nunca na regra. Um evento precisa ter `id` estável e `type` válido, e pode trazer `subject`, `summary`, `detail` e `link`; os limites estão no [protocolo](protocol.md#fontes-transformar-o-mundo-em-eventos).
 
-## 一致性测试
+Quando a fonte consegue enviar JSON padrão diretamente, não é preciso escrever um plugin: basta chamar `POST /v1/events` com a chave da fonte e, depois, consultar o andamento com `GET /v1/events/<número>` usando a mesma chave (veja o [protocolo](protocol.md#fontes-transformar-o-mundo-em-eventos)).
 
-在引擎目录运行协议的现有 HTTP 检查，全部使用临时数据和随机端口：
+## O que o access realmente permite
+
+`access` é traduzido pelo plugin; não é um sandbox de sistema fornecido pela central. Abaixo está o comportamento quando nenhuma permissão local adicional é liberada.
+
+| Plugin | `read` | `edit` | `full` |
+| ------ | ------ | ------ | ------ |
+| Codex | `read-only`: roda shell, não escreve arquivos e os comandos não têm rede por padrão | `workspace-write`: roda shell, escreve no diretório de trabalho e no temporário; os comandos não têm rede por padrão | `danger-full-access`: escreve arquivos, roda shell e acessa a rede, sem aprovação |
+| Claude Code | `plan`: lê arquivos e executa comandos somente leitura; os demais comandos dependem da aprovação automática e das regras locais | `acceptEdits`: também permite editar arquivos dentro do diretório e operações comuns de arquivo; qualquer shell ou rede ainda precisa ser liberado | `bypassPermissions`: pula a aprovação de ferramentas, sem isolamento de sistema adicional |
+| DeepSeek Harness | `read-only`: não escreve arquivos; leitura de arquivos e rede sem restrições | `workspace-write`: comandos e alterações de arquivos limitados ao diretório de trabalho e ao temporário; leitura de arquivos e rede sem restrições | `danger-full-access`: sem restrições |
+| ZCode | `plan`: planejamento somente leitura, não escreve arquivos | `edit`: aplica edições automaticamente e executa comandos de shell diretamente | `yolo`: sem aprovação e sem restrições |
+| ACP | Quando o Agent pergunta, autoriza leitura e busca | Também autoriza edições dentro do diretório de trabalho | Autoriza todas as operações que o Agent vier a perguntar |
+
+As três faixas do Codex foram executadas de fato com o comando do plugin; no ZCode, o CLI real percorreu o modo `edit`, uma pergunta e a continuação da sessão após a resposta, enquanto `plan` e `yolo` foram organizados a partir da documentação do `--mode` dele; DeepSeek Harness e Claude Code foram compilados com base na [documentação do DSH](https://github.com/deepseek-ai/deepseek-harness/blob/master/apps/cli/reference/README.md) e na [documentação oficial de permissões](https://code.claude.com/docs/en/permission-modes), sem executar o modelo de verdade. A restrição de rede dos comandos do Codex não é a mesma fronteira de hosted search e MCP; veja a [documentação oficial de sandbox](https://learn.chatgpt.com/docs/agent-approvals-security). A configuração de CLI do usuário pode mudar as capacidades acima, e `read` também não significa que as chaves locais estejam inacessíveis.
+
+O `access` do ACP só cobre as operações que o Agent pergunta por conta própria. A especificação permite que o Agent execute sem perguntar, e esse tipo de operação o `access` não consegue bloquear: é preciso limitar pelo modo do próprio Agent, por exemplo escrevendo `env INITIAL_AGENT_MODE=read-only …` em `command`. `model`, `effort` e `tier` do ACP não têm efeito e também devem ser configurados do lado do Agent.
+
+As receitas escolhem permissões com base nisso: o briefing matinal usa `edit` para escrever arquivos locais, a de issues usa `edit` para alterar código e deixa um script fixo acessar a rede para buscar o corpo da issue, e a de alertas usa `read` para examinar o código e a pilha de chamadas que acompanha o evento. Tratamento de feedback, resumo do Feishu e triagem de e-mail usam `edit`; investigação de site usa `read`. Os scripts fixos de inspeção, de leitura do Feishu e de leitura da caixa de e-mail cuidam do acesso à rede, enquanto os Agents de resumo e de triagem leem apenas o snapshot completo. `command` e os scripts fixos rodam com a conta local, sem ficar sujeitos ao `access`.
+
+## Teste de conformidade
+
+Execute no diretório do motor as verificações HTTP existentes do protocolo, todas com dados temporários e portas aleatórias:
 
 ```bash
 node --disable-warning=ExperimentalWarning --test tests/conformance.test.ts
 ```
 
-检查其他中台实现时，用 `agent-autoloop conformance <测试地址> --config <测试凭据文件>`，文件格式见[协议](protocol.md#一致性和复现)。它会写事件和卡片，只对专用测试中台运行。
+Para verificar outras implementações da central, use `agent-autoloop conformance <endereço de teste> --config <arquivo de credenciais de teste>`; o formato do arquivo está no [protocolo](protocol.md#conformidade-e-reprodução). Ele escreve eventos e cartões, então rode apenas contra uma central dedicada de testes.
 
-插件本身的完整接入测试见 [tests/example-plugins.test.ts](../tests/example-plugins.test.ts)。用其他语言写独立进程也可以，参考 [curl/jq 通道](../examples/channel.sh)和[接单程序](../examples/worker.sh)。
+O teste completo de integração do plugin em si está em [tests/example-plugins.test.ts](../tests/example-plugins.test.ts). Também vale escrever um processo independente em outra linguagem; veja o [canal em curl/jq](../examples/channel.sh) e o [worker](../examples/worker.sh).

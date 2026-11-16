@@ -1,4 +1,4 @@
-// JSON Schema, as much of it as protocol/schema.json uses, so checking the protocol needs nothing installed.
+// JSON Schema, na medida em que protocol/schema.json o usa, para que conferir o protocolo não exija nada instalado.
 import { readFileSync } from "node:fs";
 import { dateTime } from "./validate.ts";
 
@@ -52,6 +52,6 @@ function visit(schema: any, item: any, path: string): string[] {
 }
 
 export function checkSchema(name: string, value: unknown): string[] {
-  if (!Object.hasOwn(schemas.$defs, name)) throw new Error(`没有这个协议类型：${name}`);
+  if (!Object.hasOwn(schemas.$defs, name)) throw new Error(`não existe este tipo de protocolo: ${name}`);
   return visit(schemas.$defs[name], value, name);
 }

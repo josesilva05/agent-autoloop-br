@@ -1,5 +1,5 @@
-# A job object keeps every descendant in the turn, including after its immediate parent exits. Closing the supervisor
-# kills the whole job, so cancelling a turn or a crashed supervisor cannot leave an Agent running by itself.
+# Um job object mantém todo descendente no turno, inclusive depois que o pai imediato dele sai. Fechar o supervisor
+# mata o job inteiro, então cancelar um turno ou um supervisor que quebrou não pode deixar um Agent rodando sozinho.
 param([string]$RunFile, [string]$Marker)
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'

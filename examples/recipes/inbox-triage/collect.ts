@@ -1,4 +1,4 @@
-// The mailbox stays behind its CLI: only a complete, body-capped snapshot can wake the triage Agent.
+// A caixa de entrada fica atrás do seu CLI: só um snapshot completo, com o corpo limitado, pode acordar o Agent de triagem.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -22,7 +22,7 @@ type Summary = {
 class AuthorizationError extends Error {}
 
 function lark(args: string[]) {
-  // Reading the mailbox is a human decision: the CLI is always asked as the owner, never as the bot.
+  // Ler a caixa de entrada é uma decisão humana: o CLI é sempre chamado como o titular, nunca como o bot.
   const run = spawnSync("lark-cli", [...args, "--as", "user"], {
     encoding: "utf8",
     timeout: 120_000,
@@ -33,22 +33,24 @@ function lark(args: string[]) {
   if (response.error?.type === "authorization" || response.error?.type === "authentication")
     throw new AuthorizationError();
   if (run.status !== 0 || response.ok !== true)
-    throw new Error(`邮箱读取失败：${response.error?.type ?? "未知错误"}，请在本机检查 CLI`);
-  if (response.identity !== "user") throw new Error("邮箱读取没有使用本人身份");
+    throw new Error(
+      `Falha ao ler a caixa de entrada: ${response.error?.type ?? "erro desconhecido"}; verifique o CLI nesta máquina`,
+    );
+  if (response.identity !== "user") throw new Error("A leitura da caixa de entrada não usou a identidade do titular");
   return response.data ?? {};
 }
 
 const context = JSON.parse(readFileSync(process.env.AGENT_AUTOLOOP_CONTEXT!, "utf8"));
-const blockedTitle = "请恢复邮箱读取";
+const blockedTitle = "Restabeleça a leitura da caixa de entrada";
 if (
   context.answers.length &&
   !context.answers.some(
     (answer: { title: string; choice: number | null }) => answer.title === blockedTitle && answer.choice === 0,
   )
 ) {
-  console.log("没事可做：本轮未确认恢复，留待下次计划读取");
+  console.log("NADA A FAZER: a recuperação não foi confirmada nesta rodada; fica para a próxima leitura agendada");
 } else if (context.open.some((card: { title: string }) => card.title === blockedTitle) && !context.answers.length) {
-  console.log("没事可做：等待本人恢复邮箱读取");
+  console.log("NADA A FAZER: aguardando o titular restabelecer a leitura da caixa de entrada");
 } else {
   const sources: Sources = JSON.parse(readFileSync(process.argv[2], "utf8"));
   if (
@@ -62,7 +64,9 @@ if (
     sources.lookbackHours < 1 ||
     !Array.isArray(sources.skipSenders)
   ) {
-    throw new Error("检查 sources.json：目录、回看小时、最多几封、正文保留多少字都要写清楚");
+    throw new Error(
+      "Verifique o sources.json: defina pasta, horas de retrospectiva, máximo de mensagens e caracteres do corpo",
+    );
   }
   try {
     const until = new Date();
@@ -72,16 +76,17 @@ if (
       ...(sources.onlyUnread ? { is_unread: true } : {}),
       time_range: { start_time: from.toISOString(), end_time: until.toISOString() },
     };
-    // A skipped sender still takes a slot in the page it arrives in, so the listing is read page by page: reading only
-    // the first would let notifications fill the cap and make a mailbox with mail look empty.
+    // Um remetente ignorado continua ocupando um lugar na página em que chega, então a lista é lida página por página:
+    // ler só a primeira deixaria as notificações preencherem o limite e uma caixa com mensagens pareceria vazia.
     const skip = new Set(sources.skipSenders.map((address: string) => address.trim().toLowerCase()));
     const picked: Summary[] = [];
-    // One request returns at most this many summaries however it is paged inside, so paging past it buys nothing.
+    // Uma requisição devolve no máximo esta quantidade de resumos, seja como for a paginação interna, então paginar
+    // além disso não compra nada.
     const ceiling = 400;
     let scanned = 0;
     let pageToken = "";
     let more = true;
-    // Mail the owner wants that the cap left out of the snapshot.
+    // Mensagens que o titular quer e que o limite deixou fora do snapshot.
     let left = false;
     while (picked.length < sources.maxMessages && more && scanned < ceiling) {
       const listed = lark([
@@ -95,7 +100,10 @@ if (
         JSON.stringify(filter),
         ...(pageToken ? ["--page-token", pageToken] : []),
       ]);
-      if (!Array.isArray(listed.messages)) throw new Error("邮箱没有返回邮件列表，不能当作没有新邮件");
+      if (!Array.isArray(listed.messages))
+        throw new Error(
+          "A caixa de entrada não devolveu a lista de mensagens; não é o mesmo que não haver mensagens novas",
+        );
       const page = listed.messages as Summary[];
       scanned += page.length;
       for (const message of page) {
@@ -103,24 +111,28 @@ if (
         if (picked.length < sources.maxMessages) picked.push(message);
         else left = true;
       }
-      // An empty page ends the read whatever the listing says about more: there is nowhere left to page from.
+      // Uma página vazia encerra a leitura, seja o que a lista disser sobre haver mais: não resta de onde paginar.
       const next = typeof listed.page_token === "string" ? listed.page_token : "";
       more = listed.has_more === true && next !== "" && page.length > 0;
       pageToken = next;
     }
-    // Only a window read to its end with nothing left out is all of it; reaching the cap says nothing about what is after.
+    // Só é tudo quando a janela foi lida até o fim sem nada ficar de fora; alcançar o limite não diz nada sobre o resto.
     const complete = !more && !left;
     if (!picked.length && complete) {
-      console.log(`没事可做：${sources.lookbackHours} 小时内没有需要看的邮件`);
+      console.log(`NADA A FAZER: não há e-mails para ler nas últimas ${sources.lookbackHours} horas`);
     } else {
-      // A sender the owner asked to skip is not read at all, so its body never reaches this machine. A read cut short
-      // with nothing kept has no bodies to ask for, and an empty id list is not a request the mailbox takes.
+      // Um remetente que o titular pediu para ignorar não é lido de forma nenhuma, então o corpo dele nunca chega a esta
+      // máquina. Uma leitura interrompida sem nada mantido não tem corpos a pedir, e uma lista vazia de ids não é uma
+      // requisição que a caixa de entrada aceite.
       const contents = picked.length
         ? lark(["mail", "+messages", "--message-ids", picked.map((m) => m.message_id).join(","), "--html=false"])
         : { messages: [] };
-      if (!Array.isArray(contents.messages)) throw new Error("邮箱没有返回邮件正文，资料不完整");
+      if (!Array.isArray(contents.messages))
+        throw new Error("A caixa de entrada não devolveu o corpo das mensagens; dados incompletos");
       if (Array.isArray(contents.unavailable_message_ids) && contents.unavailable_message_ids.length)
-        throw new Error(`邮箱没有返回部分邮件的正文（${contents.unavailable_message_ids.length} 封），本次不生成清单`);
+        throw new Error(
+          `A caixa de entrada não devolveu o corpo de algumas mensagens (${contents.unavailable_message_ids.length}); nenhuma lista será gerada desta vez`,
+        );
       const bodies = new Map<string, { body_plain_text?: string }>(
         (contents.messages as { message_id: string; body_plain_text?: string }[]).map((message) => [
           message.message_id,
@@ -129,7 +141,10 @@ if (
       );
       const messages = picked.map((summary) => {
         const body = bodies.get(summary.message_id);
-        if (!body) throw new Error(`邮箱没有返回邮件 ${summary.message_id} 的正文，本次不生成清单`);
+        if (!body)
+          throw new Error(
+            `A caixa de entrada não devolveu o corpo da mensagem ${summary.message_id}; nenhuma lista será gerada desta vez`,
+          );
         const chars = [...(body.body_plain_text ?? "")];
         return {
           message_id: summary.message_id,
@@ -150,7 +165,7 @@ if (
         until: until.toISOString(),
         folder: sources.folderId,
         limit: sources.maxMessages,
-        // What the listing got through, so the brief can say whether mail was left unscanned.
+        // O que a listagem conseguiu atravessar, para que a triagem possa dizer se houve mensagens não vistas.
         scanned: { summaries: scanned, complete },
         messages,
       };
@@ -163,26 +178,27 @@ if (
             id,
             type: "inbox.ready",
             subject: "inbox",
-            summary: `本期收件箱读取了 ${messages.length} 封${complete ? "" : "，还有邮件没读完"}`,
+            summary: `A caixa de entrada teve ${messages.length} mensagens lidas neste período${complete ? "" : ", e ainda há mensagens não lidas"}`,
           },
         ],
       };
       console.log(
-        `收件箱读取完成：${messages.length} 封${complete ? "" : "（还有邮件没读，本期没读全）"}\n\n\`\`\`agent-autoloop\n${JSON.stringify(receipt)}\n\`\`\``,
+        `Leitura da caixa de entrada concluída: ${messages.length} mensagens${complete ? "" : " (ainda há mensagens não lidas; a leitura deste período não foi completa)"}\n\n\`\`\`agent-autoloop\n${JSON.stringify(receipt)}\n\`\`\``,
       );
     }
   } catch (error) {
     if (!(error instanceof AuthorizationError)) throw error;
     console.log(
-      `待你处理：请恢复邮箱读取\n\n\`\`\`agent-autoloop\n${JSON.stringify({
+      `AGUARDANDO VOCÊ: Restabeleça a leitura da caixa de entrada\n\n\`\`\`agent-autoloop\n${JSON.stringify({
         ask: [
           {
             key: "mail-access",
             title: blockedTitle,
-            text: "请在接单电脑用本人身份登录邮箱，或补上读信的授权，完成后选择继续。恢复前不会用旧邮件当成本次结果。",
-            options: ["已恢复，继续读取", "本期先跳过"],
+            text: "No computador do worker, entre na caixa de entrada com a identidade do titular ou complete a autorização de leitura e, ao terminar, escolha continuar. Até a recuperação, e-mails antigos não serão usados como o resultado desta leitura.",
+            options: ["Já restabeleci, continuar a leitura", "Pular este período"],
             recommend: 0,
-            about: "重新按 sources.json 的范围读一次；完整读到底才交给分诊 Agent。",
+            about:
+              "Releia uma vez dentro do escopo do sources.json; só entregue ao Agent de triagem depois de ler tudo até o fim.",
           },
         ],
       })}\n\`\`\``,

@@ -1,9 +1,9 @@
-// Failure modes: stdout contains non-protocol text; unknown tools execute arbitrary endpoints; malformed arguments reach
-// the hub; an HTTP failure becomes a successful tool result; notifications get responses; source keys act as owner keys;
-// a client is told a version number left behind by a release; a slow tool call holds up a ping or another call, or is
-// dropped when the input ends while it's in hand; a U+2028 or U+2029 in a request, which JSON leaves as it is, cuts the
-// line, so the request never gets an answer. An Agent asking through MCP sees only the newest page of runs and can't go
-// back past it.
+// Modos de falha: stdout contém texto que não é do protocolo; ferramentas desconhecidas executam endpoints arbitrários;
+// argumentos malformados chegam à central; uma falha HTTP vira um resultado de ferramenta bem-sucedido; notificações recebem
+// respostas; chaves de fonte atuam como chaves de titular; um cliente recebe um número de versão deixado para trás por uma
+// release; uma chamada de ferramenta lenta segura um ping ou outra chamada, ou é descartada quando a entrada termina com ela
+// em andamento; um U+2028 ou U+2029 numa requisição, que o JSON deixa como está, corta a linha, então a requisição nunca
+// recebe resposta. Um Agent perguntando por MCP vê só a página mais nova de rodadas e não consegue voltar além dela.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -15,7 +15,7 @@ import { versionName } from "../host/version.ts";
 import { setup } from "./helpers.ts";
 const home = setup("mcp");
 
-/** The MCP server for real, against a stand-in hub, past its handshake. */
+/** O servidor MCP de verdade, contra uma central de faz de conta, passado o handshake. */
 async function connect(hub: RequestListener) {
   const server = createServer(hub);
   server.listen(0, "127.0.0.1");
@@ -33,7 +33,7 @@ async function connect(hub: RequestListener) {
     env: process.env,
     stdio: ["pipe", "pipe", "inherit"],
   });
-  // Watched from the start: it can be gone by the time a test looks.
+  // Observado desde o início: ele pode já ter ido embora quando um teste olhar.
   const closed = once(child, "close");
   let output = "";
   child.stdout.on("data", (b) => (output += b));
@@ -48,7 +48,7 @@ async function connect(hub: RequestListener) {
     for (;;) {
       const answer = answers().find((answer) => answer.id === id);
       if (answer) return answer;
-      if (Date.now() > end) assert.fail(`nothing came back for ${id}`);
+      if (Date.now() > end) assert.fail(`nada voltou para ${id}`);
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   };
@@ -67,7 +67,7 @@ async function connect(hub: RequestListener) {
   return { child, closed, send, answers, answered, close };
 }
 
-test("MCP stdio initializes and exposes only the typed hub operations", async () => {
+test("o MCP por stdio inicializa e expõe só as operações tipadas da central", async () => {
   const calls: any[] = [];
   const server = createServer((req, res) => {
     calls.push([req.url, req.headers.authorization]);
@@ -106,13 +106,21 @@ test("MCP stdio initializes and exposes only the typed hub operations", async ()
     { id: 5, method: "tools/call", params: { name: "why", arguments: { run: 999 } } },
     { id: 6, method: "tools/call", params: { name: "request", arguments: { path: "/etc/passwd" } } },
     { id: 7, method: "tools/call", params: { name: "emit", arguments: { id: "a", type: "one" } } },
-    { id: 8, method: "tools/call", params: { name: "pause", arguments: { rule: "巡检", reason: "上游在修" } } },
-    { id: 9, method: "tools/call", params: { name: "resume", arguments: { rule: "巡检" } } },
-    { id: 10, method: "tools/call", params: { name: "run", arguments: { rule: "巡检", reason: "看一眼" } } },
+    {
+      id: 8,
+      method: "tools/call",
+      params: { name: "pause", arguments: { rule: "inspeção", reason: "o upstream está em manutenção" } },
+    },
+    { id: 9, method: "tools/call", params: { name: "resume", arguments: { rule: "inspeção" } } },
+    {
+      id: 10,
+      method: "tools/call",
+      params: { name: "run", arguments: { rule: "inspeção", reason: "dar uma olhada" } },
+    },
     {
       id: 11,
       method: "tools/call",
-      params: { name: "replay", arguments: { rule: "巡检", since: "2026-11-11T08:59:12.345Z" } },
+      params: { name: "replay", arguments: { rule: "inspeção", since: "2026-11-11T08:59:12.345Z" } },
     },
   ];
   child.stdin.end(messages.map((m) => JSON.stringify({ jsonrpc: "2.0", ...m })).join("\n") + "\n");
@@ -127,7 +135,7 @@ test("MCP stdio initializes and exposes only the typed hub operations", async ()
   assert.equal(
     responses[0].result.serverInfo.version,
     versionName(),
-    "it says which version it is, not a number left behind",
+    "ele diz qual versão é, não um número deixado para trás",
   );
   const get = (id: number) => responses.find((r) => r.id === id);
   assert.equal(get(1).result.protocolVersion, "2025-11-25");
@@ -137,19 +145,19 @@ test("MCP stdio initializes and exposes only the typed hub operations", async ()
   assert.equal(get(4).error.code, -32602);
   assert.equal(get(5).result.isError, true);
   assert.equal(get(6).error.code, -32602);
-  // Calls run side by side, so they can reach the hub in any order.
+  // As chamadas rodam lado a lado, então podem chegar à central em qualquer ordem.
   assert.deepEqual(calls.toSorted(), [
     ["/v1/events", "Bearer source-key"],
-    ["/v1/rules/%E5%B7%A1%E6%A3%80/pause", "Bearer owner-key"],
-    ["/v1/rules/%E5%B7%A1%E6%A3%80/replay", "Bearer owner-key"],
-    ["/v1/rules/%E5%B7%A1%E6%A3%80/resume", "Bearer owner-key"],
-    ["/v1/rules/%E5%B7%A1%E6%A3%80/run", "Bearer owner-key"],
+    ["/v1/rules/inspe%C3%A7%C3%A3o/pause", "Bearer owner-key"],
+    ["/v1/rules/inspe%C3%A7%C3%A3o/replay", "Bearer owner-key"],
+    ["/v1/rules/inspe%C3%A7%C3%A3o/resume", "Bearer owner-key"],
+    ["/v1/rules/inspe%C3%A7%C3%A3o/run", "Bearer owner-key"],
     ["/v1/runs/999/why", "Bearer owner-key"],
     ["/v1/state", "Bearer owner-key"],
   ]);
 });
 
-test("status goes back a page of runs when given before", async () => {
+test("status volta uma página de rodadas quando recebe before", async () => {
   const urls: string[] = [];
   const mcp = await connect((req, res) => {
     urls.push(req.url!);
@@ -161,24 +169,24 @@ test("status goes back a page of runs when given before", async () => {
   assert.deepEqual(urls, ["/v1/state?before=41"]);
 });
 
-test("U+2028 and U+2029 in a request are part of the line", async () => {
+test("U+2028 e U+2029 numa requisição fazem parte da linha", async () => {
   let told = "";
   const mcp = await connect(async (req, res) => {
     for await (const chunk of req) told += chunk;
     res.end(JSON.stringify({ ok: true }));
   });
   try {
-    const text = "第一行 第二行 第三行";
+    const text = "primeira linha\u2028segunda linha\u2029terceira linha";
     mcp.send({ id: 2, method: "tools/call", params: { name: "tell", arguments: { key: "k", text } } });
     assert.equal((await mcp.answered(2)).result.isError, undefined);
     assert.deepEqual(JSON.parse(told), { key: "k", text });
-    assert.ok(!mcp.answers().some((answer) => answer.error), "and no pieces of it were taken for requests");
+    assert.ok(!mcp.answers().some((answer) => answer.error), "e nenhum pedaço dele foi tomado por requisição");
   } finally {
     await mcp.close();
   }
 });
 
-test("a slow tool call holds up neither a ping nor another call, and is still answered after the input ends", async () => {
+test("uma chamada de ferramenta lenta não segura nem um ping nem outra chamada, e ainda é respondida depois que a entrada termina", async () => {
   let release = () => {};
   const held = new Promise<void>((resolve) => (release = resolve));
   const mcp = await connect(async (req, res) => {
@@ -191,7 +199,7 @@ test("a slow tool call holds up neither a ping nor another call, and is still an
     assert.deepEqual((await mcp.answered(3)).result, {});
     mcp.send({ id: 4, method: "tools/call", params: { name: "why", arguments: { run: 1 } } });
     assert.match((await mcp.answered(4)).result.content[0].text, /runs\/1\/why/);
-    assert.ok(!mcp.answers().some((answer) => answer.id === 2), "it's still with the hub");
+    assert.ok(!mcp.answers().some((answer) => answer.id === 2), "ela ainda está com a central");
     mcp.child.stdin.end();
     release();
     assert.match((await mcp.answered(2)).result.content[0].text, /v1\/state/);

@@ -1,9 +1,9 @@
-// Failure modes: a draft mutates its base; filtered reads miss changed/new rows or retain deleted rows;
-// restart replays all history, reuses a deleted ID, or trusts an incompatible projection;
-// opening a second process briefly drops views used by the running service;
-// history size forces a point lookup to scan or populate a whole JavaScript table;
-// a draft reads rows in another order than they'll read once committed, or still sees what it replaced or deleted in a
-// table whose rows are keyed by their fields.
+// Modos de falha: um rascunho altera a sua base; leituras filtradas perdem linhas mudadas/novas ou retêm linhas apagadas;
+// reiniciar reexecuta todo o histórico, reaproveita um ID apagado ou confia numa projeção incompatível;
+// abrir um segundo processo derruba por um instante as views usadas pelo serviço em execução;
+// o tamanho do histórico força uma busca pontual a varrer ou preencher uma tabela JavaScript inteira;
+// um rascunho lê as linhas em outra ordem daquela em que serão lidas após o commit, ou ainda vê o que substituiu ou
+// apagou numa tabela cujas linhas são indexadas pelos seus campos.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DatabaseSync } from "node:sqlite";
@@ -21,7 +21,7 @@ import {
 import { commit, openView } from "../kernel/store.ts";
 
 const fact = (seq: number, changes: Fact["changes"]): Fact => ({ version: 1, seq, at: seq, type: "fixture", changes });
-test("a draft overlays filtered reads without changing the base", () => {
+test("um rascunho sobrepõe leituras filtradas sem mudar a base", () => {
   const base = evolve(empty(), [
     fact(1, [
       { table: "cards", key: "1", row: { id: 1, state: "open" } },
@@ -46,7 +46,7 @@ test("a draft overlays filtered reads without changing the base", () => {
   base.close();
 });
 
-test("a draft reads what the view will read once it's committed, in the same order, whatever a table is keyed by", () => {
+test("um rascunho lê o que a view lerá após o commit, na mesma ordem, seja qual for a chave da tabela", () => {
   const reads: [Table, Match?, number?, boolean?][] = [
     ["cards", { state: "open" }],
     ["cards", { state: "open" }, undefined, true],
@@ -62,7 +62,7 @@ test("a draft reads what the view will read once it's committed, in the same ord
     { table: "cards", key: "100", row: { id: 100, state: "open" } },
     { table: "cards", key: "2", row: null },
   ];
-  // A row of one of these is stored under a key made from its fields. The new row sorts ahead of the ones already there.
+  // Uma linha de uma destas é guardada sob uma chave feita dos seus campos. A linha nova se ordena à frente das que já estão lá.
   const keyed: [Table, (name: string) => [string, Row]][] = [
     ["run_events", (name) => [`1:${name}`, { run_id: 1, event_id: name }]],
     ["deliveries", (name) => [`1:${name}`, { card_id: 1, channel: name }]],
@@ -93,7 +93,7 @@ test("a draft reads what the view will read once it's committed, in the same ord
   base.close();
 });
 
-test("restart reuses projections and preserves deleted ID high water", () => {
+test("reiniciar reaproveita projeções e preserva a marca d'água de IDs apagados", () => {
   const db = new DatabaseSync(":memory:");
   let view = openView(db, "format-a");
   view = commit(db, view, () => [fact(1, [{ table: "timers", key: "9", row: { id: 9 } }])]);
@@ -116,7 +116,7 @@ test("restart reuses projections and preserves deleted ID high water", () => {
   db.close();
 });
 
-test("opening another process never exposes a missing SQL view", async () => {
+test("abrir outro processo nunca expõe uma view SQL ausente", async () => {
   const { setup } = await import("./helpers.ts");
   const { join } = await import("node:path");
   const home = setup("projection-open");

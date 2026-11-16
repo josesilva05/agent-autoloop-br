@@ -1,6 +1,7 @@
-// The architecture, as a test. The hub's kernel knows no vendor and makes no request of its own: everything connects to it.
-// Failure cases: a product name, an outbound request, a runtime dependency or an interface enters the kernel; what loads and
-// runs the plugins comes to know one of them by name, or to import it.
+// A arquitetura, como teste. O kernel da central não conhece nenhum fornecedor e não faz nenhuma requisição por conta
+// própria: tudo se conecta a ele. Modos de falha: um nome de produto, uma requisição para fora, uma dependência de
+// runtime ou uma interface entra no kernel; o que carrega e executa os plugins passa a conhecer um deles pelo nome,
+// ou a importá-lo.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ const kernel = readdirSync(join(root, "kernel"))
 const VENDORS =
   /claude|anthropic|codex|openai|gemini|cursor|hermes|openclaw|feishu|lark|dingtalk|telegram|slack|github|gitlab|\bacp\b|\bdsh\b|\bzcode\b/i;
 
-/** A comment may say where a limit came from. */
+/** Um comentário pode dizer de onde veio um limite. */
 function namesNoProduct(file: string, text: string) {
   for (const [i, line] of text.split("\n").entries()) {
     if (line.trim().startsWith("//") || line.trim().startsWith("/**")) continue;
@@ -22,21 +23,21 @@ function namesNoProduct(file: string, text: string) {
   }
 }
 
-test("the kernel names no product", () => {
+test("o kernel não cita nenhum produto", () => {
   for (const [file, text] of kernel) namesNoProduct(file, text);
 });
 
-test("what loads and runs the plugins names none either: a new product is a new plugin", () => {
+test("o que carrega e executa os plugins também não cita nenhum: um produto novo é um plugin novo", () => {
   for (const folder of ["host", "protocol", "worker"]) {
     for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
-      // What the worker keeps out of an agent's environment, of a session the worker itself may be in: nothing knows it else.
+      // O que o worker tira do ambiente de um Agent, de uma sessão em que ele mesmo pode estar: nada mais sabe.
       const text = readFileSync(join(root, folder, file), "utf8").replace("CLAUDECODE$|CLAUDE_CODE_|CODEX_", "");
       namesNoProduct(`${folder}/${file}`, text);
     }
   }
 });
 
-test("nothing but the loader reaches a plugin", () => {
+test("nada além do carregador alcança um plugin", () => {
   for (const folder of ["kernel", "host", "protocol", "worker", "cli"]) {
     for (const file of readdirSync(join(root, folder)).filter((name) => name.endsWith(".ts"))) {
       const text = readFileSync(join(root, folder, file), "utf8");
@@ -45,23 +46,23 @@ test("nothing but the loader reaches a plugin", () => {
   }
 });
 
-test("the kernel makes no request of its own", () => {
+test("o kernel não faz nenhuma requisição por conta própria", () => {
   const requests =
     /\bfetch\(|https?\.request|https?\.get\(|node:https|node:net|node:dgram|node:tls|child_process|WebSocket/;
   for (const [file, text] of kernel) assert.ok(!requests.test(text), file);
 });
 
-test("nothing is installed to run it", () => {
+test("nada é instalado para executá-lo", () => {
   const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   assert.deepEqual(manifest.dependencies ?? {}, {});
 });
 
-test("there's no interface in it", () => {
+test("não há nenhuma interface nele", () => {
   assert.ok(!existsSync(join(root, "web")));
   for (const [file, text] of kernel) assert.ok(!/<script|cookie/i.test(text), file);
 });
 
-test("time and entropy enter through the shell", () => {
+test("tempo e entropia entram pelo host", () => {
   for (const [file, text] of kernel)
     assert.ok(
       !/Date\.now\(|new Date\(\)|Math\.random\(|randomBytes|randomUUID|process\.env|node:fs|setTimeout|setInterval/.test(
@@ -71,7 +72,7 @@ test("time and entropy enter through the shell", () => {
     );
 });
 
-test("only evolve writes projections and only commit appends the log", () => {
+test("só o evolve escreve projeções e só o commit acrescenta ao registro", () => {
   const production = ["kernel", "host", "protocol", "plugins", "worker", "cli"]
     .filter((name) => existsSync(join(root, name)))
     .flatMap((name) =>

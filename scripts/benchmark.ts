@@ -1,5 +1,5 @@
-// Failure modes: measuring buffered writes as durable; excluding process startup; counting serial polls as concurrent;
-// a busy hub whose queue isn't really there, or whose polls have lapsed, passing for one under load.
+// Modos de falha: medir gravações em buffer como duráveis; excluir a inicialização do processo; contar polls seriais como
+// concorrentes; uma central ocupada cuja fila não existe de fato, ou cujos polls expiraram, passando por uma sob carga.
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
@@ -10,7 +10,7 @@ import { observePolls, checkPolls, observe, dispatchLatency, percentile, timed }
 import type { Change } from "../kernel/evolve.ts";
 
 if (process.argv.includes("--server")) {
-  // A cron tick can claim the poll before its measured event and leave readiness waiting forever.
+  // Um tick de cron pode reivindicar o poll antes do evento medido e deixar a prontidão esperando para sempre.
   const fixture = JSON.parse(readFileSync(new URL("../tests/rules.fixture.json", import.meta.url), "utf8"));
   fixture.rules = fixture.rules.filter((rule: { when: { cron?: string } }) => !rule.when.cron);
   fixture.elsewhere = [];
@@ -39,19 +39,19 @@ if (process.argv.includes("--server")) {
       sqlite: db.prepare("PRAGMA synchronous").get(),
     }),
   );
-  // What a read of the rules costs goes with their size, and the fixture is much smaller than a real rules file.
+  // O custo de uma leitura das regras acompanha o tamanho delas, e o fixture é muito menor que um arquivo de regras real.
   const padRules = () => {
     const extra = Array.from({ length: 15 }, (_, i) => ({
-      name: `规则 ${i}`,
+      name: `regra ${i}`,
       when: { source: "ops", types: [`padding.${i}`] },
       to: "a1",
       cwd: "~/x",
-      prompt: "按手册做。".repeat(20),
+      prompt: "Siga o manual.".repeat(20),
     }));
     execute("rules", [parseRules(JSON.stringify({ ...fixture, rules: [...fixture.rules, ...extra] }))]);
   };
-  // One fact with the whole queue in it, each row a copy of what ingest writes. Taking them through ingest one by one
-  // is quadratic for as long as each input rescans the queue, and that is what the scenario is there to measure.
+  // Um único fato com a fila inteira dentro, cada linha uma cópia do que o ingest grava. Passá-los pelo ingest um a um é
+  // quadrático enquanto cada entrada reexamina a fila, e é exatamente isso que o cenário está ali para medir.
   const seedQueue = (count: number) => {
     const view = getView();
     const event = { id: "queued", type: "feedback.new", subject: "#queued" };
@@ -69,7 +69,7 @@ if (process.argv.includes("--server")) {
       seeded.push({ table: "run_events", key: `${runId}:${eventId}`, row: { run_id: runId, event_id: eventId } });
     }
     commit(db, view, () => [{ version: 1, seq: view.seq + 1, at: now, type: "seed", changes: seeded }]);
-    // The fact above went round decide, so this is what brings the due table up to date with it.
+    // O fato acima contornou o decide, então é isto que coloca a tabela due em dia com ele.
     execute("tick", []);
   };
   const busyFigures = () => {
@@ -137,11 +137,11 @@ if (process.argv.includes("--server")) {
           if (done(await ask())) return;
           await new Promise((resolve) => setTimeout(resolve, 10));
         }
-        assert.fail("长轮询没有到位");
+        assert.fail("os long polls não se estabeleceram");
       };
       const queued = Number(process.env.BENCH_QUEUE ?? 5000);
       const { rulesBytes } = await ask({ padRules: true });
-      // The polls go in before the queue: while each heartbeat rescans the queue, a thousand of them would outlast their wait.
+      // Os polls entram antes da fila: enquanto cada heartbeat reexamina a fila, mil deles ultrapassariam o próprio tempo de espera.
       const abort = new AbortController();
       const waiting = [];
       for (let i = 0; i < 1000; i++) {
@@ -152,7 +152,7 @@ if (process.argv.includes("--server")) {
       const before = await ask({ queue: queued });
       const heartbeats = await timed(200, 20_000, () => request("/v1/work?wait=0&capacity=0&claim=beat", "worker"));
       const after = await ask();
-      assert.ok(after.queued >= queued, "排队必须真的在");
+      assert.ok(after.queued >= queued, "a fila precisa realmente existir");
       abort.abort();
       const responses = await Promise.all(waiting);
       assert.ok(responses.every((r) => r.status === "fulfilled" || r.reason.name === "AbortError"));
@@ -169,7 +169,7 @@ if (process.argv.includes("--server")) {
         await request(`/v1/runs/${job.run}/result`, job.token, { outcome: "done" });
         finish.push(performance.now() - finishedAt);
       });
-      // Every lane the group allows is taken and more are behind them: a worker with room asks this every second for nothing.
+      // Toda lane que o grupo permite está ocupada e há mais atrás delas: um worker com folga pergunta isso a cada segundo em vão.
       for (let i = 0; i < 4; i++) await request("/v1/events", "source", event(1000 + i));
       const held = [];
       for (let i = 0; i < 3; i++) held.push((await request(`/v1/work?wait=0&claim=held${i}`, "worker")).job);

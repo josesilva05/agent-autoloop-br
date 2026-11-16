@@ -1,28 +1,28 @@
-# 飞书周报与业务摘要
+# Relatório semanal e resumo de negócio do Feishu
 
-以本人权限读汇报、对照项目表，整理进展与待协调事项。默认周日北京时间 18 点读取过去七天的指定汇报和指定表格当前状态；完整读取后才调用 Agent，完整稿保存在本机，飞书给本人不含敏感明细的简短摘要。
+Lê os relatórios com a permissão do titular, compara com as tabelas de projetos e organiza o progresso e os pontos que precisam de coordenação. Por padrão, às 18h de domingo no fuso Asia/Shanghai (horário de Pequim), lê os relatórios indicados dos últimos sete dias e o estado atual das tabelas indicadas; o Agent só é chamado depois de uma leitura completa, o texto integral fica salvo nesta máquina e o Feishu recebe apenas um resumo curto para o titular, sem detalhes sensíveis.
 
-## 怎么启用
+## Como ativar
 
-1. 把本目录复制到 `~/.agent-autoloop/work/feishu-brief/`，目录权限设为 `0700`，不要放进 Git 仓库。两条规则使用同一台电脑、同一 `cwd` 和同一 `group`，读取和整理串行执行。
-2. 把 `SKILL.md` 放到 `~/.codex/skills/feishu-brief/`；Claude Code 放到 `~/.claude/skills/feishu-brief/`。
-3. 安装已登录本人身份的 `lark-cli`，先看 `lark-cli api --help` 和 `lark-cli base +record-list --help`，确认支持模板中的命令。只沿用已有授权，不在脚本里保存或导出 access token。
-4. 修改 `sources.json`：`reportRule` 是已有汇报规则的准确名称，`reportUsers` 是需要汇总且本人有权查看的人员 open_id；`tables` 填自己的多维表格 token、table ID、原链接和必要字段名。不需要表格就填空数组。占位标识不能直接用，模板不会创建表格或扩大权限。
-5. 合并规则的 `sources`、`agents`、`channels`、`rules`，替换接单电脑和路径；时区用 `Asia/Shanghai`。权限：`edit`，摘要 Agent 仅需读资料、写本地稿；联网读取由固定脚本完成，它只执行读取命令。
-6. 运行 `agent-autoloop check`。在专用测试中台用假 CLI 验证采集、摘要派发、登录失效后的提问与续办，再启用自己的定时规则。
+1. Copie este diretório para `~/.agent-autoloop/work/feishu-brief/`, com permissão `0700`, fora de qualquer repositório Git. As duas regras usam o mesmo computador, o mesmo `cwd` e o mesmo `group`, de modo que leitura e organização acontecem em série.
+2. Coloque o `SKILL.md` em `~/.codex/skills/feishu-brief/`; no Claude Code, em `~/.claude/skills/feishu-brief/`.
+3. Instale um `lark-cli` já autenticado com a identidade do titular e leia antes `lark-cli api --help` e `lark-cli base +record-list --help` para confirmar que os comandos usados neste modelo são suportados. Use apenas as autorizações já existentes; não salve nem exporte access token no script.
+4. Altere o `sources.json`: `reportRule` é o nome exato de uma regra de relatório já existente, `reportUsers` são os open_id das pessoas que devem ser reunidas e que o titular tem permissão de ver; em `tables`, preencha o token da sua tabela Base, o table ID, o link original e os nomes dos campos necessários. Se não precisar de tabelas, use um array vazio. Os identificadores reservados não funcionam como estão, e o modelo não cria tabelas nem amplia permissões.
+5. Mescle os `sources`, `agents`, `channels` e `rules` das regras, trocando o computador do worker e os caminhos; use o fuso `Asia/Shanghai`. Permissão: `edit` — o Agent de resumo só precisa ler dados e escrever o texto local; a leitura pela internet é feita pelo script fixo, que só executa comandos de leitura.
+6. Execute `agent-autoloop check`. Numa central de teste dedicada e com um CLI falso, verifique a coleta, o despacho do resumo e a pergunta e a continuação depois de uma falha de login antes de ativar as suas regras agendadas.
 
-## 读取与保存范围
+## O que é lido e o que é salvo
 
-汇报接口为 `POST /open-apis/report/v1/tasks/query`，这是查询操作，所需权限为 `report:task:readonly`。所有读取均使用 `--as user`，只拿本人发起和收到的汇报，再按人员、规则、时间过滤；不会切到机器人身份获取更多数据。接口规范见[飞书查询汇报任务](https://open.feishu.cn/document/server-docs/report-v1/task/query.md)。没有看到某人的汇报，不等于他没提交。附件图片不会下载。
+A interface de relatórios é `POST /open-apis/report/v1/tasks/query`, uma operação de consulta cuja permissão necessária é `report:task:readonly`. Toda leitura usa `--as user`, trazendo apenas os relatórios que o titular enviou ou recebeu, filtrados depois por pessoa, regra e período; nada muda para a identidade do bot para obter mais dados. A especificação da interface está em [Feishu — consultar tarefas de relatório](https://open.feishu.cn/document/server-docs/report-v1/task/query.md). Não ver o relatório de alguém não significa que essa pessoa não o enviou. Imagens em anexo não são baixadas.
 
-表格用 `base +record-list`，只读取指定字段，以 NDJSON 文件与 manifest 检查分页。直到 `has_more=false` 才算完整；跨页版本变化会报错，不能把部分数据说成完整汇总。不写回表格、OKR 或汇报。表格记录是当前快照，不能直接当作本周增量。
+As tabelas usam `base +record-list`, leem apenas os campos indicados e conferem a paginação por um arquivo NDJSON e um manifest. Só está completo ao chegar em `has_more=false`; mudança de versão entre páginas é um erro, e dados parciais não podem ser apresentados como um resumo completo. Nada é escrito de volta em tabelas, OKR ou relatórios. Os registros da tabela são o retrato do momento da leitura e não representam por si só o que foi acrescentado ou mudou nestes sete dias.
 
-临时表格导出在读取结束后清理。完整本期资料保存在 `weekly-input.json`（权限 `0600`），摘要是 `briefs/<资料编号>.md`；它们属于本人的业务资料，不提交、不公开，也不在飞书卡片里附原文。新资料覆盖输入文件后，旧的排队事件不会错误使用新资料；完整历史摘要由本人按自己的保留期限管理。
+As exportações temporárias de tabela são limpas ao fim da leitura. Os dados completos do período ficam em `weekly-input.json` (permissão `0600`) e o resumo em `briefs/<número dos dados>`; são dados de negócio do titular — não faça commit, não publique e não anexe o texto integral em cartões do Feishu. Depois que dados novos substituem o arquivo de entrada, eventos antigos na fila não usam os dados novos por engano; o histórico completo de resumos é gerenciado pelo titular conforme o próprio prazo de retenção.
 
-本人登录或授权失效时只发一张问题卡片，没有 `brief.ready` 事件，不拿上次的文件冒充本周结果。本人恢复后点继续，重新完整读取；选“本期先跳过”结束本轮，下次计划时间再读；临时接口错误则如实失败，由中台现有机制处理。
+Quando o login ou a autorização do titular falha, é enviado um único cartão de pergunta, sem evento `brief.ready`, e o arquivo anterior não é apresentado como o resultado desta semana. Depois que o titular restabelece o acesso, ele clica em continuar e a leitura completa é refeita; se escolher "Pular este período", esta rodada se encerra e a leitura volta no próximo horário agendado; erros temporários de interface falham com sinceridade e ficam com os mecanismos existentes da central.
 
-## 飞书通知
+## Notificação pelo Feishu
 
-规则默认登记 `feishu` 通道。把 `ou_REPLACE_ME` 换成本人的 open_id；在已有 `config.json` 的 `channels.feishu` 配上这个人的 `user` 和已有通道密钥。复用已运行的飞书通道，不另开监听。尚未接入时按[通道配置](../../../skills/agent-autoloop/SKILL.md#接一个通道)完成；配置涉及新密钥或权限时先取得本人授权。
+As regras registram por padrão o canal `feishu`. Troque `ou_REPLACE_ME` pelo open_id do titular; no `channels.feishu` do `config.json` existente, configure o `user` dessa pessoa e a chave de canal já em uso. Reaproveite o canal Feishu que já está rodando, sem abrir outra escuta. Se ele ainda não estiver conectado, siga a [configuração de canais](../../../skills/agent-autoloop/SKILL.md#conectar-um-canal); quando a configuração envolver chaves ou permissões novas, obtenha antes a autorização do titular.
 
-读取业务资料使用本人身份，通知使用机器人身份。默认只发给本人；一个中台默认把卡片交给它配置的所有通道；含私人资料的规则写上 `channels`，只发到本人私聊的通道，不要混入共享群通道。不要把密钥、实际 open_id、表格 token 或业务数据提交到仓库。
+A leitura dos dados de negócio usa a identidade do titular; a notificação usa a identidade do bot. Por padrão envia-se apenas ao titular; uma central entrega os cartões a todos os canais que ela tem configurados, então regras com dados privados devem declarar `channels` para enviar somente ao canal de conversa privada do titular, sem se misturar com canais de grupo compartilhados. Não faça commit no repositório de chaves, open_id reais, tokens de tabela nem dados de negócio.

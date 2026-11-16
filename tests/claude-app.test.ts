@@ -1,6 +1,6 @@
-// Finding the Claude Code the desktop app ships. Failure case: the app keeps files such as auto-update-state.json next
-// to its version folders, and reading one of them as a folder throws ENOTDIR, so every Claude turn fails instead of
-// using the copy that is there.
+// Encontrar o Claude Code que o aplicativo desktop distribui. Caso de falha: o aplicativo guarda arquivos como
+// auto-update-state.json ao lado das pastas de versão, e ler um deles como pasta lança ENOTDIR, então toda rodada do
+// Claude falha em vez de usar a cópia que está lá.
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,7 +9,7 @@ import { setup } from "./helpers.ts";
 
 const { inTheApp } = await import("../plugins/claude/agent.ts");
 
-test("the app's own files beside its versions are skipped", () => {
+test("os arquivos do próprio aplicativo ao lado das versões são pulados", () => {
   const home = setup("claude-app");
   const root = join(home, "Library/Application Support/Claude/claude-code");
   mkdirSync(join(root, "2.1.309", "build-a"), { recursive: true });

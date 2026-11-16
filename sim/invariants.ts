@@ -4,7 +4,7 @@ import { snapshot, type Fact, type View, type Row } from "../kernel/evolve.ts";
 
 type Snapshot = ReturnType<typeof snapshot>;
 const rows = (view: Snapshot, table: keyof Snapshot["tables"]) => Object.values(view.tables[table]);
-// Independent replay oracle: it checks the indexed projection without using its write or query implementation.
+// Oráculo de reprodução independente: confere a projeção indexada sem usar a implementação de escrita nem de consulta.
 export function replay(log: Fact[]): Snapshot {
   const tables = Object.fromEntries(
     [
@@ -30,7 +30,7 @@ export function replay(log: Fact[]): Snapshot {
       if (row === null) delete tables[table][key];
       else {
         tables[table][key] = row;
-        // Configuration versions are derived from each rules fact, including logs written before the lookup existed.
+        // As versões de configuração saem de cada fato de regras, inclusive em logs de antes de essa busca existir.
         if (table === "config" && key === "rules") tables.config[String(row.version)] = row;
         if (typeof row.id === "number") next[table] = Math.max(next[table] ?? 0, row.id);
       }
@@ -40,27 +40,32 @@ export function replay(log: Fact[]): Snapshot {
 }
 export function invariants(current: View, log: Fact[], before?: Snapshot) {
   const view = snapshot(current);
-  assert.deepEqual(view, replay(log), "日志重放记录不同");
-  for (const [index, fact] of log.entries()) assert.equal(fact.seq, index + 1, "日志序号不连续");
+  assert.deepEqual(view, replay(log), "a reprodução do log gerou registros diferentes");
+  for (const [index, fact] of log.entries())
+    assert.equal(fact.seq, index + 1, "os números de sequência do log não são contínuos");
   const events = rows(view, "events");
   const runs = rows(view, "runs");
   const cards = rows(view, "cards");
   const links = rows(view, "run_events");
-  assert.equal(new Set(events.map((e) => JSON.stringify([e.source, e.key]))).size, events.length, "重复事件");
+  assert.equal(new Set(events.map((e) => JSON.stringify([e.source, e.key]))).size, events.length, "evento duplicado");
   const held = runs.filter((r) => r.state === "claimed");
-  assert.equal(new Set(held.map((r) => JSON.stringify([r.grp, r.lane]))).size, held.length, "同一事项同时领了两轮");
+  assert.equal(
+    new Set(held.map((r) => JSON.stringify([r.grp, r.lane]))).size,
+    held.length,
+    "o mesmo assunto pegou duas rodadas ao mesmo tempo",
+  );
   for (const group of new Set(held.map((r) => r.grp)))
     assert.ok(
       held.filter((r) => r.grp === group).length <=
         (view.tables.config.rules.value.rules.find((r: Row) => r.group === group)?.parallel ?? 1),
-      "超出同组并发数",
+      "acima do limite de concorrência do mesmo grupo",
     );
   for (const e of events)
-    // A rule paused when the event came is on record as having matched it, and took nothing.
+    // Uma regra pausada quando o evento chegou fica registrada como tendo casado com ele, e não despachou nada.
     for (const rule of JSON.parse(e.routed).filter((r: string) => !JSON.parse(e.paused ?? "[]").includes(r)))
       assert.ok(
         links.some((l) => l.event_id === e.id && view.tables.runs[l.run_id]?.rule === rule),
-        "已收事件丢了派发关系",
+        "um evento recebido perdeu a relação de despacho",
       );
   for (const card of cards)
     if (card.answer_event !== null) {
@@ -74,11 +79,12 @@ export function invariants(current: View, log: Fact[], before?: Snapshot) {
               view.tables.runs[l.run_id]?.rule === card.rule &&
               view.tables.runs[l.run_id]?.lane === card.lane,
           ),
-          "回答没叫醒原事项",
+          "a resposta não acordou o assunto original",
         );
     }
   if (before) {
-    for (const e of rows(before, "events")) assert.deepEqual(view.tables.events[e.id], e, "已落盘事件被改了或丢了");
+    for (const e of rows(before, "events"))
+      assert.deepEqual(view.tables.events[e.id], e, "um evento já gravado foi alterado ou perdido");
     for (const c of rows(before, "cards"))
       if (c.answer_event !== null) {
         const now = view.tables.cards[c.id];
@@ -88,8 +94,9 @@ export function invariants(current: View, log: Fact[], before?: Snapshot) {
       }
     for (const r of rows(before, "runs"))
       if (["done", "nothing", "cancelled"].includes(r.state))
-        assert.deepEqual(view.tables.runs[r.id], r, "完成的回执再次生效");
+        assert.deepEqual(view.tables.runs[r.id], r, "um recibo já concluído teve efeito de novo");
   }
-  if (log.length) assert.deepEqual(view.tables.due, deadlines(current, log.at(-1)!.at), "到期表和重算的不一样");
+  if (log.length)
+    assert.deepEqual(view.tables.due, deadlines(current, log.at(-1)!.at), "a tabela de vencidos difere do recálculo");
   return view;
 }

@@ -1,4 +1,5 @@
-// The hub's open incident card is the checkpoint: no second scheduler, database, or pre-acknowledgement cursor.
+// O cartão de incidente aberto na central é o ponto de controle: nada de um segundo agendador, banco de dados ou cursor
+// de reconhecimento prévio.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -13,7 +14,7 @@ type Receipt = {
 };
 
 export async function probe(target: Target, request = fetch): Promise<Observation> {
-  // Network and body-read failures are observations of the monitored site, not a successful check.
+  // Falhas de rede e de leitura do corpo são observações sobre o site monitorado, não uma verificação bem-sucedida.
   try {
     const response = await request(target.url, {
       redirect: "manual",
@@ -21,16 +22,17 @@ export async function probe(target: Target, request = fetch): Promise<Observatio
       signal: AbortSignal.timeout(20_000),
       headers: { "user-agent": "agent-autoloop-site-check/1.0" },
     });
-    if (response.status !== 200) return { ok: false, reason: `返回 ${response.status}` };
-    if (!(await response.text()).includes(target.contains)) return { ok: false, reason: "缺少约定的健康内容" };
-    return { ok: true, reason: "状态为 200，且包含约定的健康内容" };
+    if (response.status !== 200) return { ok: false, reason: `respondeu ${response.status}` };
+    if (!(await response.text()).includes(target.contains))
+      return { ok: false, reason: "não contém o conteúdo de saúde combinado" };
+    return { ok: true, reason: "status 200 e contém o conteúdo de saúde combinado" };
   } catch {
-    return { ok: false, reason: "连接、读取失败或超过 20 秒未完成" };
+    return { ok: false, reason: "falha de conexão ou de leitura, ou não concluiu em 20 segundos" };
   }
 }
 
 export function receipt(target: Target, observation: Observation, context: Context): Receipt {
-  const title = `${target.name}暂时无法正常访问`;
+  const title = `${target.name} está temporariamente inacessível`;
   const open = context.open.filter((card) => card.title === title);
   const changed = observation.ok ? open.length > 0 : open.length === 0;
   if (!changed) return {};
@@ -39,13 +41,13 @@ export function receipt(target: Target, observation: Observation, context: Conte
     .digest("hex");
   return {
     ...(observation.ok
-      ? { resolve: open.map(({ card }) => ({ card, reason: `巡检已恢复：${observation.reason}` })) }
+      ? { resolve: open.map(({ card }) => ({ card, reason: `Inspeção recuperada: ${observation.reason}` })) }
       : {
           notice: [
             {
               key: `site-${target.id}`,
               title,
-              text: "自动巡检发现异常，已交给维护 Agent 排查；恢复后会更新这张卡片。",
+              text: "A inspeção automática encontrou uma anomalia e a entregou ao Agent de manutenção para investigar; este cartão será atualizado quando houver recuperação.",
             },
           ],
         }),
@@ -54,7 +56,7 @@ export function receipt(target: Target, observation: Observation, context: Conte
         id,
         type: observation.ok ? "site.recovered" : "site.down",
         subject: target.id,
-        summary: observation.ok ? "网站巡检已恢复" : "网站巡检发现异常",
+        summary: observation.ok ? "Inspeção do site recuperada" : "Inspeção do site encontrou uma anomalia",
         detail: observation.reason,
         link: new URL(target.url).href,
       },
@@ -76,11 +78,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     url.search ||
     url.hash
   ) {
-    throw new Error("检查 site.json：填写站点编号、名称、关键内容和不含凭据、查询参数或片段的 HTTP 地址");
+    throw new Error(
+      "Verifique o site.json: preencha o número do site, o nome, o conteúdo essencial e um endereço HTTP sem credenciais, parâmetros de consulta nem fragmento",
+    );
   }
   const context: Context = JSON.parse(readFileSync(process.env.AGENT_AUTOLOOP_CONTEXT!, "utf8"));
   const observation = await probe(target);
   console.log(
-    `巡检完成：${observation.reason}\n\n\`\`\`agent-autoloop\n${JSON.stringify(receipt(target, observation, context))}\n\`\`\``,
+    `Inspeção concluída: ${observation.reason}\n\n\`\`\`agent-autoloop\n${JSON.stringify(receipt(target, observation, context))}\n\`\`\``,
   );
 }

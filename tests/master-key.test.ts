@@ -1,6 +1,6 @@
-// The master key signs every card link and run token. Failure modes: an empty or cut-short master.key is used as is, so
-// anyone who sees a card's number and time can forge its link; a broken key is quietly replaced, invalidating every
-// link and token without the owner deciding to; a good key, with or without a trailing newline, stops being accepted.
+// A chave mestra assina todo link de cartão e todo token de rodada. Modos de falha: um master.key vazio ou cortado é usado como
+// está, então qualquer um que veja o número e a hora de um cartão pode forjar o link dele; uma chave quebrada é substituída em
+// silêncio, invalidando todo link e token sem o titular decidir; uma chave boa, com ou sem quebra de linha no fim, deixa de ser aceita.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -29,7 +29,7 @@ const start = (name: string, key?: string) => {
   return { ...started, file: () => readFileSync(join(home, "master.key"), "utf8") };
 };
 
-test("an empty or cut-short master key stops the hub and says how to fix it, leaving the file alone", () => {
+test("uma chave mestra vazia ou cortada impede a central de iniciar e diz como resolver, deixando o arquivo intacto", () => {
   for (const [name, key] of [
     ["empty", ""],
     ["blank", "\n"],
@@ -39,12 +39,12 @@ test("an empty or cut-short master key stops the hub and says how to fix it, lea
     const started = start(name, key);
     assert.notEqual(started.status, 0, name);
     assert.match(started.stderr, /master\.key/, name);
-    assert.match(started.stderr, /备份/, name);
-    assert.equal(started.file(), key, `${name}: not replaced behind the owner's back`);
+    assert.match(started.stderr, /backup/, name);
+    assert.equal(started.file(), key, `${name}: não substituída pelas costas do titular`);
   }
 });
 
-test("a good master key works, with or without a trailing newline; a missing one is made", () => {
+test("uma chave mestra boa funciona, com ou sem quebra de linha no fim; uma ausente é criada", () => {
   const key = randomBytes(32).toString("base64url");
   for (const [name, written] of [
     ["exact", key],

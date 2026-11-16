@@ -1,4 +1,4 @@
-// Keep Feishu credentials in its CLI; only complete, reader-scoped snapshots can wake the summarizer.
+// As credenciais do Feishu ficam no CLI dele; só um snapshot completo, no escopo de leitura, pode acordar o resumidor.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -26,22 +26,24 @@ function lark(args: string[]) {
   if (response.error?.type === "authorization" || response.error?.type === "authentication")
     throw new AuthorizationError();
   if (run.status !== 0 || response.ok !== true)
-    throw new Error(`飞书读取失败：${response.error?.type ?? "未知错误"}，请在本机检查 CLI`);
-  if (response.identity !== "user") throw new Error("飞书读取没有使用本人身份");
+    throw new Error(
+      `Falha na leitura do Feishu: ${response.error?.type ?? "erro desconhecido"}; verifique o CLI nesta máquina`,
+    );
+  if (response.identity !== "user") throw new Error("A leitura do Feishu não usou a identidade do titular");
   return response.data;
 }
 
 const context = JSON.parse(readFileSync(process.env.AGENT_AUTOLOOP_CONTEXT!, "utf8"));
-const blockedTitle = "请恢复飞书资料读取";
+const blockedTitle = "Restabeleça a leitura dos dados do Feishu";
 if (
   context.answers.length &&
   !context.answers.some(
     (answer: { title: string; choice: number | null }) => answer.title === blockedTitle && answer.choice === 0,
   )
 ) {
-  console.log("没事可做：本轮未确认恢复，留待下次计划读取");
+  console.log("NADA A FAZER: a recuperação não foi confirmada nesta rodada; fica para a próxima leitura agendada");
 } else if (context.open.some((card: { title: string }) => card.title === blockedTitle) && !context.answers.length) {
-  console.log("没事可做：等待本人恢复飞书读取");
+  console.log("NADA A FAZER: aguardando o titular restabelecer a leitura do Feishu");
 } else {
   const sources: Sources = JSON.parse(readFileSync(process.argv[2], "utf8"));
   if (
@@ -50,7 +52,9 @@ if (
     sources.reportUsers.some((id) => !id.startsWith("ou_")) ||
     sources.tables.some((table) => !table.baseToken || !table.tableId || !table.fields.length || !table.name)
   ) {
-    throw new Error("检查 sources.json：指定汇报规则、人员，以及表格和必要字段");
+    throw new Error(
+      "Verifique o sources.json: indique a regra de relatório, as pessoas, as tabelas e os campos necessários",
+    );
   }
   const folder = mkdtempSync(".brief-");
   try {
@@ -75,7 +79,10 @@ if (
             page_size: 20,
           }),
         ]);
-        if (!Array.isArray(data.items)) throw new Error("飞书没有返回汇报列表，不能当作没有周报");
+        if (!Array.isArray(data.items))
+          throw new Error(
+            "O Feishu não devolveu a lista de relatórios; isso não pode ser tratado como ausência de relatório semanal",
+          );
         reports.push(
           ...data.items.filter(
             (r: Report) =>
@@ -86,7 +93,7 @@ if (
           ),
         );
         if (data.has_more && (!data.page_token || data.page_token === page))
-          throw new Error("汇报分页标记无效，资料不完整");
+          throw new Error("Marcador de paginação dos relatórios inválido; dados incompletos");
         page = data.has_more ? data.page_token : "";
       } while (page);
     }
@@ -115,7 +122,8 @@ if (
           output,
         ]);
         const manifest = JSON.parse(readFileSync(output.replace(/\.ndjson$/, ".manifest.json"), "utf8"));
-        if (offset && manifest.rev !== revision) throw new Error("读取期间表格版本改变，本次不生成摘要");
+        if (offset && manifest.rev !== revision)
+          throw new Error("A versão da tabela mudou durante a leitura; nenhum resumo será gerado desta vez");
         revision = manifest.rev;
         records.push(
           ...readFileSync(output, "utf8")
@@ -125,7 +133,7 @@ if (
         );
         if (manifest.has_more === false) break;
         if (manifest.has_more !== true || !Number.isInteger(manifest.next_offset) || manifest.next_offset <= offset)
-          throw new Error("表格分页信息无效，资料不完整");
+          throw new Error("Informação de paginação da tabela inválida; dados incompletos");
         offset = manifest.next_offset;
       }
       tables.push({ name: table.name, url: table.url, fields: table.fields, records });
@@ -140,20 +148,21 @@ if (
     writeFileSync("weekly-input.json.tmp", JSON.stringify({ id, ...content }, null, 2), { mode: 0o600 });
     renameSync("weekly-input.json.tmp", "weekly-input.json");
     console.log(
-      `资料读取完成\n\n\`\`\`agent-autoloop\n${JSON.stringify({ events: [{ id, type: "brief.ready", subject: "weekly", summary: "本期飞书资料已完整读取" }] })}\n\`\`\``,
+      `Leitura dos dados concluída\n\n\`\`\`agent-autoloop\n${JSON.stringify({ events: [{ id, type: "brief.ready", subject: "weekly", summary: "Os dados do Feishu deste período foram lidos por completo" }] })}\n\`\`\``,
     );
   } catch (error) {
     if (!(error instanceof AuthorizationError)) throw error;
     console.log(
-      `待你处理：请恢复飞书资料读取\n\n\`\`\`agent-autoloop\n${JSON.stringify({
+      `AGUARDANDO VOCÊ: Restabeleça a leitura dos dados do Feishu\n\n\`\`\`agent-autoloop\n${JSON.stringify({
         ask: [
           {
             key: "feishu-access",
             title: blockedTitle,
-            text: "请在接单电脑恢复本人飞书登录或所需资料的访问权限，完成后选择继续。已有资料不会被当成本期结果。",
-            options: ["已恢复，继续读取", "本期先跳过"],
+            text: "No computador do worker, restabeleça o login do titular no Feishu ou o acesso aos dados necessários e, ao terminar, escolha continuar. Os dados já obtidos não serão tratados como o resultado deste período.",
+            options: ["Já restabeleci, continuar a leitura", "Pular este período"],
             recommend: 0,
-            about: "重新读取本期汇报和指定表格；完整成功后才交给摘要 Agent。",
+            about:
+              "Releia os relatórios deste período e as tabelas indicadas; só entregue ao Agent de resumo depois de um sucesso completo.",
           },
         ],
       })}\n\`\`\``,

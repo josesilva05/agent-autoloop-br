@@ -1,6 +1,6 @@
-// Failure modes: a labelled PR is never picked up; local review executes PR files; draft checks authorize a merge;
-// delivery reports success before Ship and health agree; the fixture leaks a repository, child process or database.
-// This opt-in test creates and deletes exactly the named private repository, using the existing gh/Codex logins.
+// Modos de falha: um PR rotulado nunca é recolhido; a revisão local executa arquivos do PR; verificações de rascunho autorizam
+// um merge; a entrega reporta sucesso antes de Ship e saúde concordarem; o fixture vaza um repositório, processo filho ou banco.
+// Este teste opcional cria e apaga exatamente o repositório privado indicado, usando os logins gh/Codex já existentes.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -13,7 +13,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const [repo, flag] = process.argv.slice(2);
 assert.ok(
   repo && /^[\w.-]+\/[\w.-]+$/.test(repo) && flag === "--run",
-  "用法：node scripts/delivery-e2e.ts owner/name --run（会创建并删除这个私有仓库）",
+  "Uso: node scripts/delivery-e2e.ts owner/name --run (cria e apaga este repositório privado)",
 );
 const root = mkdtempSync(join(tmpdir(), "agent-autoloop-delivery-e2e-"));
 const work = join(root, "seed");
@@ -56,8 +56,11 @@ const start = Date.now();
 const api = github(repo);
 try {
   git("init", "-q", "-b", "main");
-  write("AGENTS.md", "## 审查要点\n\napp.txt 只能包含一个版本标记；不执行仓库里的代码或设置。\n");
-  write("app.txt", "版本一\n");
+  write(
+    "AGENTS.md",
+    "## Pontos de revisão\n\napp.txt só pode conter um marcador de versão; não execute código nem configurações do repositório.\n",
+  );
+  write("app.txt", "versão um\n");
   write(
     "ops/delivery.json",
     JSON.stringify(
@@ -88,7 +91,7 @@ jobs:
     if: github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
-      - run: echo 草稿只做快速检查
+      - run: echo Um rascunho faz apenas uma verificação rápida
   check:
     if: '!github.event.pull_request.draft'
     runs-on: ubuntu-latest
@@ -97,7 +100,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
-      - run: node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; assert.ok(["版本一","版本二"].includes(fs.readFileSync("app.txt","utf8").trim()));'
+      - run: node --input-type=module -e 'import fs from "node:fs"; import assert from "node:assert/strict"; assert.ok(["versão um","versão dois"].includes(fs.readFileSync("app.txt","utf8").trim()));'
 `,
   );
   write(
@@ -120,11 +123,11 @@ jobs:
         with:
           test-local-health: 'true'
       - if: steps.scope.outputs.release == 'true' && steps.scope.outputs.superseded != 'true'
-        run: echo 发布步骤完成，测试控制器核对成功后更新本机健康版本
+        run: echo Passo de publicação concluído. O controlador do teste atualiza a versão de saúde local depois de confirmar o sucesso
 `,
   );
-  live = commit("初始化临时交付测试项目");
-  gh(["repo", "create", repo, "--private", "--description", "agent-autoloop 临时交付测试"]);
+  live = commit("Inicializa o projeto temporário do teste de entrega");
+  gh(["repo", "create", repo, "--private", "--description", "teste temporário de entrega do agent-autoloop"]);
   created = true;
   assert.equal(JSON.parse(gh(["repo", "view", repo, "--json", "isPrivate"])).isPrivate, true);
   git("remote", "add", "origin", `https://github.com/${repo}.git`);
@@ -132,11 +135,14 @@ jobs:
   for (const name of ["deliver", "deliver-attended", "deliver-review", "ask-owner"])
     gh(["label", "create", name, "--repo", repo]);
   git("switch", "-c", "verify-delivery");
-  write("app.txt", "版本二\n");
-  const head = commit("验证交付流程的版本变化");
+  write("app.txt", "versão dois\n");
+  const head = commit("Verifica a mudança de versão do fluxo de entrega");
   git("push", "-u", "origin", "verify-delivery");
   const body = join(root, "pr-body.md");
-  writeFileSync(body, "将版本标记从版本一改为版本二，验证审查、完整检查、合并、Ship 和本机健康版本。\n");
+  writeFileSync(
+    body,
+    "Troca o marcador de versão um para versão dois e verifica revisão, verificação completa, merge, Ship e a versão de saúde local.\n",
+  );
   const url = gh([
     "pr",
     "create",
@@ -148,7 +154,7 @@ jobs:
     "main",
     "--draft",
     "--title",
-    "验证完整交付流程",
+    "Verificar o fluxo completo de entrega",
     "--body-file",
     body,
   ]);
@@ -162,7 +168,7 @@ jobs:
       sources: { github: { name: "GitHub" } },
       agents: {
         delivery: {
-          name: "交付",
+          name: "Entrega",
           worker: "test",
           use: "delivery",
           command: [repo, "--test-local-health"],
@@ -173,11 +179,11 @@ jobs:
       channels: {},
       rules: [
         {
-          name: "交付",
+          name: "Entrega",
           when: { source: "github", types: ["pull_request.*"] },
           to: "delivery",
           cwd: root,
-          prompt: "按项目 main 的设置完成交付",
+          prompt: "Conclua a entrega conforme as configurações do projeto na main",
           parallel: 1,
         },
       ],
@@ -193,7 +199,7 @@ jobs:
   const source = hubClient(base, hub.addKey("source", "github"));
   const owner = hubClient(base, hub.addKey("owner", "me"));
   worker = createWorker({ hub: hubClient(base, hub.addKey("worker", "test")), name: "test", capacity: 1, wait: 0 });
-  // GitHub's filtered issue list can lag a successful label mutation on a fresh repository.
+  // A lista filtrada de issues do GitHub pode atrasar depois de uma mutação de rótulo bem-sucedida num repositório novo.
   let events = await poll(repo);
   for (let attempt = 0; !events.length && attempt < 20; attempt++) {
     await delay(1000);
@@ -221,7 +227,7 @@ jobs:
     if (state.runs.some((r: any) => r.state === "done")) {
       assert.ok(merged && ship);
       assert.equal(live, merged);
-      assert.ok(state.runs.some((r: any) => r.summary.includes("健康版本已核实")));
+      assert.ok(state.runs.some((r: any) => r.summary.includes("versão saudável verificada")));
       const statuses = (await api(`commits/${head}/status`)).statuses;
       for (const context of ["agent-review", "delivery"])
         assert.equal(statuses.find((s: any) => s.context === context)?.state, "success");
@@ -245,10 +251,11 @@ jobs:
       );
       break;
     }
-    if (state.cards.length) throw new Error("审查发现问题：" + state.cards.map((c: any) => c.text).join("\n"));
+    if (state.cards.length)
+      throw new Error("A revisão encontrou problemas: " + state.cards.map((c: any) => c.text).join("\n"));
     await delay(1000);
   }
-  assert.ok(completed, "完整交付未在 20 分钟内完成");
+  assert.ok(completed, "A entrega completa não terminou em 20 minutos");
 } finally {
   for (const entry of worker?.entries() ?? [])
     if (entry.pid) {
@@ -268,7 +275,7 @@ jobs:
       gh(["repo", "delete", repo, "--yes"]);
       console.log(JSON.stringify({ deleted: repo }));
     } catch (error) {
-      console.error(`临时仓库没有删掉：${repo}，${(error as Error).message}`);
+      console.error(`O repositório temporário não foi apagado: ${repo}, ${(error as Error).message}`);
       process.exitCode = 1;
     }
   }

@@ -1,16 +1,30 @@
 {
-  "askFirst": ["删数据", "停服", "花钱", "对外发消息", "改产品方向", "新建或轮换密钥", "修改权限", "动线上"],
+  "askFirst": [
+    "apagar dados",
+    "derrubar serviço",
+    "gastar dinheiro",
+    "enviar mensagens a terceiros",
+    "mudar a direção do produto",
+    "criar ou rotacionar chaves",
+    "alterar permissões",
+    "mexer em produção"
+  ],
   "sources": {
     "shop": { "name": "shop" },
-    "shop-fix": { "name": "shop 修复" }
+    "shop-fix": { "name": "correção do shop" }
   },
   "agents": {
     "agent": { "name": "Agent", "worker": "mac-mini", "use": "codex", "access": "read" },
-    "restart": { "name": "重启脚本", "worker": "mac-mini", "use": "command", "command": ["{cwd}/restart.sh"] }
+    "restart": {
+      "name": "Script de reinicialização",
+      "worker": "mac-mini",
+      "use": "command",
+      "command": ["{cwd}/restart.sh"]
+    }
   },
   "rules": [
     {
-      "name": "查线上报错",
+      "name": "Investigar erros de produção",
       "when": { "source": "shop", "types": ["alert.*"] },
       "to": "agent",
       "cwd": "~/code/shop",
@@ -19,7 +33,7 @@
       "emits": { "source": "shop-fix", "types": ["restart"] }
     },
     {
-      "name": "重启",
+      "name": "Reiniciar",
       "when": { "source": "shop-fix", "types": ["restart"] },
       "to": "restart",
       "cwd": "~/code/shop",

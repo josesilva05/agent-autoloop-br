@@ -1,10 +1,10 @@
 #!/bin/sh
-# Says how much CI a run needs, as scope=docs, normal, kernel or full. Text no test reads skips everything, and everything
-# else gets the quick tests. The simulation only imports kernel/ and protocol/, so those and its own parts add a short one:
-# breaking each kernel condition in turn showed the quick tests already catch what the long runs do. The long runs come with
-# nightly and before a release; a pull request only gets them for the two files nothing else would run, or a diff it can't
-# get. What reaches main gets the quick tests, text too: a commit whose run a newer push replaced is checked by the next one,
-# whatever that is.
+# Diz de quanto CI uma execução precisa, como scope=docs, normal, kernel ou full. Texto que nenhum teste lê pula tudo, e todo o
+# resto recebe os testes rápidos. A simulação só importa kernel/ e protocol/, então esses e as partes dela acrescentam uma curta:
+# quebrar cada condição do kernel uma por vez mostrou que os testes rápidos já pegam o que as execuções longas fazem. As longas
+# vêm com o nightly e antes de uma publicação; um pull request só as recebe para os dois arquivos que nada mais executaria, ou
+# para um diff que ele não consegue obter. O que chega em main recebe os testes rápidos, texto inclusive: um commit cuja execução
+# um push mais novo substituiu é verificado pela próxima, seja ela qual for.
 set -u
 
 if [ "${GITHUB_EVENT_NAME:-}" = push ]; then
@@ -12,7 +12,7 @@ if [ "${GITHUB_EVENT_NAME:-}" = push ]; then
   exit 0
 fi
 
-# Without --no-renames, moving a file out of kernel/ would show only where it landed.
+# Sem --no-renames, mover um arquivo para fora de kernel/ mostraria só onde ele foi parar.
 if [ "${GITHUB_EVENT_NAME:-}" != pull_request ] ||
   ! files=$(git diff --no-renames --name-only HEAD^1 HEAD 2>/dev/null) || [ -z "$files" ]; then
   echo "scope=full"
@@ -22,9 +22,9 @@ fi
 scope=docs
 while IFS= read -r file; do
   case "$file" in
-    # tests/example-plugins.test.ts runs the commands in this tutorial.
+    # tests/example-plugins.test.ts executa os comandos deste tutorial.
     docs/plugins.md) kind=normal ;;
-    README.md | README.en.md | INSTALL.md | SECURITY.md | CONTRIBUTING.md | AGENTS.md | LICENSE) kind=docs ;;
+    README.md | INSTALL.md | SECURITY.md | CONTRIBUTING.md | AGENTS.md | LICENSE) kind=docs ;;
     docs/* | .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md) kind=docs ;;
     tests/simulation.test.ts | sim/enumerate.ts) kind=full ;;
     kernel/* | protocol/* | sim/random.ts | sim/world.ts | sim/invariants.ts) kind=kernel ;;

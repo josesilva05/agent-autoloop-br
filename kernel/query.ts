@@ -1,4 +1,4 @@
-// Reading the view: what the decisions and the doors ask of it, and the shapes they hand out.
+// Lendo a view: o que as decisões e as portas perguntam a ela, e os formatos que elas entregam.
 import { credential, type Environment } from "./credentials.ts";
 import { rows, type Fact, type Row, type View } from "./evolve.ts";
 import { ruleOf, type Rule, type Rules } from "./rules.ts";
@@ -8,7 +8,7 @@ export function configuration(view: View, version?: number): Rules {
   const current = view.get("config", "rules");
   return (version === undefined || version === current?.version ? current : view.get("config", version))?.value;
 }
-/** The owner's pause that keeps a rule from taking work at this moment, if there is one. */
+/** A pausa do titular que impede uma regra de pegar trabalho neste momento, se houver uma. */
 export function pauseOf(view: View, rule: Rule, now: number): Row | null {
   const row = view.get("pauses", rule.name);
   return row && (row.until === null || Date.parse(row.until) > now) ? row : null;
@@ -25,7 +25,7 @@ export const workers = (view: View) =>
     ...rows(view, "runs", { state: "claimed" }).map((run) => workerOf(view, run)!),
   ]);
 
-/** What a worker's agents have on: runs in hand and runs ready to be claimed. */
+/** O que os Agents de um worker têm pendente: rodadas em mãos e rodadas prontas para serem pegas. */
 export function waitingOn(view: View, worker: string, now: number) {
   return rows(view, "runs", { state: ["queued", "claimed"] }).filter(
     (run) => workerOf(view, run) === worker && (run.state === "claimed" || Date.parse(run.not_before) <= now),
@@ -42,15 +42,15 @@ export function sourceOf(view: View, runId: number) {
   return sources.length === 1 ? sources[0] : null;
 }
 
-/** The rules an event went to, and the ones that would have taken it but were paused. */
+/** As regras para as quais um evento foi, e as que o teriam pego mas estavam pausadas. */
 export function routingOf(event: Row) {
   const paused: string[] = JSON.parse(event.paused ?? "[]");
   return { routed: JSON.parse(event.routed).filter((name: string) => !paused.includes(name)), paused };
 }
 
 /**
- * What became of an event, for the source that sent it: every run it is in now, as retries can merge runs. A run's summary
- * and the events its receipt sent are what the Agent made of all its events, so only a run of this source's alone has them.
+ * O que foi de um evento, para a fonte que o enviou: toda rodada em que ele está agora, já que novas tentativas podem
+ * fazer merge de rodadas. O resumo e os eventos do recibo são o que o Agent fez dos seus, e só uma rodada da fonte os tem.
  */
 export function eventOutcome(view: View, source: string, id: number) {
   const event = view.get("events", id);
@@ -87,7 +87,7 @@ export function eventOutcome(view: View, source: string, id: number) {
   };
 }
 
-/** The cards a run may close: open before it was claimed, from the same source and group. */
+/** Os cartões que uma rodada pode fechar: abertos antes de ela ser pega, da mesma fonte e do mesmo grupo. */
 export function openInScope(view: View, run: Row) {
   const source = sourceOf(view, run.id);
   if (!source || !run.claimed_at) return [];
@@ -98,7 +98,7 @@ export function openInScope(view: View, run: Row) {
 
 export function cardView(card: Row, env: Environment, ref: string | null = null, links = false) {
   const { id, version, kind, state, title, text, recommend, choice, answer, by, result } = card;
-  const options: string[] = kind === "ask" ? JSON.parse(card.options) : state === "open" ? ["已处理"] : [];
+  const options: string[] = kind === "ask" ? JSON.parse(card.options) : state === "open" ? ["Resolvido"] : [];
   const link = links ? `${env.publicUrl.replace(/\/$/, "")}/c/${credential(env, "card", id, card.created_at)}` : null;
   const when = { createdAt: card.created_at, decidedAt: card.decided_at, closedAt: card.closed_at };
   return {

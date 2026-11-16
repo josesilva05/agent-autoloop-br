@@ -1,10 +1,10 @@
 {
   "name": "agent-autoloop",
-  "description": "Let Agents follow up on work and ask when they need your judgment.",
+  "description": "Deixe seus Agents darem continuidade ao trabalho e perguntarem quando precisarem da sua decisão.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KKKKhazix/agent-autoloop.git"
+    "url": "git+https://github.com/josesilva05/agent-autoloop-br.git"
   },
   "private": true,
   "type": "module",

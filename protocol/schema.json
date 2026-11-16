@@ -704,7 +704,7 @@
           }
         },
         "paused": {
-          "description": "Rules that match the event but are paused, so it was recorded for them and not dispatched.",
+          "description": "Regras que casam com o evento mas estão pausadas, então ele foi registrado para elas e não despachado.",
           "type": "array",
           "items": {
             "type": "string",
@@ -716,7 +716,7 @@
       "additionalProperties": false
     },
     "eventOutcome": {
-      "description": "What became of an event, read with the key of the source that sent it.",
+      "description": "O que aconteceu com um evento, lido com a chave da fonte que o enviou.",
       "type": "object",
       "properties": {
         "event": { "type": "integer", "minimum": 1 },
@@ -734,11 +734,11 @@
               "error": { "type": ["string", "null"] },
               "finishedAt": { "anyOf": [{ "type": "null" }, { "type": "string", "format": "date-time" }] },
               "summary": {
-                "description": "Null until it ends, and whenever the run also took another source's events.",
+                "description": "Null até terminar, e sempre que a rodada também tiver levado eventos de outra fonte.",
                 "type": ["string", "null"]
               },
               "events": {
-                "description": "What its receipt sent; null whenever the run also took another source's events.",
+                "description": "O que o recibo dela enviou; null sempre que a rodada também tiver levado eventos de outra fonte.",
                 "anyOf": [{ "type": "null" }, { "type": "array", "items": { "$ref": "#/$defs/event" } }]
               }
             },

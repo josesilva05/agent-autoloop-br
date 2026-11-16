@@ -97,7 +97,12 @@ test("o título de sessão de uma regra é a primeira linha, preenchido com o ob
 test("o prompt menciona o que esta rodada está continuando e o que ela pode emitir", () => {
   const text = promptFor(
     job({
-      rule: { name: "inspeção", cwd: "~/x", prompt: "dê uma olhada", emits: { source: "app", types: ["feedback.new"] } },
+      rule: {
+        name: "inspeção",
+        cwd: "~/x",
+        prompt: "dê uma olhada",
+        emits: { source: "app", types: ["feedback.new"] },
+      },
       context: {
         events: [],
         answers: [{ card: 3, title: "t", options: [], choice: 0, text: null, about: "", by: "me", at: "" }],
@@ -139,7 +144,9 @@ test("um bloqueio que precisa do titular é repassado sem reiniciar o trabalho c
     ],
   };
   const result = resultFrom(
-    readMessage(`AGUARDANDO VOCÊ: conexão de verificação da página indisponível\n\`\`\`agent-autoloop\n${JSON.stringify(receipt)}\n\`\`\``),
+    readMessage(
+      `AGUARDANDO VOCÊ: conexão de verificação da página indisponível\n\`\`\`agent-autoloop\n${JSON.stringify(receipt)}\n\`\`\``,
+    ),
     { session: "browser-session" },
   );
   assert.equal(result.problem, undefined);
@@ -164,7 +171,10 @@ test("a primeira linha diz como terminou", () => {
     error: "não consigo conectar ao banco",
   });
   assert.deepEqual(readMessage("FALHOU"), { outcome: "failed", error: "sem motivo informado" });
-  assert.deepEqual(readMessage("NADA A FAZER: já foi restaurado"), { outcome: "nothing", summary: "já foi restaurado" });
+  assert.deepEqual(readMessage("NADA A FAZER: já foi restaurado"), {
+    outcome: "nothing",
+    summary: "já foi restaurado",
+  });
   assert.deepEqual(readMessage("FAILED: no network"), { outcome: "failed", error: "no network" });
   assert.deepEqual(readMessage("NOTHING: all quiet"), { outcome: "nothing", summary: "all quiet" });
   assert.deepEqual(readMessage(""), { outcome: "failed", error: "não deixou resultado" });
@@ -233,7 +243,11 @@ test("uma cerca de código dentro das strings do recibo é parte do texto, não 
   assert.match(unmarked.problem!, /agent-autoloop/);
   const unclosed = readMessage('Concluído\n```agent-autoloop\n{"notice":[{"title":"Veja","text":"isto"}]}```');
   assert.equal(unclosed.receipt, undefined);
-  assert.match(unclosed.problem!, /numa linha só deles/, "um recibo cuja cerca de fechamento não está numa linha só é devolvido");
+  assert.match(
+    unclosed.problem!,
+    /numa linha só deles/,
+    "um recibo cuja cerca de fechamento não está numa linha só é devolvido",
+  );
 });
 
 test("um recibo ilegível diz o porquê e preserva como a rodada terminou", () => {
@@ -247,7 +261,9 @@ test("um recibo ilegível diz o porquê e preserva como a rodada terminou", () =
 
 test("um resultado é montado e verificado como a central o verificará", () => {
   const good = resultFrom(
-    readMessage('Pronto\n```agent-autoloop\n{"ask":[{"title":"Pergunta","text":"Resposta","options":["um","dois"]}]}\n```'),
+    readMessage(
+      'Pronto\n```agent-autoloop\n{"ask":[{"title":"Pergunta","text":"Resposta","options":["um","dois"]}]}\n```',
+    ),
     { session: "s", usage: { input: 1 } },
   );
   assert.deepEqual(good, {
@@ -260,7 +276,9 @@ test("um resultado é montado e verificado como a central o verificará", () => 
     },
   });
   const broken = resultFrom(
-    readMessage('Pronto\n```agent-autoloop\n{"ask":[{"title":"Pergunta","text":"Resposta","options":["só uma"]}]}\n```'),
+    readMessage(
+      'Pronto\n```agent-autoloop\n{"ask":[{"title":"Pergunta","text":"Resposta","options":["só uma"]}]}\n```',
+    ),
     {},
   );
   assert.match(broken.problem!, /ask/);

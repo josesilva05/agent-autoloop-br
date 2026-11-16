@@ -1,6 +1,10 @@
 {
   "timezone": "Asia/Shanghai",
-  "sources": { "app": { "name": "aplicativo" }, "ops": { "name": "operações" }, "hooks": { "name": "externo", "adapter": "echo" } },
+  "sources": {
+    "app": { "name": "aplicativo" },
+    "ops": { "name": "operações" },
+    "hooks": { "name": "externo", "adapter": "echo" }
+  },
   "agents": {
     "a1": { "name": "alfa", "worker": "w1", "use": "claude", "model": "m1", "effort": "high" },
     "a2": { "name": "beta", "worker": "w2", "use": "codex", "access": "full", "tier": "priority" },

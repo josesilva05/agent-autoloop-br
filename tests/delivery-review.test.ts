@@ -1,12 +1,12 @@
-// Failure modes: empty/failed reviews pass; findings are unhandled but attested; Codex reads developer
-// config or memories, writes files, sees credentials, or executes a PR's programs/settings. Review receives a text snapshot;
-// what an octopus merge brings never reaches the reviewer, so it passes unseen; Git escapes a Chinese path so it matches no
-// pattern; a root file named like a commit is taken for one and the review can't finish; a Windows npm shim cannot start the reviewer.
-// Reviewers by agent: an agent's exemption passes a path reviewed in depth, or a review asked for by label; a change nobody
-// declared, or declared by an account the project doesn't trust or for another PR, takes a listed agent's reviewer; a new
-// commit or a conflict resolved by hand keeps the declaration of the commit before it, while a clean sync with main loses it;
-// the model and depth set for a reviewer never reach Codex; a declaration its account took back still counts; a path Git
-// prints in quotes matches no pattern, so an exempt agent's change to a path reviewed in depth merges unreviewed.
+// Modos de falha: revisões vazias ou que falharam passam; findings não tratados são atestados; o Codex lê configuração de
+// desenvolvedor ou memórias, grava arquivos, vê credenciais ou executa programas/configurações de um PR. A revisão recebe um instantâneo em texto;
+// o que um octopus merge traz nunca chega ao revisor, então passa sem ser visto; o Git escapa um caminho com acentos, que não corresponde
+// a nenhum padrão; um arquivo na raiz com nome de commit é confundido com um e a revisão não consegue terminar; um shim de npm do Windows não consegue iniciar o revisor.
+// Revisores por Agent: a isenção de um Agent deixa passar um caminho revisado em profundidade, ou uma revisão pedida por label; uma mudança que ninguém
+// declarou, ou declarada por uma conta em que o projeto não confia ou para outro PR, fica com o revisor listado para aquele Agent; um commit
+// novo ou um conflito resolvido à mão mantém a declaração do commit anterior, enquanto uma sincronização limpa com a main a perde;
+// o modelo e a profundidade definidos para um revisor nunca chegam ao Codex; uma declaração que a própria conta retirou ainda conta; um caminho que o
+// Git imprime entre aspas não corresponde a nenhum padrão, então a mudança de um Agent isento num caminho revisado em profundidade é mesclada sem revisão.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseReview, codexCommand, declaredAgent, depth, reviewDelivery } from "../plugins/delivery/review.ts";
@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { settings } from "../plugins/delivery/project.ts";
 
-/** Exercise the production review entry with GitHub replies kept in memory. */
+/** Exercita a entrada de revisão de produção com as respostas do GitHub mantidas em memória. */
 function reviewPullRequest(
   repo: string,
   snapshot: string,
@@ -46,13 +46,13 @@ function reviewPullRequest(
     reviewerId: () => 1,
   });
 }
-test("a review must explicitly report a valid findings list", () => {
+test("uma revisão precisa reportar explicitamente uma lista de findings válida", () => {
   assert.deepEqual(parseReview('{"findings":[]}'), []);
-  assert.equal(parseReview('{"findings":[{"title":"错误","text":"这里会丢数据"}]}').length, 1);
+  assert.equal(parseReview('{"findings":[{"title":"erro","text":"aqui os dados se perdem"}]}').length, 1);
   for (const text of ["", "Reviewer failed", "{}", '{"findings":null}', '{"findings":[{}]}'])
     assert.throws(() => parseReview(text));
 });
-test("Codex ignores developer configuration and only reads the review snapshot", () => {
+test("o Codex ignora a configuração de desenvolvedor e só lê o instantâneo da revisão", () => {
   const argv = codexCommand("/tmp/snapshot/output.json", "high");
   for (const flag of ["--ignore-user-config", "--ephemeral", "memories", "read-only"]) assert.ok(argv.includes(flag));
   assert.ok(argv.includes('default_permissions="review"'));
@@ -61,7 +61,7 @@ test("Codex ignores developer configuration and only reads the review snapshot",
   assert.ok(!policy.includes(".codex"));
   assert.ok(!policy.includes(".ssh"));
 });
-test("review uses main's points and a text-only snapshot; ordinary internal docs skip the reviewer", async () => {
+test("a revisão usa os pontos da main e um instantâneo só de texto; documentos internos comuns pulam o revisor", async () => {
   const root = mkdtempSync(join(tmpdir(), "agent-autoloop-review-"));
   try {
     const repo = join(root, "repo");
@@ -76,7 +76,7 @@ test("review uses main's points and a text-only snapshot; ordinary internal docs
       return git("rev-parse", "HEAD");
     };
     git("init", "-q", "-b", "main");
-    writeFileSync(join(repo, "AGENTS.md"), "## 审查要点\nmain-points\n");
+    writeFileSync(join(repo, "AGENTS.md"), "## Pontos de revisão\nmain-points\n");
     writeFileSync(join(repo, "app.ts"), "throw new Error('must not execute');");
     const main = commit();
     const reviewer = join(root, "reviewer.mjs");
@@ -96,7 +96,7 @@ test("review uses main's points and a text-only snapshot; ordinary internal docs
     const docs = commit();
     assert.deepEqual(await reviewPullRequest(repo, snap, main, docs, s), { docsOnly: true });
     assert.ok(!existsSync(called));
-    writeFileSync(join(repo, "AGENTS.md"), "## 审查要点\nbranch-points\n");
+    writeFileSync(join(repo, "AGENTS.md"), "## Pontos de revisão\nbranch-points\n");
     writeFileSync(join(repo, "app.ts"), "throw new Error('changed');");
     const head = commit();
     assert.deepEqual(await reviewPullRequest(repo, snap, main, head, s), []);
@@ -106,7 +106,7 @@ test("review uses main's points and a text-only snapshot; ordinary internal docs
     rmSync(root, { recursive: true, force: true });
   }
 });
-/** A project with one commit on main, and stand-in reviewers that leave a mark when they're called and find nothing. */
+/** Um projeto com um commit na main, e revisores substitutos que deixam uma marca quando são chamados e não encontram nada. */
 function project(review: (stand: (name: string) => string[]) => object = () => ({})) {
   const root = mkdtempSync(join(tmpdir(), "agent-autoloop-review-"));
   const repo = join(root, "repo");
@@ -126,7 +126,7 @@ function project(review: (stand: (name: string) => string[]) => object = () => (
     return git("rev-parse", "HEAD");
   };
   git("init", "-q", "-b", "main");
-  writeFileSync(join(repo, "AGENTS.md"), "## 审查要点\nmain-points\n");
+  writeFileSync(join(repo, "AGENTS.md"), "## Pontos de revisão\nmain-points\n");
   writeFileSync(join(repo, "app.ts"), "export const version = 1;\n");
   const main = commit();
   const config = settings({
@@ -152,7 +152,7 @@ function project(review: (stand: (name: string) => string[]) => object = () => (
     [Symbol.dispose]: () => rmSync(root, { recursive: true, force: true }),
   };
 }
-test("a branch with an octopus merge is reported, not reviewed without what the merge brought", async () => {
+test("um branch com octopus merge é reportado, e não revisado sem o que o merge trouxe", async () => {
   using p = project();
   for (const name of ["one", "two"]) {
     p.git("switch", "-q", "-c", name, "main");
@@ -168,10 +168,10 @@ test("a branch with an octopus merge is reported, not reviewed without what the 
   assert.equal(p.git("rev-list", "--parents", "-n1", head).split(" ").length, 4);
   const result = await p.review(head);
   assert.ok("blocked" in result);
-  assert.match(result.blocked, /章鱼合并/);
+  assert.match(result.blocked, /octopus merge/);
   assert.ok(!p.reviewed());
 });
-test("an ordinary merge still goes to the reviewer", async () => {
+test("um merge comum ainda vai para o revisor", async () => {
   using p = project();
   p.git("switch", "-q", "-c", "one", "main");
   p.write("one.txt", "one");
@@ -183,20 +183,20 @@ test("an ordinary merge still goes to the reviewer", async () => {
   assert.deepEqual(await p.review(p.git("rev-parse", "HEAD")), []);
   assert.ok(p.reviewed());
 });
-test("a Chinese path still matches the settings", async () => {
+test("um caminho com acentos ainda corresponde às configurações", async () => {
   using p = project();
-  p.write("docs/说明.md", "docs");
+  p.write("docs/instruções.md", "docs");
   assert.deepEqual(await p.review(p.commit()), { docsOnly: true });
   assert.ok(!p.reviewed());
 });
-test("a root file named like a commit is reviewed as a file", async () => {
+test("um arquivo na raiz com nome de commit é revisado como arquivo", async () => {
   using p = project();
   p.write("a".repeat(40), "named like a commit");
   assert.deepEqual(await p.review(p.commit()), []);
   assert.ok(p.reviewed());
   assert.match(p.changes(), /named like a commit/);
 });
-test("an exempt agent's change skips the reviewer, unless a review is asked for or it touches a path reviewed in depth", async () => {
+test("a mudança de um Agent isento pula o revisor, a menos que uma revisão seja pedida ou que ela toque um caminho revisado em profundidade", async () => {
   const exempt = () => ({ agents: { codex: null }, trusted: [1], xhigh: ["ops/*"] });
   using p = project(exempt);
   p.write("app.ts", "export const version = 2;\n");
@@ -210,7 +210,7 @@ test("an exempt agent's change skips the reviewer, unless a review is asked for 
   assert.deepEqual(await q.review(q.commit(), { agent: "codex", required: false }), []);
   assert.ok(q.reviewed());
 });
-test("a change goes to the reviewer listed for its agent; one nobody declared or by an agent not listed, to the default", async () => {
+test("uma mudança vai para o revisor listado para o seu Agent; uma que ninguém declarou, ou de um Agent não listado, vai para o padrão", async () => {
   const listed = (stand: (name: string) => string[]) => ({
     agents: { claude: { command: stand("for-claude") } },
     trusted: [1],
@@ -227,7 +227,7 @@ test("a change goes to the reviewer listed for its agent; one nobody declared or
   await q.review(q.commit());
   assert.ok(q.reviewed() && !q.reviewed("for-claude"));
 });
-test("the model and depth set for a reviewer reach Codex, and a path reviewed in depth raises the depth", () => {
+test("o modelo e a profundidade definidos para um revisor chegam ao Codex, e um caminho revisado em profundidade eleva a profundidade", () => {
   const argv = codexCommand("/tmp/snapshot/output.json", "xhigh", "another-model");
   assert.equal(argv[argv.indexOf("-m") + 1], "another-model");
   assert.ok(argv.includes('model_reasoning_effort="xhigh"'));
@@ -236,7 +236,7 @@ test("the model and depth set for a reviewer reach Codex, and a path reviewed in
   assert.equal(depth("medium", true), "xhigh");
   assert.equal(depth("max", true), "max");
 });
-test("only a trusted account's declaration for this PR names the agent, on this commit or the one a clean sync with main left it on", () => {
+test("só a declaração de uma conta confiável para este PR nomeia o Agent, neste commit ou naquele em que uma sincronização limpa com a main o deixou", () => {
   using p = project();
   const status = (change = {}) => ({
     context: "delivery-agent/7",
@@ -262,7 +262,7 @@ test("only a trusted account's declaration for this PR names the agent, on this 
     { creator: { id: 2 } },
     { context: "delivery-agent/8" },
     { state: "pending" },
-    { description: "Not A Name" },
+    { description: "Não É Um Nome" },
   ])
     assert.equal(agent(own, on(own, status(wrong))), null);
   const tookBack = (sha: string) => (sha === own ? [status({ state: "failure" }), status()] : []);
@@ -292,8 +292,8 @@ test("only a trusted account's declaration for this PR names the agent, on this 
   assert.equal(agent(p.commit(), on(next), clashing), null);
 });
 test(
-  "a path Git prints in quotes is still one the project reviews in depth",
-  { skip: process.platform === "win32" && "Windows has no file names with a quote in them" },
+  "um caminho que o Git imprime entre aspas ainda é um que o projeto revisa em profundidade",
+  { skip: process.platform === "win32" && "O Windows não tem nomes de arquivo com aspas" },
   async () => {
     using p = project(() => ({ agents: { codex: null }, trusted: [1], xhigh: ["ops/*"] }));
     p.write('ops/de"ploy.sh', "echo deploy\n");

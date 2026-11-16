@@ -780,17 +780,17 @@ também é preciso `curl`. **Não é necessária conta no GitHub.**
 Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.ps1 | iex
 ```
 
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.sh | sh
 ```
 
 Tanto o instalador quanto `agent-autoloop update` instalam o
-[release](https://github.com/KKKKhazix/agent-autoloop/releases) mais recente, que é o que já
+[release](https://github.com/josesilva05/agent-autoloop-br/releases) mais recente, que é o que já
 passou por todas as verificações.
 
 O serviço em segundo plano usa o mecanismo nativo de cada sistema: launchd no macOS, tarefa

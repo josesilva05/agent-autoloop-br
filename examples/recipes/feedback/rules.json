@@ -1,14 +1,22 @@
 {
   "timezone": "Asia/Shanghai",
-  "askFirst": ["删数据", "停服", "花钱", "对外发消息", "改产品方向", "新建或轮换密钥", "修改权限"],
+  "askFirst": [
+    "apagar dados",
+    "derrubar serviço",
+    "gastar dinheiro",
+    "enviar mensagens a terceiros",
+    "mudar a direção do produto",
+    "criar ou rotacionar chaves",
+    "alterar permissões"
+  ],
   "sources": {
     "feedback": {
-      "name": "用户反馈"
+      "name": "Feedback de usuários"
     }
   },
   "agents": {
     "feedback-agent": {
-      "name": "反馈维护 Agent",
+      "name": "Agent de manutenção de feedback",
       "worker": "my-computer",
       "use": "codex",
       "access": "edit"
@@ -16,7 +24,7 @@
   },
   "rules": [
     {
-      "name": "处理用户反馈",
+      "name": "Tratar feedback de usuários",
       "when": {
         "source": "feedback",
         "types": ["feedback.new", "feedback.followup"]
@@ -30,7 +38,7 @@
   ],
   "channels": {
     "feishu": {
-      "name": "飞书",
+      "name": "Feishu",
       "answerers": ["ou_REPLACE_ME"]
     }
   }

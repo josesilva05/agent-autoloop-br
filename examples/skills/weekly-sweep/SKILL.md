@@ -1,17 +1,17 @@
 ---
 name: weekly-sweep
-description: 每周清理一次代码：把上次清理以来合进来的屎山找出来删掉。
+description: Limpe o código uma vez por semana: encontre e apague o código podre que entrou em merge desde a última limpeza.
 ---
 
-# 每周清理
+# Limpeza semanal
 
-把上次清理以来合进来的改动过一遍，能删的删，能合的合，然后上线。
+Passe pelas alterações que entraram em merge desde a última limpeza, apague o que puder ser apagado, junte o que puder ser juntado e então coloque em produção.
 
-1. **定范围**：找上次清理的提交，列出之后合并的改动。
-2. **逐个读**，问这几条：
-   - 它停用或替换了什么？旧的代码、测试、文档里的句子、配置都删了吗？只是“关掉”“不显示”的，机制还在。
-   - 它加了防护吗？锁、重试、兜底：有真实事故或文档作依据吗？没有就删。
-   - 同一件事是不是写了两遍？是不是在为个案打补丁？
-   - 文档有没有被它变假？
-3. **动手**：一个区域一个改动，说明里写删了什么、凭什么能删、怎么核实的。走正常的上线流程。
-4. **收尾**：没有要用户决定的就安静结束。要他决定的（比如删掉有数据的表）用卡片问。
+1. **Defina o escopo**: encontre o commit da última limpeza e liste as alterações mescladas depois dele.
+2. **Leia uma a uma** e pergunte:
+   - O que ela desativou ou substituiu? O código antigo, os testes, as frases na documentação e a configuração foram apagados? O que foi só "desligado" ou "deixado de exibir" continua com o mecanismo de pé.
+   - Ela acrescentou proteção? Locks, novas tentativas, fallbacks: há um incidente real ou documentação que os justifique? Sem isso, apague.
+   - A mesma coisa está escrita duas vezes? É um remendo para um caso isolado?
+   - A documentação passou a mentir por causa dela?
+3. **Aja**: uma alteração por área, dizendo na descrição o que foi apagado, com que base isso pôde ser apagado e como foi verificado. Siga o fluxo normal de ida para produção.
+4. **Feche**: sem nada que o usuário precise decidir, encerre em silêncio. O que depender de decisão dele (apagar uma tabela com dados, por exemplo), pergunte por cartão.

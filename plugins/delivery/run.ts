@@ -1,4 +1,4 @@
-// One delivery run: `node run.ts owner/name`, reading its event from AGENT_AUTOLOOP_CONTEXT and printing a receipt.
+// Uma execução de entrega: `node run.ts owner/name`, lendo o próprio evento de AGENT_AUTOLOOP_CONTEXT e imprimindo um recibo.
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,24 +32,25 @@ async function handoff(
   const notify = options.notifyCommand;
   const sendBack = async (reason: string, detail: string): Promise<HandoffResult> => {
     const current = await io.api(`pulls/${number}`);
-    if (head && current.head.sha !== head) return { text: "提交已更新，下一轮处理新提交", exit: 2 };
-    if (!hasLabel(current, "deliver")) return { text: "没事可做：交付标记已撤掉", exit: 2 };
+    if (head && current.head.sha !== head)
+      return { text: "O commit foi atualizado; a próxima rodada trata o novo commit", exit: 2 };
+    if (!hasLabel(current, "deliver")) return { text: "NADA A FAZER: o rótulo de entrega foi retirado", exit: 2 };
     head = current.head.sha;
     if (current.auto_merge) await disableAuto(number, io);
     if (!hasLabel(current, "deliver-attended") && notify) tellReturn(notify, repo, number, head, reason);
     await status(io, head, "delivery", "failure", reason);
     gh(["pr", "edit", String(number), "--repo", repo, "--remove-label", "deliver,deliver-review"]);
     await io.report?.("returned", head, { detail });
-    return { text: `交付退回：${reason}`, exit: 1 };
+    return { text: `entrega devolvida: ${reason}`, exit: 1 };
   };
   try {
     const issue = await io.api(`issues/${number}`);
     if (!issue.pull_request) {
       if (!notify || issue.state !== "open" || !hasLabel(issue, "ask-owner"))
-        return { text: "没事可做：没有待转告的问题", exit: 2 };
+        return { text: "NADA A FAZER: nenhum problema aguardando repasse", exit: 2 };
       tellQuestion(notify, repo, issue);
       await io.api(`issues/${number}/labels/ask-owner`, undefined, "DELETE");
-      return { text: "已转告需要处理的问题" };
+      return { text: "Problemas que precisam de tratamento foram repassados" };
     }
     pr = await io.api(`pulls/${number}`);
     head = pr.head.sha;
@@ -61,16 +62,16 @@ async function handoff(
         if (unattendedFailure(pr.labels, latest)) {
           tellReturn(notify, repo, number, head, latest.description);
           gh(["pr", "edit", String(number), "--repo", repo, "--remove-label", "deliver-attended"]);
-          return { text: "已转告无人领取的交付结果" };
+          return { text: "Resultado de entrega não reclamado foi repassado" };
         }
       }
-      return { text: "没事可做：没有待交付的标记", exit: 2 };
+      return { text: "NADA A FAZER: não há rótulo de entrega pendente", exit: 2 };
     }
     if (pr.state === "closed" && !pr.merged_at) {
-      await status(io, head, "delivery", "failure", "合并请求已关闭，未合并或发布");
+      await status(io, head, "delivery", "failure", "o pull request foi fechado; sem merge nem publicação");
       gh(["pr", "edit", String(number), "--repo", repo, "--remove-label", "deliver,deliver-review,deliver-attended"]);
       await io.report?.("returned", head, { detail: "closed" });
-      return { text: "没事可做：合并请求已关闭", exit: 2 };
+      return { text: "NADA A FAZER: o pull request foi fechado", exit: 2 };
     }
     const result = await deliver(repo, number, io, testLocalHealth);
     if (result.findings?.length) {
@@ -101,18 +102,30 @@ async function handoff(
     );
     if (retry) {
       if (head) await io.report?.("retrying", head, { detail: hiccup ? "github" : "execution" });
-      return { text: hiccup ? "GitHub 暂时出错，一分钟后接着查" : "交付步骤暂时出错，一分钟后接着查", retry };
+      return {
+        text: hiccup
+          ? "Erro temporário no GitHub; verifique de novo em um minuto"
+          : "Erro temporário no passo de entrega; verifique de novo em um minuto",
+        retry,
+      };
     }
-    if (!canReturn) return { text: "暂时读不到交付请求，请稍后重交", exit: 2 };
+    if (!canReturn)
+      return { text: "Não foi possível ler o pedido de entrega por agora; reentregue mais tarde", exit: 2 };
     try {
       return await sendBack(
-        hiccup ? "GitHub 连续约一小时出错，请稍后重交" : "交付连续五次尝试都卡住了，请稍后重交",
+        hiccup
+          ? "O GitHub vem falhando há cerca de uma hora; reentregue mais tarde"
+          : "A entrega travou em cinco tentativas seguidas; reentregue mais tarde",
         hiccup ? "github" : "execution",
       );
     } catch {
-      if (options.direct) return { text: "暂时写不回交付结果，请稍后重交", exit: 2 };
+      if (options.direct)
+        return { text: "Não foi possível gravar o resultado da entrega por agora; reentregue mais tarde", exit: 2 };
       const retry = retryHandoff(timers, head, hiccup, Date.now(), false, io.checkRecovery)!;
-      return { text: "暂时写不回交付结果，一分钟后接着查", retry };
+      return {
+        text: "Não foi possível gravar o resultado da entrega por agora; verifique de novo em um minuto",
+        retry,
+      };
     }
   }
 }
@@ -126,8 +139,8 @@ export async function run(repo: string, context: Context, testLocalHealth = fals
         try {
           runHook(progressCommand, { repo, number, head, phase, at: new Date().toISOString(), ...metadata }, 3000);
         } catch {
-          // Progress is separate from the GitHub receipt and may be unavailable during a release.
-          console.error("暂时没能上报交付进度");
+          // O progresso é separado do recibo do GitHub e pode ficar indisponível durante uma publicação.
+          console.error("Não foi possível reportar o progresso da entrega por agora");
         }
       }
     : options.report;
@@ -153,12 +166,13 @@ export async function run(repo: string, context: Context, testLocalHealth = fals
     }
     const issue = await io.api(`issues/${number}`);
     if (!issue.pull_request) {
-      if (issue.state !== "open" || !hasLabel(issue, "ask-owner")) return "没事可做：没有待处理的问题";
+      if (issue.state !== "open" || !hasLabel(issue, "ask-owner"))
+        return "NADA A FAZER: nenhum problema aguardando tratamento";
       if (context.answers?.length) {
         await io.api(`issues/${number}/labels/ask-owner`, undefined, "DELETE");
-        return "已记录处理结果";
+        return "Resultado do tratamento registrado";
       }
-      return `有一件事需要你处理\n${receiptBlock({ ask: [question(issue)] })}`;
+      return `Há um item que precisa do seu tratamento\n${receiptBlock({ ask: [question(issue)] })}`;
     }
     try {
       const result = await deliver(repo, number, io, testLocalHealth);

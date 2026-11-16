@@ -1,20 +1,28 @@
 {
   "timezone": "Asia/Shanghai",
-  "askFirst": ["删数据", "停服", "花钱", "对外发消息", "改产品方向", "新建或轮换密钥", "修改权限"],
+  "askFirst": [
+    "apagar dados",
+    "derrubar serviço",
+    "gastar dinheiro",
+    "enviar mensagens a terceiros",
+    "mudar a direção do produto",
+    "criar ou rotacionar chaves",
+    "alterar permissões"
+  ],
   "sources": {
     "inbox-triage": {
-      "name": "收件箱"
+      "name": "Caixa de entrada"
     }
   },
   "agents": {
     "inbox-collector": {
-      "name": "邮箱读取",
+      "name": "Leitura da caixa de entrada",
       "worker": "my-computer",
       "use": "command",
       "command": ["node", "{cwd}/collect.ts", "{cwd}/sources.json"]
     },
     "inbox-agent": {
-      "name": "收件箱分诊 Agent",
+      "name": "Agent de triagem da caixa de entrada",
       "worker": "my-computer",
       "use": "codex",
       "access": "edit"
@@ -22,7 +30,7 @@
   },
   "rules": [
     {
-      "name": "读取收件箱",
+      "name": "Ler a caixa de entrada",
       "when": {
         "cron": "0 8 * * *"
       },
@@ -36,7 +44,7 @@
       }
     },
     {
-      "name": "整理收件箱清单",
+      "name": "Organizar a lista da caixa de entrada",
       "when": {
         "source": "inbox-triage",
         "types": ["inbox.ready"]
@@ -50,7 +58,7 @@
   ],
   "channels": {
     "feishu": {
-      "name": "飞书",
+      "name": "Feishu",
       "answerers": ["ou_REPLACE_ME"]
     }
   }

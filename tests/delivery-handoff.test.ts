@@ -1,4 +1,4 @@
-// A retry cannot inherit another head's errors, forget its one check restart, or notify an owner whose agent is waiting.
+// Uma nova tentativa não pode herdar os erros de outro head, esquecer sua única reinicialização de check, nem notificar um titular cujo Agent está esperando.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { unattendedFailure, retryHandoff } from "../plugins/delivery/handoff.ts";
@@ -6,7 +6,7 @@ import { unattendedFailure, retryHandoff } from "../plugins/delivery/handoff.ts"
 const head = "a".repeat(40);
 const now = Date.parse("2026-10-30T12:00:00Z");
 
-test("GitHub errors get an hour without using up the five regular retries", () => {
+test("erros do GitHub ganham uma hora sem consumir as cinco novas tentativas comuns", () => {
   const due = { key: "delivery-retry", about: JSON.stringify({ head, github: 59, execution: 3 }) };
   const next = retryHandoff([due], head, false, now);
   assert.deepEqual(JSON.parse(next!.about), { head, github: 59, execution: 4 });
@@ -17,7 +17,7 @@ test("GitHub errors get an hour without using up the five regular retries", () =
   assert.deepEqual(JSON.parse(retryHandoff([due], "b".repeat(40), true, now)!.about).github, 1);
 });
 
-test("the retry receipt keeps a check restart across errors and drops it for a new head", () => {
+test("o recibo de nova tentativa mantém uma reinicialização de check entre erros e a descarta para um head novo", () => {
   const recovery = { head, after: 12 };
   const first = retryHandoff([], head, false, now, true, recovery)!;
   assert.deepEqual(JSON.parse(first.about), { head, github: 0, execution: 1, checkAfter: 12 });
@@ -27,9 +27,9 @@ test("the retry receipt keeps a check restart across errors and drops it for a n
   assert.deepEqual(JSON.parse(changed.about), { head: "b".repeat(40), github: 0, execution: 1 });
 });
 
-test("an attended return is eligible for notice only after three minutes and without a fresh handoff", () => {
+test("uma devolução acompanhada só pode ser notificada depois de três minutos e sem um handoff novo", () => {
   const labels = [{ name: "deliver-attended" }];
-  const failed = { state: "failure", created_at: "2026-10-30T11:57:00Z", description: "请修复" };
+  const failed = { state: "failure", created_at: "2026-10-30T11:57:00Z", description: "Corrija, por favor" };
   assert.equal(unattendedFailure(labels, failed, now), true);
   assert.equal(unattendedFailure(labels, failed, now - 1), false);
   assert.equal(unattendedFailure([...labels, { name: "deliver" }], failed, now), false);

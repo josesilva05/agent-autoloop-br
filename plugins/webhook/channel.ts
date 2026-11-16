@@ -1,5 +1,6 @@
-// The smallest channel there is: anything that takes a JSON POST (a group robot in DingTalk, WeCom, Slack, Discord…).
-// Words and a link, no buttons: pair it with "links": true in rules.json so the link itself can answer that one card.
+// O menor canal que existe: qualquer coisa que aceite um POST JSON (um robô de grupo no DingTalk, WeCom, Slack,
+// Discord…). Texto e um link, sem botões: combine-o com "links": true no rules.json para que o próprio link consiga
+// responder aquele cartão.
 //   "channels": { "dingtalk": { "use": "webhook", "key": "…", "url": "https://…",
 //                               "body": { "msgtype": "text", "text": { "content": "{text}" } } } }
 import { accepted, payload } from "./templates.ts";
@@ -14,24 +15,25 @@ function fill(template: unknown, text: string): unknown {
   return template;
 }
 
-// WeCom draws its messages as Markdown: a link or a tag in what an Agent wrote would be drawn, and could pass off a link
-// of its own as the card's. Full-width look-alikes keep the words and stop the markup; bare addresses still become links.
+// O WeCom desenha suas mensagens como Markdown: um link ou uma etiqueta no que um Agent escreveu seria desenhado, e
+// poderia passar um link próprio como se fosse o do cartão. Sósias de largura total mantêm o texto e impedem a marcação;
+// endereços soltos ainda viram link.
 const asWords = (text: string) => text.replaceAll("](", "］(").replaceAll("<", "＜");
 
 function words(card: Card, platform = "") {
   const rule = card.rule && card.rule !== card.title ? card.rule : "";
   if (platform === "wecom")
     card = { ...card, title: asWords(card.title), text: asWords(card.text), options: card.options.map(asWords) };
-  const source = rule ? `来源：${platform === "wecom" ? asWords(rule) : rule}` : "";
+  const source = rule ? `Fonte: ${platform === "wecom" ? asWords(rule) : rule}` : "";
   if (
     platform === "wecom" &&
     card.kind === "notice" &&
     card.state === "open" &&
     card.options.length === 1 &&
-    card.options[0] === "已处理" &&
+    card.options[0] === "Resolvido" &&
     card.link
   )
-    return [card.title, source, card.text, `[点击处理](${card.link})`].filter(Boolean).join("\n\n");
+    return [card.title, source, card.text, `[Clique para tratar](${card.link})`].filter(Boolean).join("\n\n");
   const choices = card.options.map((option, index) => `${index + 1}. ${option}`).join("\n");
   const parts = [card.title, source, card.text, ...(card.state === "open" ? [choices, card.link] : [])];
   return parts.filter(Boolean).join("\n\n");
@@ -43,12 +45,12 @@ export default async function webhook({ hub, options, log, signal }: ChannelCont
     try {
       ({ card } = await hub.nextCard(50));
     } catch (error) {
-      log(`couldn't reach the hub: ${error}`);
+      log(`não foi possível alcançar a central: ${error}`);
       await new Promise((resolve) => setTimeout(resolve, 10_000));
       continue;
     }
     if (!card) continue;
-    // It can't change a message once sent: an update has nothing to do.
+    // Ele não consegue alterar uma mensagem já enviada: uma atualização não tem nada a fazer.
     if (card.ref) {
       await hub.delivered(card.id, card.version, card.ref);
       continue;
@@ -67,7 +69,7 @@ export default async function webhook({ hub, options, log, signal }: ChannelCont
       await accepted(String(options.platform ?? ""), response);
       await hub.delivered(card.id, card.version, `sent-${card.id}`);
     } catch (error) {
-      log(`card ${card.id} not sent: ${error}`);
+      log(`cartão ${card.id} não enviado: ${error}`);
       await hub.failed(card.id, card.version, String(error)).catch(() => {});
     }
   }

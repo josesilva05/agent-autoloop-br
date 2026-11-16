@@ -1,5 +1,5 @@
-// What's going on, for the owner's own clients, read from what's there: rules, cards, runs and who has been seen. Nothing
-// is decided by it, so it's no part of the kernel.
+// O que está acontecendo, para os clientes do próprio titular, lido a partir do que já existe: regras, cartões, rodadas
+// e quem foi visto. Nada é decidido por ele, por isso não faz parte do kernel.
 import type { SQLInputValue } from "node:sqlite";
 import { describeCron, dayStart, nextRun, parseCron } from "../kernel/cron.ts";
 import { SEEN_EVERY } from "../kernel/due.ts";
@@ -7,7 +7,7 @@ import { iso, type Row } from "../kernel/evolve.ts";
 import type { cardView } from "../kernel/query.ts";
 import { cronOf, eventRule, SCHEDULE, type Rules } from "../kernel/rules.ts";
 
-/** The columns of the read-only SQL views over the projections, which the queries here read. */
+/** As colunas das visões SQL somente de leitura sobre as projeções, que as consultas daqui leem. */
 const VIEWS = {
   events: "id source key type subject summary detail link routed paused received_at",
   runs:
@@ -25,13 +25,13 @@ const VIEWS = {
   pauses: "name by reason since until",
 };
 
-/** Made anew at every start, so changing them takes no rebuild and no migration. */
+/** Recriadas a cada inicialização, então mudá-las não exige rebuild nem migração. */
 export const viewStatements = Object.entries(VIEWS).map(([table, columns]) => {
   const selected = columns.split(" ").map((column) => `json_extract(data,'$.${column}') AS ${column}`);
   return `DROP VIEW IF EXISTS ${table}; CREATE VIEW ${table} AS SELECT ${selected.join(",")} FROM projections WHERE collection='${table}'`;
 });
 
-/** Seen this recently counts as online: two minutes of quiet, by a stamp that can be behind by SEEN_EVERY. */
+/** Ter sido visto há pouco conta como online: dois minutos de silêncio, com um carimbo que pode estar atrasado em até SEEN_EVERY. */
 const ONLINE = 120_000 + SEEN_EVERY;
 const PAGE = 60;
 const WEEK = 7 * 86400_000;
@@ -61,7 +61,7 @@ const COUNTS = `
     COALESCE(SUM(json_extract(usage, '$.cost')), 0) AS cost
   FROM runs GROUP BY rule, agent, state`;
 
-// Start from this run's links; scanning events in ID order would revisit the whole history for each run.
+// Comece pelas ligações desta rodada; varrer os eventos na ordem de id revisitaria todo o histórico para cada rodada.
 const EVENTS_OF_RUN = `
   SELECT source, type, subject, summary, link FROM run_events CROSS JOIN events ON events.id = run_events.event_id
   WHERE run_events.run_id = ? ORDER BY events.id DESC LIMIT 20`;
@@ -93,16 +93,16 @@ function tally(counted: Row[]) {
   };
 }
 
-// Events a pause kept from a rule: only those carry the field. A range on it, and +id, keep to that index instead of
-// walking every event by id.
+// Eventos que uma pausa impediu de chegar a uma regra: só eles carregam o campo. Um intervalo sobre ele, junto com +id,
+// mantém a consulta nesse índice em vez de percorrer todos os eventos por id.
 const SKIPPED = `SELECT id, source, type, subject, summary, paused, received_at FROM events
   WHERE paused > '' ORDER BY +id DESC LIMIT 20`;
-// The same, for one rule since its pause began, less those a replay has since handed to a run of the rule.
+// O mesmo, para uma regra desde que a sua pausa começou, menos aqueles que uma reexecução já entregou a uma rodada da regra.
 const SKIPPED_BY = `FROM events WHERE paused > '' AND received_at >= ?
   AND EXISTS (SELECT 1 FROM json_each(paused) WHERE value = ?)
   AND NOT EXISTS (SELECT 1 FROM run_events JOIN runs ON runs.id = run_events.run_id
     WHERE run_events.event_id = events.id AND runs.rule = ?)`;
-/** How many of the events a pause skipped come listed with it; the count says how many there are in all. */
+/** Quantos dos eventos que uma pausa ignorou vêm listados com ela; a contagem diz quantos existem ao todo. */
 const LISTED = 20;
 
 const skippedView = ({ paused, received_at: receivedAt, ...event }: Row) => ({
@@ -112,8 +112,8 @@ const skippedView = ({ paused, received_at: receivedAt, ...event }: Row) => ({
 });
 
 /**
- * What a pause has kept from a rule since `since` and nothing has made up yet, newest first: how many, and the latest of
- * them, or all of them.
+ * O que uma pausa impediu de chegar a uma regra desde `since` e que nada recompôs até agora, do mais recente para o
+ * mais antigo: quantos são, e os últimos deles, ou todos.
  */
 export function skippedOf(all: Reads["all"], rule: string, since: string, everything = false) {
   const { count } = all<{ count: number }>(`SELECT COUNT(*) AS count ${SKIPPED_BY}`, [since, rule, rule])[0];
@@ -146,8 +146,8 @@ export function stateOf(now: number, before: number | undefined, rules: Rules, {
   const hasMore = page.length > PAGE;
   const byId = new Map([...page.slice(0, PAGE), ...active].map((run) => [run.id, run]));
   const visible = [...byId.values()].sort((a, b) => b.id - a.id);
-  // A pause past its end is lifted at the next tick; until then it already doesn't hold. A schedule lets its moments pass
-  // and keeps no events.
+  // Uma pausa cujo fim já passou é suspensa no próximo tick; até lá ela já não segura nada. Um agendamento deixa os
+  // seus momentos passarem e não guarda eventos.
   const timed = new Set(rules.rules.filter((rule) => !eventRule(rule)).map((rule) => rule.name));
   const pauses = all<Row>("SELECT name, by, reason, since, until FROM pauses ORDER BY name")
     .filter((pause) => pause.until === null || Date.parse(pause.until) > now)
@@ -169,7 +169,7 @@ export function stateOf(now: number, before: number | undefined, rules: Rules, {
     timezone: rules.timezone,
     spending: spendingOf(all, now, rules.timezone),
     totals: { ...tally(counts), attention: openCards.length },
-    // The owner's own: which matter a card is about, and what its asker left for whoever carries on. Channels don't get them.
+    // Do próprio titular: sobre qual assunto é um cartão, e o que quem perguntou deixou para quem continuar. Os canais não os recebem.
     cards: openCards.map((card) => ({ ...view(card), lane: card.lane, about: card.about })),
     recentCards: recentCards.map((card) => ({ ...view(card), lane: card.lane, about: card.about })),
     timers: timers.map(({ rule, lane, key, about, at }) => ({ rule, lane, key, about, at })),

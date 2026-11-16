@@ -1,8 +1,9 @@
-// Failure modes: a recipe's rules don't pass `agent-autoloop check`, or check would pass anything; a rule names a Skill the
-// recipe doesn't ship, or the README doesn't say where to put it; a README promises one access level while the rules give
-// another; the curl in ops-alerts no longer reaches its rule, or the outside system's key can set off the restart; the
-// issue watcher prints something the worker can't read (a body's line break or backslash breaking its JSON), or an event
-// the rules wouldn't let through, or asks GitHub for something else when called with one argument.
+// Modos de falha: as regras de uma receita não passam no `agent-autoloop check`, ou o check aceitaria qualquer coisa; uma
+// regra nomeia um Skill que a receita não entrega, ou o README não diz onde colocá-lo; um README promete um nível de access
+// enquanto as regras dão outro; o curl em ops-alerts não alcança mais sua regra, ou a chave do sistema externo consegue
+// disparar a reinicialização; o observador de issues imprime algo que o worker não consegue ler (uma quebra de linha ou uma
+// barra invertida do corpo quebrando seu JSON), ou um evento que as regras não deixariam passar, ou pede outra coisa ao
+// GitHub quando chamado com um argumento só.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -50,12 +51,12 @@ const check = (rulesFile: string) =>
   });
 
 for (const name of NAMES) {
-  test(`${name}: agent-autoloop check passes its rules`, () => {
+  test(`${name}: agent-autoloop check aprova suas regras`, () => {
     const checked = check(join(RECIPES, name, "rules.json"));
     assert.equal(checked.status, 0, checked.stderr);
   });
 
-  test(`${name}: every Skill a rule names is here, and the README says where it goes`, () => {
+  test(`${name}: todo Skill que uma regra nomeia está aqui, e o README diz onde ele vai`, () => {
     const skills = readRules(name).rules.flatMap((rule: { skill?: string }) => rule.skill ?? []);
     assert.equal(skills.length, 1);
     const skill = readFileSync(join(RECIPES, name, "SKILL.md"), "utf8");
@@ -64,24 +65,24 @@ for (const name of NAMES) {
     assert.match(readDoc(name), new RegExp(`~/\\.claude/skills/${skills[0]}/`));
   });
 
-  test(`${name}: the README states the access level the rules actually give`, () => {
+  test(`${name}: o README informa o nível de access que as regras realmente dão`, () => {
     const { agents } = readRules(name);
     const real = Object.values<{ use: string; access: string }>(agents).filter((agent) => agent.use !== "command");
     assert.equal(real.length, 1);
-    const stated = /权限：`(read|edit|full)`/.exec(readDoc(name));
-    assert.ok(stated, "README 要写明权限");
+    const stated = /Permissão: `(read|edit|full)`/.exec(readDoc(name));
+    assert.ok(stated, "o README precisa informar a permissão");
     assert.equal(stated[1], real[0].access);
   });
 }
 
-test("agent-autoloop check refuses a recipe that was changed for the worse", () => {
+test("agent-autoloop check recusa uma receita que foi alterada para pior", () => {
   const broken = readRules("morning-brief");
   broken.rules[0].to = "nobody";
   const file = join(scratch, "broken.json");
   writeFileSync(file, JSON.stringify(broken));
   const checked = check(file);
   assert.notEqual(checked.status, 0);
-  assert.match(checked.stderr, /不是已登记的 Agent/);
+  assert.match(checked.stderr, /não é um Agent registrado/);
 });
 
 async function freePort() {
@@ -92,7 +93,7 @@ async function freePort() {
   return port;
 }
 
-test("ops-alerts: the curl in the README reaches the rule, and that key can't set off the restart", async () => {
+test("ops-alerts: o curl do README alcança a regra, e aquela chave não dispara a reinicialização", async () => {
   const home = mkdtempSync(join(scratch, "ops-"));
   const port = await freePort();
   const env = { AGENT_AUTOLOOP_HOME: home };
@@ -112,13 +113,13 @@ test("ops-alerts: the curl in the README reaches the rule, and that key can't se
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
     const curl = /```bash\n(curl [\s\S]*?)```/.exec(readDoc("ops-alerts"))?.[1];
-    assert.ok(curl, "README 里要有一条 curl");
+    assert.ok(curl, "o README precisa ter um curl");
     const sent = spawnSync("sh", ["-c", curl.replaceAll("http://127.0.0.1:3350", url)], {
       env: { ...cleanEnv(), SHOP_KEY: key },
       encoding: "utf8",
     });
     assert.equal(sent.status, 0, sent.stderr);
-    assert.deepEqual(JSON.parse(sent.stdout).routed, ["查线上报错"]);
+    assert.deepEqual(JSON.parse(sent.stdout).routed, ["Investigar erros de produção"]);
     const restart = await fetch(`${url}/v1/events`, {
       method: "POST",
       headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -131,7 +132,7 @@ test("ops-alerts: the curl in the README reaches the rule, and that key can't se
   }
 });
 
-// Stands in for gh and does what gh does with --jq, so the watcher's own filter really runs.
+// Substitui o gh e faz o que o gh faz com --jq, para que o filtro do próprio observador realmente rode.
 const FAKE_GH = `#!/bin/sh
 printf '%s\\n' "$*" > "$GH_LOG"
 while [ $# -gt 0 ]; do
@@ -153,7 +154,7 @@ function watch(args: string[]) {
       body: 'line one\nline two with a "quote" and a back\\slash\n\ttabbed',
     },
     { number: 13, title: "No body", url: "https://example.com/issues/13", body: "" },
-    { number: 14, title: "Long", url: "https://example.com/issues/14", body: "字".repeat(5000) },
+    { number: 14, title: "Long", url: "https://example.com/issues/14", body: "ã".repeat(5000) },
   ];
   writeFileSync(join(dir, "issues.json"), JSON.stringify(issues));
   const done = spawnSync("sh", [join(ROOT, "examples", "watch-github-issues.sh"), ...args], {
@@ -169,7 +170,7 @@ function watch(args: string[]) {
   return { said: done.stdout, asked: readFileSync(join(dir, "log"), "utf8"), issues };
 }
 
-test("github-issues: what the watcher prints goes through the worker whole, and the rules let it in", () => {
+test("github-issues: o que o observador imprime passa inteiro pelo worker, e as regras o deixam entrar", () => {
   const { said, issues } = watch(["owner/repo"]);
   const { result, problem } = resultFrom(readMessage(said), {});
   assert.equal(problem, undefined);
@@ -178,7 +179,7 @@ test("github-issues: what the watcher prints goes through the worker whole, and 
   assert.equal(events[0].id, "issue-12");
   assert.equal(events[0].subject, "#12");
   assert.equal(events[0].summary, issues[0].title);
-  assert.equal(events[0].detail, issues[0].body, "the body has to reach an Agent that can't go and read it");
+  assert.equal(events[0].detail, issues[0].body, "o corpo tem de chegar a um Agent que não pode ir lê-lo");
   assert.equal(events[0].link, issues[0].url);
   assert.equal(events[1].detail, "");
   assert.equal([...events[2].detail].length, 4000);
@@ -192,7 +193,7 @@ test("github-issues: what the watcher prints goes through the worker whole, and 
   assert.equal(handler.when.source, watcher.emits.source);
 });
 
-test("github-issues: the watcher's search is optional, and the rules use it to leave old issues alone", () => {
+test("github-issues: a busca do observador é opcional, e as regras a usam para deixar issues antigos em paz", () => {
   assert.doesNotMatch(watch(["owner/repo"]).asked, /--search/);
   assert.match(watch(["owner/repo", "created:>=2026-11-04"]).asked, /--search created:>=2026-11-04/);
   const { agents } = readRules("github-issues");

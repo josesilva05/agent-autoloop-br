@@ -1,65 +1,65 @@
-# 安装说明（写给 Agent）
+# Instruções de instalação (para o Agent)
 
-用户请你装好 Agent 自动化中台。先安装，再走一遍提问和继续处理；能自己做的直接做。
+O usuário pediu que você instale a central de automação de Agents. Primeiro instale, depois percorra o fluxo de pergunta e continuação do tratamento; faça diretamente o que puder fazer sozinho.
 
-## 安装
+## Instalação
 
-支持原生 Windows、macOS 和 Linux。需要 Node.js 24 或更新、Git，以及一个已经登录的命令行 Agent；macOS/Linux 还需要 curl。Windows 使用系统自带的 PowerShell 5.1、任务计划程序和 Windows Script Host（wscript）。
+Suporta Windows nativo, macOS e Linux. É preciso Node.js 24 ou mais novo, Git e um Agent de linha de comando já autenticado; macOS/Linux também precisam de curl. O Windows usa o PowerShell 5.1 que já vem no sistema, o Agendador de Tarefas e o Windows Script Host (wscript).
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.ps1 | iex
 ```
 
-默认安装在 `$env:USERPROFILE\.agent-autoloop`，命令目录加入当前进程及用户 PATH。Windows 10 和 11 都能装，不需要管理员：后台服务是当前账号自己的登录任务。例外是 Windows 自带的 Administrator 账号（开着 UAC 时）：不提权建不了登录任务，提权建出来的任务又会让中台和它派的 Agent 带着完整的管理员权限，所以 `service install` 会拒绝并打印一行 PowerShell，改用「启动」文件夹在登录时以普通权限拉起中台。Windows 服务在本人登录后于后台常驻、不开窗口，退出 10 秒后自动重启，注销后停止；通过 SSH 管理时也可用 `service install`，任务会在 Windows 已登录的会话中运行；Codex 0.167 的原生沙箱在 OpenSSH 会话中会出现 runner pipe-in 超时，本机登录会话正常，见 [Codex 已知问题](https://github.com/openai/codex/issues/37722)。中台起不来、日志里是 `listen EACCES` 时，多半是 Hyper-V、WSL 把端口划进了系统保留范围：`netsh int ipv4 show excludedportrange protocol=tcp` 查看，在 `config.json` 里换一个范围外的端口。CI 或普通命令测试用 `--no-service`，再运行安装器打印的完整命令启动 `up`。桌面通知只在同一登录会话显示。
+Por padrão instala em `$env:USERPROFILE\.agent-autoloop` e adiciona o diretório de comandos ao PATH do processo atual e ao PATH do usuário. Windows 10 e 11 instalam sem precisar de administrador: o serviço em segundo plano é uma tarefa de logon da própria conta atual. A exceção é a conta Administrator nativa do Windows (com o UAC ligado): sem elevar não dá para criar a tarefa de logon, e criada com elevação ela faria a central e os Agents despachados por ela rodarem com privilégios completos de administrador. Por isso `service install` recusa e imprime uma linha de PowerShell, usando em vez disso a pasta "Inicializar" para subir a central no logon com privilégios normais. O serviço do Windows fica residente em segundo plano depois que o titular faz logon, sem abrir janela, reinicia automaticamente 10 segundos após encerrar e para depois do logoff; ao gerenciar por SSH também é possível usar `service install`, e a tarefa rodará na sessão do Windows já autenticada. O sandbox nativo do Codex 0.167 apresenta timeout de runner pipe-in em sessões OpenSSH, enquanto a sessão de logon local funciona normalmente — veja [problema conhecido do Codex](https://github.com/openai/codex/issues/37722). Quando a central não sobe e o log mostra `listen EACCES`, na maioria das vezes o Hyper-V ou o WSL colocou a porta na faixa reservada pelo sistema: verifique com `netsh int ipv4 show excludedportrange protocol=tcp` e troque no `config.json` por uma porta fora dessa faixa. Para CI ou testes com comando genérico use `--no-service` e depois rode o comando completo que o instalador imprimiu para iniciar o `up`. Notificações de desktop só aparecem na mesma sessão de logon.
 
-本地仓库安装示例：
+Exemplo de instalação a partir de um repositório local:
 
 ```powershell
 $env:AGENT_AUTOLOOP_REPO = 'C:\code\agent-autoloop'
 & 'C:\code\agent-autoloop\install.ps1' --agent codex --no-service
 ```
 
-系统不允许运行本地脚本时，可仅为这一条命令使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\code\agent-autoloop\install.ps1 --agent codex --no-service`，不修改全局执行策略。安装其他参数与下面的 macOS/Linux 相同。
+Quando o sistema não permite executar scripts locais, você pode usar, apenas para este comando, `powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\code\agent-autoloop\install.ps1 --agent codex --no-service`, sem alterar a política de execução global. Os demais parâmetros de instalação são os mesmos do macOS/Linux abaixo.
 
-给 Windows 写带中文的 PowerShell 脚本（比如轮询脚本，或包一层 Agent 的脚本）要存成带 BOM 的 UTF-8：PowerShell 5.1 按本地代码页读不带 BOM 的文件，中文会乱，接着报语法错误。
+Ao escrever para o Windows scripts PowerShell com texto em português (por exemplo, um script de polling, ou um script que encapsula um Agent), salve em UTF-8 com BOM: o PowerShell 5.1 lê arquivos sem BOM usando a página de código local, os acentos saem corrompidos e em seguida aparecem erros de sintaxe.
 
-WSL2 仍按 Linux 安装；常驻服务需要发行版开启 systemd，没开则加 `--no-service`。WSL2 的桌面通知不会发送到 Windows 桌面。
+No WSL2 continue instalando como Linux; o serviço residente exige que a distribuição tenha o systemd ativo e, se não tiver, acrescente `--no-service`. As notificações de desktop do WSL2 não chegam à área de trabalho do Windows.
 
-先检查 `node --version`。Homebrew 的 `node@24` 默认不进 PATH，装好后还要运行 `export PATH="$(brew --prefix node@24)/bin:$PATH"`；需要长期生效时再写入用户的 shell 配置。不要替用户登录，也不要读取或复制登录凭据。
+Verifique antes `node --version`. O `node@24` do Homebrew não entra no PATH por padrão; depois de instalar é preciso rodar `export PATH="$(brew --prefix node@24)/bin:$PATH"` e, para valer permanentemente, gravar isso na configuração de shell do usuário. Não faça logon pelo usuário nem leia ou copie credenciais de login.
 
-本仓库已公开，安装脚本和代码都可匿名下载，不需要 GitHub 账号、登录或 GitHub CLI（`gh`）。下面的 macOS/Linux 命令安装并启用登录后常驻服务：
+Este repositório é público: o script de instalação e o código podem ser baixados anonimamente, sem conta no GitHub, sem login e sem GitHub CLI (`gh`). O comando macOS/Linux abaixo instala e ativa o serviço residente iniciado no logon:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.sh | sh
 ```
 
-GitHub Issue 轮询和 PR 交付等功能另需已登录的 `gh`，按对应场景说明配置；运行 Agent 也仍需该 Agent 自己的登录或授权。中台在后台启动 Agent，桌面应用里能用的浏览器和电脑操作它不一定用得上（比如 Codex 应用里的 Chrome，后台的 `codex exec` 用不到）；要它操作网页，照[浏览器接入](docs/plugins.md#浏览器接入)配好，再用后台的启动方式实际跑一次。
+Recursos como o polling de Issues do GitHub e a entrega de PR exigem adicionalmente um `gh` autenticado, configurado conforme a instrução do cenário correspondente; executar o Agent também continua exigindo o login ou a autorização próprios daquele Agent. A central inicia o Agent em segundo plano, e navegadores e operações de computador disponíveis no aplicativo desktop não necessariamente ficam acessíveis a ele (por exemplo, o Chrome dentro do app do Codex não é usado pelo `codex exec` em segundo plano); para que ele opere páginas web, configure conforme [Acesso ao navegador](docs/plugins.md#acesso-ao-navegador) e depois execute de fato uma vez usando o modo de início em segundo plano.
 
-安装和 `agent-autoloop update` 都装最新的 Release，那是通过了全部检查的版本，`main` 上还没发布的改动要等下一个 Release。
+Tanto a instalação quanto `agent-autoloop update` instalam o Release mais recente, que é a versão aprovada em todas as verificações; mudanças ainda não publicadas em `main` ficam para o próximo Release.
 
-用户指定本地仓库时，用该目录的安装脚本，并把 `AGENT_AUTOLOOP_REPO` 设成它的绝对路径。不要下载 GitHub 的旧脚本，也不要用未提交的文件冒充已安装版本；这时安装器克隆的是本地仓库的 HEAD，`update` 也跟着那个仓库走，不看 Release。已经装过时这个变量不起作用，还跟着原来的来源走；要换来源，先运行 `agent-autoloop uninstall` 再装。
+Quando o usuário indicar um repositório local, use o script de instalação daquele diretório e defina `AGENT_AUTOLOOP_REPO` com o caminho absoluto dele. Não baixe o script antigo do GitHub nem faça arquivos não commitados passarem por versão instalada; nesse caso o instalador clona o HEAD do repositório local e o `update` também passa a seguir aquele repositório, ignorando o Release. Se já houver instalação, essa variável não tem efeito e a origem anterior continua valendo; para trocar de origem, rode antes `agent-autoloop uninstall` e instale de novo.
 
-下面以 `/path/to/agent-autoloop` 为例，使用已经登录的 Codex：
+Abaixo, usando `/path/to/agent-autoloop` como exemplo e o Codex já autenticado:
 
 ```bash
 AGENT_AUTOLOOP_REPO=/path/to/agent-autoloop sh /path/to/agent-autoloop/install.sh --agent codex
 ```
 
-`--agent claude` 选择 Claude Code；只有其他 CLI 时加 `--command 'hermes chat -Q -q {prompt}'`，带空格的路径用引号括起来；找不到这个程序时不装。不指定时会检测本机安装的 Agent，第一种作为试跑对象。
+`--agent claude` escolhe o Claude Code; quando houver apenas outra CLI, acrescente `--command 'hermes chat -Q -q {prompt}'`, com caminhos contendo espaço entre aspas; se o programa não for encontrado, ele não instala. Quando nada é especificado, os Agents instalados na máquina são detectados e o primeiro deles vira o alvo da execução de teste.
 
-程序装进 `~/.agent-autoloop/app`，配置和记录留在 `~/.agent-autoloop`。默认打开桌面通知；没有图形会话时安静跳过，问题仍能用 `agent-autoloop status` 查看。macOS/Linux 的命令优先放在 PATH 中的 `~/.local/bin`，否则选 PATH 里第一个可写目录，不用 sudo、不覆盖其他程序；没有位置时使用安装器打印的完整路径。
+O programa é instalado em `~/.agent-autoloop/app`, e a configuração e os registros ficam em `~/.agent-autoloop`. A notificação de desktop vem ativada por padrão; sem sessão gráfica ela é pulada silenciosamente e as perguntas continuam visíveis com `agent-autoloop status`. No macOS/Linux o comando é colocado preferencialmente em `~/.local/bin`, que está no PATH; caso contrário, é escolhido o primeiro diretório gravável do PATH, sem sudo e sem sobrescrever outros programas; não havendo lugar, use o caminho completo impresso pelo instalador.
 
-安装器和中台启动时在 macOS/Linux 把数据目录设为 `0700`，Windows 则用 ACL 只允许本人和 SYSTEM 访问，包括已有目录，阻止其他系统用户读取数据库、事件和运行输出。Codex 的 Windows 沙箱会给用户目录下的文件夹加上它的账号的读权限，数据目录也在内；中台启动时收回，在那之前沙箱里的命令能读到主密钥和配置里的密钥。插件另外给每轮的 `context.json` 加这个读权限。升级后同步重启中台与接单程序；新版 `status` 使用中台提供的费用汇总。
+O instalador e a inicialização da central definem o diretório de dados como `0700` no macOS/Linux e, no Windows, usam ACL permitindo acesso apenas ao titular e ao SYSTEM, inclusive em diretórios já existentes, impedindo que outros usuários do sistema leiam o banco de dados, os eventos e a saída das execuções. O sandbox do Codex no Windows adiciona permissão de leitura para a conta dele nas pastas sob o diretório do usuário, incluindo o diretório de dados; a central revoga isso ao iniciar e, até lá, comandos dentro do sandbox conseguem ler a chave mestra e as chaves da configuração. Os plugins adicionam essa mesma permissão de leitura ao `context.json` de cada rodada. Depois de atualizar, reinicie juntos a central e o worker; o novo `status` usa o resumo de custos fornecido pela central.
 
-升级时若投影格式有变化，会自动从旧日志逐条重建，历史多时首次启动需要等待；之后正常启动直接复用投影。原日志和已有卡片链接保留，不需要手动迁移。
+Se o formato da projeção mudar durante a atualização, ela é reconstruída automaticamente item por item a partir do log antigo, e a primeira inicialização pode demorar quando o histórico é grande; depois disso, as inicializações normais reutilizam a projeção. O log original e os links de cartões existentes são preservados, sem migração manual.
 
-## 临时 HOME、CI 或没有服务管理器
+## HOME temporário, CI ou ausência de gerenciador de serviços
 
-使用临时 HOME 时不要装系统服务，不改真实用户的 shell 配置和 Agent 配置。保留调用者给定的 `AGENT_AUTOLOOP_HOME`；用真实 `CODEX_HOME` 只为了沿用已经完成的 Codex 登录。
+Ao usar um HOME temporário, não instale serviço no sistema e não altere a configuração de shell nem a configuração de Agent do usuário real. Preserve o `AGENT_AUTOLOOP_HOME` dado pelo chamador; use o `CODEX_HOME` real apenas para aproveitar o login do Codex já concluído.
 
-在临时环境中选一个空闲端口，运行本地安装脚本，随后启动中台：
+Em ambiente temporário, escolha uma porta livre, rode o script de instalação local e em seguida inicie a central:
 
 ```bash
 port=$(node -e 'const s=require("node:net").createServer().listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')
@@ -67,13 +67,13 @@ AGENT_AUTOLOOP_REPO=/path/to/agent-autoloop sh /path/to/agent-autoloop/install.s
 agent-autoloop up
 ```
 
-`up` 会一直运行。在 Agent 的命令工具里保留它返回的运行中会话，再用另一条命令完成验证；不要用 `nohup … &` 代替，命令工具可能在退出时清理后台进程。看到监听地址后再运行验证命令；启动失败就先处理该会话里的错误。
+`up` fica rodando continuamente. Na ferramenta de comandos do Agent, mantenha a sessão em execução que ele devolveu e use outro comando para concluir a verificação; não substitua por `nohup … &`, pois a ferramenta de comandos pode limpar processos em segundo plano ao sair. Rode o comando de verificação só depois de ver o endereço em escuta; se a inicialização falhar, trate primeiro o erro naquela sessão.
 
-PATH 没有命令时，把 `agent-autoloop` 换成安装器打印的完整路径。临时测试使用假的通知程序或通道，Windows 也不要弹真实通知；不要给已在线的飞书应用再开监听。
+Quando o comando não estiver no PATH, troque `agent-autoloop` pelo caminho completo impresso pelo instalador. Testes temporários usam programas ou canais de notificação falsos; no Windows também não devem abrir notificações reais. Não abra mais um listener para um aplicativo Feishu que já está online.
 
-## 验证
+## Verificação
 
-先查看安装和连接情况，再用真实 Agent 跑完整问答：
+Primeiro confira a instalação e a conexão, depois faça um ciclo completo de perguntas e respostas com um Agent real:
 
 ```bash
 agent-autoloop --version
@@ -81,40 +81,40 @@ agent-autoloop doctor
 agent-autoloop try
 ```
 
-`try` 会使用用户的模型额度。在非交互终端，它打印问题和 `agent-autoloop answer` 命令后退出；这是正常等待，不是失败。把问题转给用户，按他的选择回答，再运行 `agent-autoloop status`，看到“试跑通过”才算接通。仅为安装验证时，可以选择第二项绿色完成试跑。
+`try` consome a cota de modelo do usuário. Em um terminal não interativo, ele imprime a pergunta e o comando `agent-autoloop answer` e sai; isso é espera normal, não falha. Repasse a pergunta ao usuário, responda conforme a escolha dele e rode `agent-autoloop status`; só considere conectado ao ver "execução de teste aprovada". Quando o objetivo for apenas validar a instalação, você pode escolher a segunda opção, verde, para concluir a execução de teste.
 
-Claude 要委托 Codex 处理网页时，可用[浏览器交接模板](examples/recipes/browser-handoff/README.md)，先配置现成入口，再验收首次调用与原会话续办。模板不安装浏览器驱动、不自动放宽 Claude 命令权限。
+Quando o Claude precisar delegar ao Codex o trabalho em páginas web, use o [modelo de handoff de navegador](examples/recipes/browser-handoff/README.md): configure primeiro a entrada pronta e depois valide a primeira chamada e a continuação na sessão original. O modelo não instala driver de navegador nem afrouxa automaticamente as permissões de comando do Claude.
 
-任务还需要网页操作时，另按[浏览器接入](docs/plugins.md#浏览器接入)用同一后台启动方式核实实际页面和会话接续。`try` 只证明问答流程；中台不自动提供浏览器连接或修改 Agent 的工具配置。需要本人恢复连接、登录或验证时，保留待验收项并交 `ask`，不要反复重跑已完成的业务。
+Quando a tarefa também exigir operações na web, verifique além disso, seguindo [Acesso ao navegador](docs/plugins.md#acesso-ao-navegador) e usando o mesmo modo de início em segundo plano, as páginas reais e a continuidade da sessão. `try` só prova o fluxo de perguntas e respostas; a central não fornece automaticamente conexão de navegador nem altera a configuração de ferramentas do Agent. Quando for preciso o titular restabelecer conexão, fazer login ou validar, mantenha os itens pendentes de aceite e entregue via `ask`, sem reexecutar repetidamente o trabalho de negócio já concluído.
 
-没有安装系统服务时，`doctor` 会显示服务未运行；检查中台、Agent 和桌面通道是否在线即可，不要为了消除这条提示安装真实服务。
+Quando nenhum serviço de sistema tiver sido instalado, `doctor` mostrará que o serviço não está em execução; basta verificar se a central, o Agent e o canal de desktop estão online, e não instale um serviço real só para eliminar esse aviso.
 
-## 写第一条规则
+## Escrever a primeira regra
 
-安装验证完成后，按用户希望自动处理的事从 [README 的场景模板](README.md#拿来即用的场景模板)选一个，再照[配置手册](skills/agent-autoloop/SKILL.md)写规则；用户还没指定用途时再问。用 `agent-autoloop check` 检查；改动几秒内生效。
+Depois de validar a instalação, escolha em [receitas do README](README.md#receitas-prontas-para-usar) uma que corresponda ao que o usuário quer automatizar e escreva a regra seguindo o [manual de configuração](skills/agent-autoloop/SKILL.md); pergunte apenas se o usuário ainda não tiver indicado a finalidade. Verifique com `agent-autoloop check`; as mudanças valem em poucos segundos.
 
-国内业务可从反馈处理、网站巡检、飞书周报与业务摘要三套模板开始。它们默认飞书本人私聊；替换占位符后，配置和业务资料留在私有目录，不提交到仓库。模板不替用户新建凭据或扩大飞书权限。
+Para o seu negócio, você pode começar pelas três receitas de tratamento de feedback, monitoramento de site e resumo semanal e de negócios no Feishu. Elas usam por padrão o chat privado do titular no Feishu; depois de trocar os placeholders, a configuração e os materiais de negócio ficam em um diretório privado e não são commitados no repositório. As receitas não criam credenciais novas para o usuário nem ampliam as permissões do Feishu.
 
-桌面通知只在这台电脑上显示。需要别的通道时，先确认接收位置，再按配置手册接入。不要直接测试发信或发群消息。`access` 的含义见[插件说明](docs/plugins.md#access-实际能做什么)，不要替用户扩大权限。
+A notificação de desktop só aparece neste computador. Quando precisar de outro canal, confirme antes o destino e conecte-o seguindo o manual de configuração. Não teste diretamente enviando mensagens privadas ou em grupo. O significado de `access` está na [documentação de plugins](docs/plugins.md#o-que-o-access-realmente-permite); não amplie permissões em nome do usuário.
 
-## 卸载
+## Desinstalação
 
-卸载程序，默认保留规则、密钥和记录：
+Desinstala o programa e, por padrão, mantém regras, chaves e registros:
 
 ```bash
 agent-autoloop uninstall
 ```
 
-终端里确认后才执行；非交互运行时加 `--yes` 跳过确认，数据同样保留。它只停自己的服务和进程、删除指向自身的命令及 Skill 链接，以及安装目录里的 `app`。其他同名文件不动；数据目录不删除。
+Só executa depois da confirmação no terminal; em execução não interativa, acrescente `--yes` para pular a confirmação, e os dados são mantidos do mesmo jeito. Ele apenas para os próprios serviços e processos, remove os comandos e os links de Skill que apontam para si mesmo e apaga o `app` dentro do diretório de instalação. Outros arquivos com o mesmo nome não são tocados; o diretório de dados não é removido.
 
-临时安装验证完，用 `agent-autoloop uninstall --yes` 停掉本次进程，再清掉自己创建的临时目录。不要卸载用户已经在用的中台。
+Depois de validar uma instalação temporária, use `agent-autoloop uninstall --yes` para parar os processos desta execução e em seguida limpe os diretórios temporários que você mesmo criou. Não desinstale a central que o usuário já está usando.
 
-## 文档
+## Documentação
 
-- [配置手册](skills/agent-autoloop/SKILL.md)：接事件插件、通道和多台电脑。
-- [交付流水线](skills/agent-autoloop/SKILL.md#交付流水线)随安装提供，按仓库配置交付规则后开始接单。
-- [协议](docs/protocol.md)：HTTP、回执、事实日志和故障恢复。
-- [插件](docs/plugins.md)：三个可运行的最小例子。
-- [安全边界](SECURITY.md)：密钥、执行权限和交付审查。
+- [Manual de configuração](skills/agent-autoloop/SKILL.md): conectar plugins de eventos, canais e vários computadores.
+- O [pipeline de entrega](skills/agent-autoloop/SKILL.md#pipeline-de-entrega) vem com a instalação e começa a receber trabalho depois que as regras de entrega são configuradas conforme o repositório.
+- [Protocolo](docs/protocol.md): HTTP, recibos, registro de fatos e recuperação de falhas.
+- [Plugins](docs/plugins.md): três exemplos mínimos executáveis.
+- [Limites de segurança](SECURITY.md): chaves, permissões de execução e revisão na entrega.
 
-Windows 开发检查用 `npm run test:windows` 与 `node scripts/install-smoke-windows.ts`。Linux/macOS 用 `npm run test:quick`（改了 `kernel/`、`protocol/`、`sim/` 时用 `npm test`）、`npm run typecheck`、`npm run format:check`，完整故障检查和性能实测用 `npm run test:nightly`。备份和恢复见[配置手册](skills/agent-autoloop/SKILL.md#日志与恢复)。`master.key` 坏了中台会拒绝启动：从备份恢复；没有备份就删掉它，重启会生成新的，已发出的卡片链接和正在跑的轮次会失效。
+Para verificações de desenvolvimento no Windows use `npm run test:windows` e `node scripts/install-smoke-windows.ts`. Em Linux/macOS use `npm run test:quick` (use `npm test` quando alterar `kernel/`, `protocol/` ou `sim/`), `npm run typecheck` e `npm run format:check`; para a verificação completa de falhas e a medição de desempenho use `npm run test:nightly`. Backup e restauração estão no [manual de configuração](skills/agent-autoloop/SKILL.md#log-e-recuperação). Se `master.key` estiver corrompida, a central recusa iniciar: restaure a partir do backup; sem backup, apague-a e a reinicialização gera uma nova, o que invalida os links de cartões já enviados e as rodadas em execução.

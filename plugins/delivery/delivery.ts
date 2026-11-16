@@ -1,5 +1,6 @@
-// One pull request from label to live: review, full check, merge, Ship, health. Every step reads GitHub's state back
-// rather than trusting its own last response, and a failure is left for the hub's retry to pick up where it stands.
+// Um pull request do rótulo até a produção: revisão, check completo, merge, Ship, health. Cada passo relê o estado do
+// GitHub em vez de confiar na própria última resposta, e uma falha é deixada para a nova tentativa da central retomar
+// de onde parou.
 import { settings, type Live, type Settings } from "./project.ts";
 import type { Finding, Reviewed } from "./review.ts";
 
@@ -52,7 +53,7 @@ export class DeliveryRefusal extends Error {
 
 export class DeliverySuperseded extends Error {}
 
-const FINDINGS = "审查发现问题，修复后推新提交才会重审";
+const FINDINGS = "A revisão encontrou problemas; só é revisada de novo após um push com novos commits corrigidos";
 const STALL = 10 * 60_000;
 const labels = (pr: any) => new Set<string>((pr.labels ?? []).map((label: any) => label.name));
 const newestFirst = (a: any, b: any) => b.id - a.id;
@@ -66,18 +67,18 @@ export async function disableAuto(number: number, io: DeliveryIO) {
     try {
       await io.disableAuto(number);
     } catch (error) {
-      /* A lost mutation response must be read back, not assumed. */
+      /* Uma resposta de mutação perdida precisa ser relida, não presumida. */
       cause = error;
     }
     try {
       if (!(await io.api(`pulls/${number}`)).auto_merge) return;
     } catch (error) {
-      /* Known failure: a failed read-back must still confirm cancellation within three attempts. */
+      /* Falha conhecida: uma releitura que falhou ainda precisa confirmar o cancelamento em três tentativas. */
       cause = error;
     }
     if (attempt < 2) await io.wait();
   }
-  throw new Error("无法确认自动合并已关闭", { cause });
+  throw new Error("não foi possível confirmar que o merge automático foi encerrado", { cause });
 }
 
 async function newestCheck(head: string, config: Settings, io: DeliveryIO) {
@@ -136,22 +137,26 @@ export async function waitLive(merged: string, config: Settings, io: DeliveryIO,
       }
     }
     if (newest?.status === "completed" && newest.conclusion !== "success") {
-      throw new DeliveryRefusal(`已经合并，发布没有通过：${newest.html_url}。修复发布后重交原改动。`, head);
+      throw new DeliveryRefusal(
+        `O merge já foi feito, mas a publicação não passou: ${newest.html_url}. Corrija a publicação e reentregue a mesma mudança.`,
+        head,
+      );
     }
     await io.wait();
   }
 }
 
 async function clearLabels(number: number, pr: any, io: DeliveryIO) {
-  // A retry goes by what's left on. A merged PR only goes on to its release while it has `deliver`; an open one with `deliver`
-  // alone is a full delivery, so a review-only one must lose `deliver-review` last or the retry merges it.
+  // Uma nova tentativa se guia pelo que continuou marcado. Um PR com merge só segue para a publicação enquanto tiver
+  // `deliver`; um aberto só com `deliver` é uma entrega completa, então um de só-revisão precisa perder
+  // `deliver-review` por último, senão a nova tentativa faz o merge dele.
   const order = pr.merged_at ? ["deliver-review", "deliver"] : ["deliver", "deliver-review"];
   for (const label of ["deliver-attended", ...order]) {
     if (!labels(pr).has(label)) continue;
     try {
       await io.api(`issues/${number}/labels/${label}`, undefined, "DELETE");
     } catch (error) {
-      // GitHub returned 404 after an observed labelled PR had already completed Ship; verify the desired state.
+      // O GitHub devolveu 404 depois que um PR marcado e observado já concluiu o Ship; confira o estado desejado.
       if (labels(await io.api(`pulls/${number}`)).has(label)) throw error;
     }
   }
@@ -163,7 +168,10 @@ async function synced(number: number, head: string, base: string, io: DeliveryIO
     const pr = await io.api(`pulls/${number}`);
     if (pr.merged_at) return pr;
     if (pr.head.sha !== head && (await io.contains(base, pr.head.sha))) return pr;
-    if (Date.now() > until) throw new Error("已请求同步 main，15 分钟内没有看到同步后的提交，稍后重试");
+    if (Date.now() > until)
+      throw new Error(
+        "A sincronização com a main foi solicitada, mas nenhum commit sincronizado apareceu em 15 minutos; tente de novo mais tarde",
+      );
     await io.wait();
   }
 }
@@ -175,48 +183,54 @@ export async function deliver(
   testLocalHealth = false,
 ): Promise<Delivered> {
   const reviewOnly = async (pr: any): Promise<Delivered> => {
-    const summary = "审查通过，未合并或发布";
+    const summary = "Revisão aprovada, sem merge nem publicação";
     await status(io, pr.head.sha, "delivery", "success", summary);
     await clearLabels(number, pr, io);
     await io.report?.("reviewed", pr.head.sha);
     return { summary, reviewOnly: true };
   };
   const withdrawn = async (head: string): Promise<Delivered> => {
-    await status(io, head, "delivery", "success", "交付标记已撤回，未合并或发布");
+    await status(io, head, "delivery", "success", "o rótulo de entrega foi retirado; sem merge nem publicação");
     await io.report?.("withdrawn", head);
-    return { summary: "交付标记已撤回" };
+    return { summary: "o rótulo de entrega foi retirado" };
   };
   let pr = await io.api(`pulls/${number}`);
-  if (!labels(pr).has("deliver") || (!pr.merged_at && pr.state !== "open")) return { summary: "没有待交付的标记" };
+  if (!labels(pr).has("deliver") || (!pr.merged_at && pr.state !== "open"))
+    return { summary: "não há rótulo de entrega pendente" };
   if (pr.head.repo?.full_name !== repo || pr.base.ref !== "main")
-    throw new DeliveryRefusal("只处理本仓库分支到 main 的合并请求", pr.head.sha);
+    throw new DeliveryRefusal("Só são tratados pull requests de branches deste repositório para a main", pr.head.sha);
   if (pr.auto_merge) await disableAuto(number, io);
   let head: string = pr.head.sha;
   const accept = async () => {
-    await status(io, head, "delivery", "pending", "正在审查、检查和核实发布");
+    await status(io, head, "delivery", "pending", "Revisando, verificando os checks e confirmando a publicação");
     await io.report?.("accepted", head);
   };
   if (io.verifyReview) await accept();
   const settingsAt = async (commit: string) => {
     const file = await io.api(`contents/ops/delivery.json?ref=${commit}`);
     const read = settings(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")), testLocalHealth);
-    if (read.repo !== repo) throw new Error("main 的 repo 设置与交付仓库不一致");
+    if (read.repo !== repo) throw new Error("O repo configurado na main não é o mesmo do repositório de entrega");
     if (io.reviewStatus) read.review.status = io.reviewStatus;
     return read;
   };
   let config = await settingsAt((await io.api("git/ref/heads/main")).object.sha);
   if (!pr.merged_at && !io.verifyReview) {
-    // The label stays on after findings, so another event lands here: a second review that misses them would merge the commit.
-    // The review status keeps the record, since a failed round writes its error over `delivery`.
+    // O rótulo continua depois dos problemas encontrados, então outro evento cai aqui: uma segunda revisão que não
+    // os visse faria o merge do commit.
+    // O status de revisão guarda o registro, já que uma rodada que falhou escreve o erro por cima de `delivery`.
     const { statuses } = await io.api(`commits/${head}/status?per_page=100`);
     if (statuses.some((item: any) => item.context === config.review.status && item.state === "failure"))
-      return { summary: "这个提交审查发现过问题，修复后推新提交才会重审" };
+      return {
+        summary:
+          "A revisão deste commit já encontrou problemas; só é revisado de novo após um push com novos commits corrigidos",
+      };
   }
   if (!io.verifyReview) await accept();
-  // Sync inside the run: a thrown sync waits out the hub's growing retry backoff while main keeps moving.
+  // Sincronizar dentro da execução: uma sincronização lançada como erro espera passar o backoff crescente de novas
+  // tentativas da central enquanto a main continua avançando.
   rounds: for (let round = 1; !pr.merged_at; round++) {
     if (pr.mergeable === false || pr.mergeable_state === "dirty")
-      throw new DeliveryRefusal("改动与 main 有合并冲突，请先解决后重新交付。", head);
+      throw new DeliveryRefusal("A mudança tem conflito de merge com a main; resolva primeiro e reentregue.", head);
     let base = (await io.api("git/ref/heads/main")).object.sha;
     if (!(await io.contains(base, head))) {
       try {
@@ -228,18 +242,27 @@ export async function deliver(
       pr = await synced(number, head, base, io);
       if (pr.merged_at) break;
       if (!(await io.contains(head, pr.head.sha)))
-        throw new DeliverySuperseded("同步后的分支不包含原来的提交，等待重新交付");
+        throw new DeliverySuperseded(
+          "O branch sincronizado não contém mais o commit original; aguardando nova entrega",
+        );
       head = pr.head.sha;
-      await status(io, head, "delivery", "pending", "已同步 main，正在审查、检查和核实发布");
-      // GitHub syncs with main as it is by then, which may be newer than what was read above: against the older one, those
-      // commits would be reviewed as the branch's own.
+      await status(
+        io,
+        head,
+        "delivery",
+        "pending",
+        "Main sincronizada; revisando, verificando os checks e confirmando a publicação",
+      );
+      // O GitHub sincroniza com a main como ela estiver naquele momento, que pode ser mais nova do que a lida acima:
+      // contra a mais antiga, aqueles commits seriam revisados como se fossem do próprio branch.
       base = (await io.api("git/ref/heads/main")).object.sha;
       if (!(await io.contains(base, head))) {
         if (round < 3) continue;
-        throw new Error("main 已前进，稍后重新同步和检查");
+        throw new Error("A main avançou; sincronize e verifique de novo mais tarde");
       }
     }
-    // The settings of the main this round is against: a newer one may add the health check its release has to pass.
+    // As configurações da main contra a qual esta rodada corre: uma mais nova pode acrescentar o health check que a
+    // publicação dela precisa aprovar.
     config = await settingsAt(base);
     const reviewed = await io.review(pr, config, base);
     const exempt = !Array.isArray(reviewed) && "exempt" in reviewed ? reviewed.exempt : null;
@@ -249,7 +272,8 @@ export async function deliver(
       pr = current;
       break;
     }
-    if (current.head.sha !== head) throw new DeliverySuperseded("审查期间提交变了，等待重新交付");
+    if (current.head.sha !== head)
+      throw new DeliverySuperseded("O commit mudou durante a revisão; aguardando nova entrega");
     if (!Array.isArray(reviewed) && "blocked" in reviewed) {
       await status(io, head, config.review.status, "failure", reviewed.blocked);
       throw new DeliveryRefusal(reviewed.blocked, head);
@@ -260,20 +284,22 @@ export async function deliver(
     }
     if (findings.length) {
       await status(io, head, "delivery", "failure", FINDINGS);
-      // Last: once this stands nothing reviews the commit again, so a failed write must not keep the findings from going out.
+      // Por último: depois disto registrado, nada mais revisa o commit, então uma escrita que falhe não pode impedir
+      // que os problemas encontrados sejam publicados.
       await status(io, head, config.review.status, "failure", FINDINGS);
-      return { summary: "审查发现问题，尚未合并", findings, head };
+      return { summary: "a revisão encontrou problemas; merge ainda não feito", findings, head };
     }
     if (labels(current).has("deliver-review")) {
       if (!exempt) return reviewOnly(current);
-      // Asked for after this round let the change through without a review: the next round reviews it.
+      // Pedida depois que esta rodada deixou a mudança passar sem revisão: a próxima rodada a revisa.
       pr = current;
       continue;
     }
     await io.report?.("checking", head);
     let after = io.checkRecovery?.head === head ? io.checkRecovery.after : 0;
     if (current.draft) {
-      // Right after going ready the newest run is still a draft one: only a run started by the change can pass.
+      // Logo depois de sair de draft, a execução mais nova ainda é uma do tempo de draft: só uma execução iniciada
+      // pela mudança pode aprovar.
       after = (await newestCheck(head, config, io))?.id ?? 0;
       if (io.checkRecovery?.head === head) io.checkRecovery.after = after;
       await io.api(`pulls/${number}/ready`, {}, "POST");
@@ -293,13 +319,16 @@ export async function deliver(
         pr = await io.api(`pulls/${number}`);
         if (pr.merged_at) break rounds;
         if (pr.head.sha !== head) {
-          throw new DeliverySuperseded("检查期间提交变了，等待重新交付");
+          throw new DeliverySuperseded("O commit mudou durante os checks; aguardando nova entrega");
         }
         if (pr.base.ref !== "main" || pr.state !== "open") {
-          throw new DeliveryRefusal("改动已关闭或目标分支已变更，只合并到 main。", head);
+          throw new DeliveryRefusal(
+            "a mudança foi fechada ou o branch de destino mudou; o merge é só para o main.",
+            head,
+          );
         }
         if (pr.mergeable === false || pr.mergeable_state === "dirty") {
-          throw new DeliveryRefusal("改动与 main 有合并冲突，请先解决后重新交付。", head);
+          throw new DeliveryRefusal("A mudança tem conflito de merge com a main; resolva primeiro e reentregue.", head);
         }
         if (!labels(pr).has("deliver")) {
           await stopAuto();
@@ -313,26 +342,30 @@ export async function deliver(
         if (state === "stalled") {
           if (io.checkRecovery?.head === head)
             throw new DeliveryRefusal(
-              "GitHub 收下了检查却一直没开始跑（多半是 GitHub 出了事故），已重新触发一次仍不动。等 GitHub 恢复后重新交付。",
+              "O GitHub aceitou o check, mas ele nunca começou (provável incidente); já foi reacionado e segue parado. Reentregue quando o GitHub voltar.",
               head,
             );
           await stopAuto();
           await io.api(`pulls/${number}/draft`, {}, "POST");
           io.checkRecovery = { head, after };
-          // Converting to draft can start another run. Only a run created after going ready can authorize merging.
+          // Converter para draft pode iniciar outra execução. Só uma execução criada depois de sair de draft pode
+          // autorizar o merge.
           after = (await newestCheck(head, config, io))?.id ?? 0;
           io.checkRecovery.after = after;
           await io.api(`pulls/${number}/ready`, {}, "POST");
           continue;
         }
         if (state === "failed") {
-          throw new DeliveryRefusal(`完整检查没有通过。查看 https://github.com/${repo}/pull/${number}/checks`, head);
+          throw new DeliveryRefusal(
+            `O check completo não passou. Veja https://github.com/${repo}/pull/${number}/checks`,
+            head,
+          );
         }
         if (state === "passed" || pr.auto_merge) {
           if ((await io.api("git/ref/heads/main")).object.sha !== base) {
             await stopAuto();
             if (round < 3) continue rounds;
-            throw new Error("main 已前进，稍后重新同步和检查");
+            throw new Error("A main avançou; sincronize e verifique de novo mais tarde");
           }
           const behind = await io.verifyTools?.(head);
           if (behind) throw new DeliveryRefusal(behind, head);
@@ -353,9 +386,13 @@ export async function deliver(
             const checked = pr;
             pr = await io.api(`pulls/${number}`);
             if (pr.merged_at) break rounds;
-            if (pr.head.sha !== head) throw new DeliverySuperseded("要合并的提交变了，等待重新交付");
+            if (pr.head.sha !== head)
+              throw new DeliverySuperseded("O commit a ser mesclado mudou; aguardando nova entrega");
             if (pr.base.ref !== "main" || pr.state !== "open")
-              throw new DeliveryRefusal("改动已关闭或目标分支已变更，只合并到 main。", head);
+              throw new DeliveryRefusal(
+                "a mudança foi fechada ou o branch de destino mudou; o merge é só para o main.",
+                head,
+              );
             if (!labels(pr).has("deliver")) {
               await stopAuto();
               return withdrawn(head);
@@ -365,11 +402,11 @@ export async function deliver(
               continue rounds;
             }
             const passed = exempt
-              ? `${exempt} 写的改动按策略免审`
+              ? `Mudança escrita por ${exempt}, dispensada de revisão pela política`
               : !Array.isArray(reviewed) && "docsOnly" in reviewed
-                ? "只改内部文档，按策略免审"
-                : "此提交审查通过";
-            await status(io, head, config.review.status, "success", `${passed}，完整检查通过`);
+                ? "Só documentos internos alterados, dispensado de revisão pela política"
+                : "Revisão deste commit aprovada";
+            await status(io, head, config.review.status, "success", `${passed}, check completo aprovado`);
             if (!merging) await io.report?.("merging", head);
             merging = true;
             const auto = io.enableAuto && !config.admin_merge.includes(pr.user.login) ? io.enableAuto : undefined;
@@ -379,13 +416,15 @@ export async function deliver(
                 await auto(pr);
               } else await io.merge(pr, config);
             } catch (error) {
-              // The request can be accepted before its response is lost. Read back before any retry.
+              // A requisição pode ser aceita antes de a resposta dela se perder. Releia antes de qualquer nova
+              // tentativa.
               pr = await io.api(`pulls/${number}`);
               if (!pr.merged_at && !(auto && pr.auto_merge)) throw error;
             }
             pr = await io.api(`pulls/${number}`);
             if (pr.merged_at) break rounds;
-            if (!auto || !pr.auto_merge) throw new Error("尚未确认合并，稍后继续核实");
+            if (!auto || !pr.auto_merge)
+              throw new Error("Merge ainda não confirmado; continue a verificação mais tarde");
           }
         }
         await io.wait();
@@ -398,10 +437,10 @@ export async function deliver(
   const merge = pr.merge_commit_sha;
   const shipped = await waitLive(merge, config, io, pr.head.sha);
   const summary = !shipped
-    ? "已合并；项目没有线上服务"
+    ? "Merge feito; o projeto não tem serviço em produção"
     : shipped.phase === "docs_only"
-      ? `仅内部文档变化，已合并，无需发布。已核实线上版本 ${shipped.release}`
-      : `已发布并核实线上版本 ${shipped.release}`;
+      ? `Apenas documentos internos mudaram, merge feito, sem publicação necessária. Versão em produção confirmada: ${shipped.release}`
+      : `Publicado, com a versão em produção confirmada: ${shipped.release}`;
   await status(io, pr.head.sha, "delivery", "success", summary);
   await clearLabels(number, pr, io);
   await io.report?.(shipped?.phase ?? "merged", pr.head.sha, { merge, ship: shipped?.ship });

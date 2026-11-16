@@ -1,5 +1,5 @@
-// Failure modes: an ACP adapter cannot restore its session; a real MCP client cannot negotiate or call a hub tool;
-// a smoke test writes to the normal hub home or leaves its database/server behind.
+// Modos de falha: um adaptador ACP não consegue restaurar a própria sessão; um cliente MCP real não consegue negociar nem
+// chamar uma ferramenta da central; um teste de fumaça escreve no home normal da central ou deixa para trás o banco/servidor dela.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
@@ -22,7 +22,7 @@ let server: any;
 let hub: any;
 try {
   if (mode === "acp") {
-    assert.ok(process.argv[3], "acp 后面写 ACP 服务程序的绝对路径");
+    assert.ok(process.argv[3], "escreva depois de acp o caminho absoluto do programa do serviço ACP");
     const env = {
       ...process.env,
       INITIAL_AGENT_MODE: "read-only",
@@ -39,8 +39,8 @@ try {
             cwd: home,
             access: "read",
             prompt: n
-              ? "只回复上一轮约定的四位数字，不调用工具。"
-              : "记住四位数字 7391。只回复这四位数字，不调用工具。",
+              ? "Responda apenas com os quatro dígitos combinados no turno anterior, sem chamar ferramentas."
+              : "Memorize os quatro dígitos 7391. Responda apenas com esses quatro dígitos, sem chamar ferramentas.",
             resume: session,
             command: [process.argv[3]],
           }),
@@ -102,10 +102,10 @@ try {
       `mcp_servers.agent_autoloop.args=${JSON.stringify([join(import.meta.dirname, "../bin/agent-autoloop.ts"), "mcp"])}`,
       "-c",
       `mcp_servers.agent_autoloop.env={AGENT_AUTOLOOP_HOME=${JSON.stringify(home)}}`,
-      "必须调用 agent_autoloop 的 status 工具查看状态，然后只回复：状态读取完成。不要调用其他工具。",
+      "Você precisa chamar a ferramenta status do agent_autoloop para ver o estado e então responder apenas: Leitura de estado concluída. Não chame outras ferramentas.",
     ]);
     assert.ok(calls > 0);
-    assert.ok(out.includes("状态读取完成"));
+    assert.ok(out.includes("Leitura de estado concluída"));
     console.log(
       JSON.stringify({
         client: "Codex MCP",

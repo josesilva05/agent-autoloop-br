@@ -1,9 +1,10 @@
-// `agent-autoloop uninstall`, run from a copy of the program laid out as an install is, in a throwaway home with stand-ins for
-// launchctl and systemctl: nothing real can be reached. Failure cases: the service keeps running, or one started by hand does;
-// a process that only has the old number is killed; a link is left behind, in ~/.local/bin, elsewhere on PATH or among the
-// Agents' Skills, or reinstalling over the kept data doesn't bring them back; someone's own file, folder or link of the same name is removed, or a link that leads somewhere else; the
-// data is deleted by uninstall or --yes; with nobody at a terminal it hangs on the question; AGENT_AUTOLOOP_HOME
-// naming the user's home, or a folder this program didn't make, gets it deleted.
+// `agent-autoloop uninstall`, executado a partir de uma cópia do programa organizada como uma instalação, num home
+// descartável com substitutos para launchctl e systemctl: nada real pode ser alcançado. Casos de falha: o serviço
+// continua rodando, ou um iniciado à mão continua; um processo que só tem o número antigo é morto; um link é deixado
+// para trás, em ~/.local/bin, em outro lugar do PATH ou entre os Skills dos Agents, ou reinstalar sobre os dados
+// preservados não os traz de volta; um arquivo, pasta ou link de outra pessoa com o mesmo nome é removido, ou um link
+// que leva a outro lugar; os dados são apagados pelo uninstall ou pelo --yes; sem ninguém num terminal ele trava na
+// pergunta; um AGENT_AUTOLOOP_HOME apontando o home do usuário, ou uma pasta que este programa não criou, faz isso ser apagado.
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
@@ -34,7 +35,7 @@ after(() => {
 });
 
 let people = 0;
-/** Somebody with an install in the usual place, things of their own around it, and links as the install script makes them. */
+/** Alguém com uma instalação no lugar de costume, coisas próprias ao redor dela, e links como o script de instalação os faz. */
 function install() {
   const person = join(dir, `person-${++people}`);
   const hub = join(person, ".agent-autoloop");
@@ -105,9 +106,9 @@ function linksAreGone(it: Install) {
   assert.ok(!isThere(skillLink(it)));
 }
 
-test("the install it makes is what it takes away: service stopped, links gone, all data always kept", () => {
+test("o que a instalação cria é o que ela tira: serviço parado, links removidos, todos os dados sempre preservados", () => {
   const it = install();
-  assert.ok(lstatSync(skillLink(it)).isSymbolicLink(), "init linked the Skill");
+  assert.ok(lstatSync(skillLink(it)).isSymbolicLink(), "o init ligou o Skill");
   const service =
     process.platform === "darwin"
       ? join(it.person, "Library", "LaunchAgents", "agent-autoloop.plist")
@@ -124,12 +125,12 @@ test("the install it makes is what it takes away: service stopped, links gone, a
   assert.ok(!existsSync(service));
   linksAreGone(it);
   ownThingsAreThere(it);
-  assert.ok(existsSync(join(it.hub, "config.json")), "nobody was there to say yes, so the data stays");
-  assert.match(done.stdout, /规则、密钥和记录还留在/);
-  assert.ok(!existsSync(it.app), "the installed code is removed");
+  assert.ok(existsSync(join(it.hub, "config.json")), "ninguém estava lá para dizer sim, então os dados ficam");
+  assert.match(done.stdout, /Regras, chaves e registros continuam em/);
+  assert.ok(!existsSync(it.app), "o código instalado é removido");
 });
 
-test("--yes skips confirmation and preserves all data", () => {
+test("--yes pula a confirmação e preserva todos os dados", () => {
   const it = install();
   const done = it.run(["uninstall", "--yes"]);
   assert.equal(done.status, 0, done.stderr);
@@ -140,7 +141,7 @@ test("--yes skips confirmation and preserves all data", () => {
   assert.ok(existsSync(it.person));
 });
 
-test("at a terminal only confirming removes the program, and every answer preserves data", () => {
+test("num terminal, só confirmar remove o programa, e qualquer resposta preserva os dados", () => {
   const answering = (it: Install, words: string) =>
     spawnSync(
       process.execPath,
@@ -169,16 +170,16 @@ test("at a terminal only confirming removes the program, and every answer preser
   }
 });
 
-test("installing the service again brings back a Skill link that uninstalling took away", () => {
+test("instalar o serviço de novo traz de volta um link de Skill que a desinstalação tirou", () => {
   const it = install();
-  // Not rmSync: on Node 25.1 it refuses to remove a link that leads to a folder.
+  // Não rmSync: no Node 25.1 ele se recusa a remover um link que leva a uma pasta.
   unlinkSync(skillLink(it));
-  // The stand-in service manager refuses; the link comes first.
+  // O gerenciador de serviços substituto se recusa; o link vem primeiro.
   it.run(["service", "install"]);
   assert.ok(lstatSync(skillLink(it)).isSymbolicLink());
 });
 
-test("a hub started by hand is stopped too; a process that only has the old number isn't", async () => {
+test("uma central iniciada à mão também é parada; um processo que só tem o número antigo, não", async () => {
   const it = install();
   const asIfUp = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)", "agent-autoloop", "up"], {
     stdio: "ignore",
@@ -198,7 +199,7 @@ test("a hub started by hand is stopped too; a process that only has the old numb
   assert.equal(someoneElse.signalCode, null);
 });
 
-test("AGENT_AUTOLOOP_HOME can name anything: a folder this program didn't make, or the user's home, isn't deleted", () => {
+test("AGENT_AUTOLOOP_HOME pode nomear qualquer coisa: uma pasta que este programa não criou, ou o home do usuário, não é apagada", () => {
   const it = install();
   const projects = join(it.person, "projects");
   mkdirSync(projects);
@@ -214,14 +215,14 @@ test("AGENT_AUTOLOOP_HOME can name anything: a folder this program didn't make, 
   assert.ok(existsSync(join(it.hub, "config.json")));
 });
 
-test("with nothing installed it still finishes, and says so plainly", () => {
+test("sem nada instalado ele ainda termina, e diz isso com clareza", () => {
   const it = install();
   const nothing = it.run(["uninstall", "--yes"], { AGENT_AUTOLOOP_HOME: join(it.person, "never") });
   assert.equal(nothing.status, 0, nothing.stderr);
-  assert.match(nothing.stdout, /卸载好了/);
+  assert.match(nothing.stdout, /Desinstalação concluída/);
 });
 
-test("without a terminal uninstall asks for --yes before removing anything", () => {
+test("sem um terminal, o uninstall pede --yes antes de remover qualquer coisa", () => {
   const it = install();
   const done = it.run(["uninstall"]);
   assert.notEqual(done.status, 0);
@@ -230,7 +231,7 @@ test("without a terminal uninstall asks for --yes before removing anything", () 
   assert.ok(isThere(join(it.person, ".local", "bin", "agent-autoloop")));
 });
 
-test("an unrelated service file with the same name is left running and untouched", () => {
+test("um arquivo de serviço sem relação com o mesmo nome é deixado em execução e intacto", () => {
   const it = install();
   const service =
     process.platform === "darwin"

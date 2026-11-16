@@ -1,4 +1,4 @@
-// The log and its expendable projection commit together. Only this module appends facts.
+// O log e sua projeção descartável fazem commit juntos. Só este módulo acrescenta fatos.
 import type { DatabaseSync } from "node:sqlite";
 import { Conflict } from "./errors.ts";
 import { evolve, initialize, statement, View, type Fact } from "./evolve.ts";
@@ -32,7 +32,7 @@ export function openView(db: DatabaseSync, format: string) {
 export function commit(db: DatabaseSync, view: View, produce: () => Fact[]): View {
   return transaction(db, () => {
     const latest = Number(statement(db, "SELECT COALESCE(MAX(seq),0) AS seq FROM facts").get()!.seq);
-    if (latest !== view.seq) throw new Conflict("日志已变化，请重读后再提交");
+    if (latest !== view.seq) throw new Conflict("o log mudou; releia e então faça o commit");
     const facts = produce();
     if (!facts.length) return view;
     const insert = statement(db, "INSERT INTO facts(seq,fact) VALUES (?,?)");
@@ -40,7 +40,7 @@ export function commit(db: DatabaseSync, view: View, produce: () => Fact[]): Vie
     return evolve(view, facts, db);
   });
 }
-/** Reads the view holding the write lock: commands write to this database too, so one read before it can be stale. */
+/** Lê a view segurando o lock de escrita: comandos também escrevem neste banco, então uma lida antes dele pode estar defasada. */
 export function commitLatest(db: DatabaseSync, format: string, produce: (view: View) => Fact[]): View {
   return transaction(db, () => {
     const view = openView(db, format);

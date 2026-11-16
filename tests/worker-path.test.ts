@@ -1,5 +1,5 @@
-// Failure modes: characters in the install path execute as shell source, command arguments are re-parsed,
-// or the worker cannot recover the result from a directory containing quotes and command substitutions.
+// Modos de falha: caracteres no caminho da instalação são executados como código de shell, argumentos de comando são
+// reanalisados, ou o worker não consegue recuperar o resultado de um diretório que contém aspas e substituições de comando.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +15,7 @@ process.env.SHELL = "/bin/sh";
 after(() => rmSync(scratch, { recursive: true, force: true }));
 const { createWorker } = await import("../worker/worker.ts");
 
-test("install paths and command arguments stay literal through the worker wrapper", async () => {
+test("caminhos de instalação e argumentos de comando permanecem literais pelo wrapper do worker", async () => {
   const results: any[] = [];
   let claimed = false;
   const job = {
@@ -24,7 +24,7 @@ test("install paths and command arguments stay literal through the worker wrappe
     attempt: 1,
     session: null,
     askFirst: [],
-    rule: { name: "literal", cwd: project, prompt: "Read the input." },
+    rule: { name: "literal", cwd: project, prompt: "Leia a entrada." },
     agent: {
       id: "a",
       name: "Agent",
@@ -54,8 +54,8 @@ test("install paths and command arguments stay literal through the worker wrappe
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.ok(!existsSync(join(project, "path-injected")), "the install path executed a command");
-  assert.ok(!existsSync(join(project, "argv-injected")), "an argument executed a command");
+  assert.ok(!existsSync(join(project, "path-injected")), "o caminho de instalação executou um comando");
+  assert.ok(!existsSync(join(project, "argv-injected")), "um argumento executou um comando");
   assert.equal(results[0]?.summary, "literal $(touch argv-injected)");
   assert.equal(results[0]?.outcome, "done");
 });

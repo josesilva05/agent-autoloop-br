@@ -1,4 +1,4 @@
-// The delivery's way to GitHub: the signed-in `gh`, and bare Git objects fetched into a scratch folder.
+// O caminho da entrega até o GitHub: o `gh` autenticado e objetos Git bare baixados para uma pasta temporária.
 import { execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -40,7 +40,7 @@ export function gh(args: string[], input?: object) {
 }
 
 export function github(repo: string) {
-  if (!REPO.test(repo)) throw new Error("仓库要写成 owner/name");
+  if (!REPO.test(repo)) throw new Error("O repositório deve ser escrito como owner/name");
   return async (path: string, body?: any, method = body === undefined ? "GET" : "POST") => {
     const ready = /^pulls\/(\d+)\/(ready|draft)$/.exec(path);
     if (ready) {
@@ -56,7 +56,7 @@ export function github(repo: string) {
 }
 
 export function pages(repo: string, path: string): any[] {
-  if (!REPO.test(repo)) throw new Error("仓库要写成 owner/name");
+  if (!REPO.test(repo)) throw new Error("O repositório deve ser escrito como owner/name");
   return JSON.parse(gh(["api", `repos/${repo}/${path}`, "--paginate", "--slurp"])).flat();
 }
 
@@ -140,11 +140,13 @@ export function createIO(repo: string, folder: string, options: DeliveryOptions 
         const main = (await kit("git/ref/heads/main")).object.sha;
         const latest = (await kit(`commits?sha=${main}&path=delivery&per_page=1`))[0]?.sha;
         if (!commitSha.test(installed ?? "") || !commitSha.test(latest ?? ""))
-          throw new Error("无法识别项目安装的交付工具或工具仓库 main 上的版本");
+          throw new Error(
+            "Não foi possível identificar a ferramenta de entrega instalada no projeto nem a versão dela na main do repositório da ferramenta",
+          );
         const includes = async (base: string, head: string) =>
           base === head || ["ahead", "identical"].includes((await kit(`compare/${base}...${head}`)).status);
         if ((await includes(installed, main)) && (await includes(latest, installed))) return null;
-        return `ops/delivery/ 装的是 ${options.toolkit} ${installed.slice(0, 12)}，不是 main 上的最新版（交付工具最近一次改在 ${latest.slice(0, 12)}）。请重新安装并提交后再交付。`;
+        return `ops/delivery/ tem ${options.toolkit} ${installed.slice(0, 12)}, que não é a versão mais recente da main (a ferramenta de entrega mudou pela última vez em ${latest.slice(0, 12)}). Reinstale, faça o commit e então reentregue.`;
       },
     }),
     async merge(pr, config) {
@@ -154,13 +156,14 @@ export function createIO(repo: string, folder: string, options: DeliveryOptions 
         return;
       }
       const result = await api(`pulls/${pr.number}/merge`, { sha: pr.head.sha, merge_method: "squash" }, "PUT");
-      if (!result.merged) throw new Error("GitHub 没有接受合并");
+      if (!result.merged) throw new Error("O GitHub não aceitou o merge");
     },
     async disableAuto(number) {
       gh(["pr", "merge", String(number), "--repo", repo, "--disable-auto"]);
     },
     prepareShip() {
-      // Every older Ship run would otherwise consume a compare request, even when the exact merge is already live.
+      // Sem isso, cada execução mais antiga do Ship consumiria uma requisição de comparação, mesmo quando o merge
+      // exato já está em produção.
       fetchObjects("refs/heads/main");
     },
     async contains(base, head) {
@@ -174,7 +177,7 @@ export function createIO(repo: string, folder: string, options: DeliveryOptions 
             return true;
           } catch (error) {
             const status = (error as { status?: number }).status;
-            // All objects in this scratch repository are fetched with their full history.
+            // Todos os objetos neste repositório temporário são baixados com o histórico completo.
             if (status === 1) {
               ancestors.set(key, false);
               return false;
@@ -200,7 +203,10 @@ export function createIO(repo: string, folder: string, options: DeliveryOptions 
     },
     live: liveRelease,
     async wait() {
-      if (Date.now() - started > LONGEST_WAIT) throw new Error("等待超过半小时，保留远端状态，稍后继续核实");
+      if (Date.now() - started > LONGEST_WAIT)
+        throw new Error(
+          "A espera passou de meia hora; o estado remoto foi preservado, continue a verificação mais tarde",
+        );
       await setTimeout(5000);
     },
   };

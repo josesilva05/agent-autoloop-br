@@ -1,8 +1,9 @@
-// Which service runs this on a machine. Failure cases: doctor says a service running from a system-level unit isn't
-// running; an update takes that unit for its own, writes a user-level one beside it, and fails where there's no user
-// manager or starts a second hub where there is; a user-level service isn't restarted by an update; a Mac is asked about
-// systemd; a service just started counts as done before its hub answers, so the command run next finds nothing there.
-// The fake systemctl stands in for both managers, and no test installs anything real.
+// Qual serviço executa isto numa máquina. Casos de falha: o doctor diz que um serviço rodando a partir de uma unit em
+// nível de sistema não está em execução; uma atualização toma aquela unit como sua, escreve uma em nível de usuário ao
+// lado dela e falha onde não há gerenciador de usuário, ou inicia uma segunda central onde há; um serviço em nível de
+// usuário não é reiniciado por uma atualização; pergunta-se a um Mac sobre systemd; um serviço recém-iniciado é dado
+// como pronto antes de a sua central responder, e então o comando seguinte não encontra nada ali.
+// O systemctl falso representa os dois gerenciadores, e nenhum teste instala nada real.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { once } from "node:events";
@@ -26,7 +27,7 @@ const onLinux = () => Object.defineProperty(process, "platform", { value: "linux
 onLinux();
 const { restartService, serviceRunning, systemUnit, untilAnswering } = await import("../host/service.ts");
 
-/** `system` and `user` are the units running; without a user manager every --user call fails, as it does for root. */
+/** `system` e `user` são as units em execução; sem um gerenciador de usuário toda chamada --user falha, como falha para o root. */
 function systemctl({ system = false, user = false, manager = true }) {
   rmSync(calls, { force: true });
   writeFileSync(
@@ -45,21 +46,21 @@ esac
 const called = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n") : []);
 const userUnits = join(person, ".config", "systemd", "user");
 
-test("a system-level unit running counts for what's running, and isn't taken for a service of ours", () => {
+test("uma unit em nível de sistema rodando conta como o que está em execução, e não é tomada por um serviço nosso", () => {
   systemctl({ system: true, manager: false });
   assert.equal(serviceRunning(), false);
   assert.match(systemUnit()!, /^agent-autoloop/);
 });
 
-test("an update leaves a system-level unit to its owner, and says how to restart it", () => {
+test("uma atualização deixa uma unit em nível de sistema para o dono dela, e diz como reiniciá-la", () => {
   systemctl({ system: true, manager: false });
   const said = restartService()!;
   assert.match(said, /systemctl restart agent-autoloop/);
   assert.ok(!called().some((call) => call.includes("daemon-reload") || call.includes("enable")));
-  assert.equal(existsSync(userUnits), false, "no second unit beside it");
+  assert.equal(existsSync(userUnits), false, "nenhuma segunda unit ao lado dela");
 });
 
-test("an update restarts a user-level service as before", () => {
+test("uma atualização reinicia um serviço em nível de usuário como antes", () => {
   systemctl({ user: true });
   assert.equal(restartService(), undefined);
   assert.ok(called().includes("--user daemon-reload"));
@@ -67,7 +68,7 @@ test("an update restarts a user-level service as before", () => {
   rmSync(userUnits, { recursive: true, force: true });
 });
 
-test("a service just started is waited for until its hub answers; one its manager doesn't have isn't", async () => {
+test("um serviço recém-iniciado é esperado até sua central responder; um que o gerenciador não tem, não", async () => {
   systemctl({ user: true });
   const probe = createServer().listen(0, "127.0.0.1");
   await once(probe, "listening");
@@ -82,20 +83,20 @@ test("a service just started is waited for until its hub answers; one its manage
     clearTimeout(starting);
     hub.close();
   }
-  assert.equal(await untilAnswering(url, 300), false, "one that never answers is given up on, and said so");
+  assert.equal(await untilAnswering(url, 300), false, "de um que nunca responde se desiste, e isso é dito");
   systemctl({});
   const asked = Date.now();
-  assert.equal(await untilAnswering(url), null, "nothing to wait for");
+  assert.equal(await untilAnswering(url), null, "nada para esperar");
   assert.ok(Date.now() - asked < 2_000);
 });
 
-test("with no service at all an update starts none and says nothing", () => {
+test("sem serviço nenhum, uma atualização não inicia nenhum e não diz nada", () => {
   systemctl({});
   assert.equal(restartService(), undefined);
   assert.equal(existsSync(userUnits), false);
 });
 
-test("a Mac isn't asked about systemd", { skip: actual !== "darwin" }, () => {
+test("não se pergunta a um Mac sobre systemd", { skip: actual !== "darwin" }, () => {
   systemctl({ system: true });
   Object.defineProperty(process, "platform", { value: "darwin" });
   try {
@@ -106,7 +107,7 @@ test("a Mac isn't asked about systemd", { skip: actual !== "darwin" }, () => {
   }
 });
 
-test("doctor says a system-level unit is running", () => {
+test("o doctor diz que uma unit em nível de sistema está em execução", () => {
   systemctl({ system: true, manager: false });
   writeFileSync(
     join(home, "config.json"),
@@ -124,6 +125,6 @@ test("doctor says a system-level unit is running", () => {
     ],
     { encoding: "utf8", timeout: 30_000 },
   );
-  assert.match(doctor.stdout, /● 系统级服务在跑/);
-  assert.doesNotMatch(doctor.stdout, /系统服务没在跑/);
+  assert.match(doctor.stdout, /● Serviço em nível de sistema em execução/);
+  assert.doesNotMatch(doctor.stdout, /O serviço do sistema não está em execução/);
 });

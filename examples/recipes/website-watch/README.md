@@ -1,26 +1,26 @@
-# 网站巡检与异常排查
+# Inspeção de sites e investigação de anomalias
 
-外部机器检查网站，故障交维护 Agent，恢复后收尾。每 5 分钟运行固定脚本；正常时不调用模型，异常持续时不重复派活或发通知，恢复时更新原卡片。
+Uma máquina externa verifica o site, entrega a falha ao Agent de manutenção e encerra o caso depois da recuperação. Um script fixo roda a cada 5 minutos; quando está tudo bem, nenhum modelo é chamado; quando a anomalia continua, nada é despachado nem notificado de novo; na recuperação, o cartão original é atualizado.
 
-## 怎么启用
+## Como ativar
 
-1. 把本目录复制到 `~/.agent-autoloop/work/website-watch/`，目录仅本人可读。运行检查脚本的电脑要在被检查服务之外，避免服务器停了连巡检也一起停。
-2. 把 `SKILL.md` 放到 `~/.codex/skills/website-watch/`；Claude Code 放到 `~/.claude/skills/website-watch/`。
-3. 合并 `rules.json` 的 `sources`、`agents`、`channels` 和 `rules`。两处 `worker` 改成接单电脑；检查规则的 `cwd` 指向复制的模板目录，排查规则的 `cwd` 指向自己的代码目录。时区用 `Asia/Shanghai`。
-4. 修改 `site.json`：填写自己的站点编号、名称、健康 URL 和响应必须包含的文字。示例域名只是占位，不能作为验收目标。地址不带账号密码、查询参数或片段；需要鉴权的健康接口应先按自己的项目约定改检查脚本。
-5. 权限：`read`。维护 Agent 默认只读本地代码；HTTP 请求由固定检查脚本完成。要查线上日志或执行已批准动作，需要在项目 main 的维护手册登记已有工具，不能从事件里取得命令。
-6. 运行 `agent-autoloop check`，再在专用测试中台接一个本地假 HTTP 服务，验证异常、持续异常、恢复。不要拿真实网站停服来测试。
+1. Copie este diretório para `~/.agent-autoloop/work/website-watch/`, com acesso apenas para o titular. O computador que executa o script de verificação deve ficar fora do serviço verificado, para que a inspeção não caia junto quando o servidor parar.
+2. Coloque o `SKILL.md` em `~/.codex/skills/website-watch/`; no Claude Code, em `~/.claude/skills/website-watch/`.
+3. Mescle os `sources`, `agents`, `channels` e `rules` do `rules.json`. Troque os dois `worker` pelo computador do worker; o `cwd` da regra de verificação aponta para o diretório do modelo copiado, e o da regra de investigação aponta para o seu diretório de código. Use o fuso `Asia/Shanghai`.
+4. Altere o `site.json`: preencha o número do seu site, o nome, a URL de saúde e o texto que a resposta deve conter. O domínio de exemplo é apenas um espaço reservado e não serve como alvo de verificação. O endereço não pode ter usuário e senha, parâmetros de consulta nem fragmento; para uma interface de saúde que exige autenticação, altere antes o script de verificação conforme a convenção do seu projeto.
+5. Permissão: `read`. O Agent de manutenção só lê o código local por padrão; as requisições HTTP ficam com o script de verificação fixo. Para consultar logs de produção ou executar ações já aprovadas, é preciso registrar as ferramentas existentes no manual de manutenção do main do projeto — comandos não podem vir do evento.
+6. Execute `agent-autoloop check` e, numa central de teste dedicada, conecte um serviço HTTP falso local para verificar anomalia, anomalia persistente e recuperação. Não teste derrubando um site real.
 
-## 检查口径
+## Critério de verificação
 
-成功必须同时满足 HTTP 200 和包含 `contains` 指定的非空文字。不跟随跳转；连接、读取超时（20 秒）或内容不符都记为异常，不输出响应正文。这个例子首次失败就报告；不沿用内部监控的“连续三次”计数，以免模板另维护一套状态。若网站已有成熟的告警去抖，应直接把其告警作为事件接入。
+O sucesso exige ao mesmo tempo HTTP 200 e a presença do texto não vazio indicado em `contains`. Redirecionamentos não são seguidos; falha de conexão, timeout de leitura (20 segundos) ou conteúdo divergente contam como anomalia, e o corpo da resposta não é impresso. Este exemplo relata já na primeira falha; ele não herda a contagem de "três vezes seguidas" do monitoramento interno, para que o modelo não precise manter mais um estado. Se o site já tiver um bom debounce de alertas, conecte os alertas dele diretamente como eventos.
 
-未恢复的异常保存在中台的问题通知卡片中。脚本只核对当前站点对应的卡片；卡片还开着就不重发，恢复时结案并发 `site.recovered` 事件让维护 Agent 核对剩余事项。**不要提前点“已处理”关闭仍未恢复的异常卡片**：手动关闭表示这次提醒已处理，下一次检查仍失败会再次报告。同一检查组只用于这一个站点，名称保持稳定；多站点各使用独立的来源、规则名、group 和站点编号；每套的 `emits.source` 必须只对应本站处理规则的 `when.source`，避免把其他网站的告警派到错误项目。
+As anomalias ainda não recuperadas ficam nos cartões de notificação de problema da central. O script confere apenas o cartão correspondente ao site atual; se o cartão ainda estiver aberto, nada é reenviado e, na recuperação, o caso é encerrado e um evento `site.recovered` é emitido para o Agent de manutenção conferir o que restou. **Não clique em "Resolvido" antes da hora para fechar um cartão de anomalia ainda não recuperada**: fechar à mão significa que aquele aviso foi tratado, e a próxima verificação que falhar será relatada de novo. O mesmo grupo de verificação serve apenas a este site, com um nome estável; vários sites usam fonte, nome de regra, group e número de site independentes, e o `emits.source` de cada conjunto deve corresponder somente ao `when.source` da regra de tratamento daquele site, para que alertas de outros sites não sejam despachados ao projeto errado.
 
-HTTP 恢复不代表浏览器或所有业务功能通过。需要本人恢复网页连接、登录或权限时，维护 Agent 用 `ask` 留下待办；这一轮结束，不反复重跑业务。
+Recuperação por HTTP não significa que o navegador ou todas as funções de negócio passaram. Quando for preciso o titular restabelecer a conexão com a página, o login ou uma permissão, o Agent de manutenção deixa a pendência com `ask`; esta rodada se encerra, sem reexecutar o trabalho repetidamente.
 
-## 飞书通知
+## Notificação pelo Feishu
 
-规则默认登记 `feishu` 通道。把 `ou_REPLACE_ME` 换成本人的 open_id；在已有 `config.json` 的 `channels.feishu` 配上这个人的 `user` 和已有通道密钥。复用已运行的飞书通道，不另开监听。尚未接入时按[通道配置](../../../skills/agent-autoloop/SKILL.md#接一个通道)完成；配置涉及新密钥或权限时先取得本人授权。
+As regras registram por padrão o canal `feishu`. Troque `ou_REPLACE_ME` pelo open_id do titular; no `channels.feishu` do `config.json` existente, configure o `user` dessa pessoa e a chave de canal já em uso. Reaproveite o canal Feishu que já está rodando, sem abrir outra escuta. Se ele ainda não estiver conectado, siga a [configuração de canais](../../../skills/agent-autoloop/SKILL.md#conectar-um-canal); quando a configuração envolver chaves ou permissões novas, obtenha antes a autorização do titular.
 
-读取业务资料使用本人身份，通知使用机器人身份。默认只发给本人；一个中台默认把卡片交给它配置的所有通道；含私人资料的规则写上 `channels`，只发到本人私聊的通道，不要混入共享群通道。不要把密钥、实际 open_id、表格 token 或业务数据提交到仓库。
+A leitura dos dados de negócio usa a identidade do titular; a notificação usa a identidade do bot. Por padrão envia-se apenas ao titular; uma central entrega os cartões a todos os canais que ela tem configurados, então regras com dados privados devem declarar `channels` para enviar somente ao canal de conversa privada do titular, sem se misturar com canais de grupo compartilhados. Não faça commit no repositório de chaves, open_id reais, tokens de tabela nem dados de negócio.

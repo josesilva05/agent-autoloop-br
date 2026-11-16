@@ -1,427 +1,234 @@
-# Glossário de tradução (zh-CN → pt-BR)
+# Glossário e vocabulário canônico (pt-BR)
 
-Este arquivo é o contrato de tradução do repositório. Todo texto traduzido — documentação,
-comentários de código, strings visíveis ao usuário e testes — **deve** usar exatamente os
-termos abaixo. Se um termo não estiver aqui, escolha a tradução mais natural em português
-do Brasil e acrescente-a a esta tabela.
+Este repositório é a localização brasileira do **Agent Autoloop**. Este documento fixa o
+vocabulário canônico em português do Brasil para que qualquer mudança futura — código,
+documentação, testes ou mensagens — permaneça coerente. Ele é o contrato de estilo do projeto.
 
-Regra geral: o original chinês é a fonte de verdade; o `README.en.md` histórico (inglês) foi
-usado como conferência de sentido. Não deve sobrar texto em chinês no resultado final, e o
-inglês só permanece em nomes próprios de produtos, siglas e identificadores de código.
+Regra geral: não deve existir texto em outro idioma natural no repositório. Inglês permanece
+apenas em identificadores de código, nomes de produtos, siglas e termos técnicos consagrados
+que este documento lista como empréstimos (`event sourcing`, `view`, `heartbeat`, `merge`,
+`claim`, `lane`, `stream`, `lock`, `polling`, `listener`, `commit`, `log`).
+
+---
 
 ## 1. Termos de arquitetura
 
-| Chinês | Inglês (referência) | **Português (obrigatório)** |
+| Termo canônico (pt-BR) | O que designa |
+|---|---|
+| **central** | o próprio Agent Autoloop em execução; o serviço que recebe, decide, despacha e registra |
+| **kernel** | a camada determinística (`kernel/`): só recebe, decide, despacha e registra fatos |
+| **host** | a casca de execução (`host/`): HTTP, arquivos, SQLite, relógio, serviço em segundo plano |
+| **worker** | o programa executor (`worker/`): pega trabalho, roda o Agent, entrega o recibo |
+| **regra** | uma entrada de `rules[]`: o que dispara, quem executa, onde e com que instrução |
+| **evento** | a unidade de trabalho que entra na central |
+| **fonte** | quem pode emitir eventos (`sources`) |
+| **canal** | por onde os cartões chegam ao titular (`channels`) |
+| **cartão** | a unidade de interação humana: `ask` (decisão) ou `notice` (aviso) |
+| **rodada** | uma execução de trabalho por um Agent; o número dela é o `#N` dos comandos |
+| **despacho** | o ato de entregar uma rodada a um worker |
+| **recibo** | o bloco `agent-autoloop` com JSON que o Agent anexa à última mensagem |
+| **fato** | uma entrada do registro append-only; **registro de fatos** é o log completo |
+| **projeção** | o estado derivado do registro; **view** é a leitura por índice |
+| **assunto** | a coisa sobre a qual os eventos falam (um Issue, um feedback, um site) |
+| **objeto** | o identificador do assunto dentro de um evento (`subject`) |
+| **reverificação** | um retorno agendado pelo próprio Agent (`later`) |
+| **vencido** | o que chegou à hora (`due`) |
+| **saltos** | a contagem de camadas entre Agents; o disjuntor para em 8 |
+| **espera de custo zero** | esperar sem processo vivo e sem token gasto |
+| **separação entre instrução e dados** | texto de terceiros nunca vira instrução |
+| **disjuntor de saltos** | o limite de 8 camadas que impede laços entre Agents |
+| **pipeline de entrega** | o plugin de CI/CD (`delivery`) |
+| **revisão** | a etapa de revisão de código do pipeline de entrega |
+| **merge** | a junção do PR (empréstimo consagrado) |
+| **ir para produção** | o deploy; **versão saudável** é a que está viva e verificada |
+| **chave** | credencial por tipo e nome; **chave mestra** é a do banco |
+| **o titular** | a pessoa dona da central; quem responde aos cartões |
+| **decidir** / **decisão** | o ato humano que um cartão `ask` solicita |
+| **agendamento** | tarefa por cron; é também o nome da fonte reservada `schedule` |
+| **pausar** / **retomar** / **reexecutar** | `pause` / `resume` / `replay` |
+| **execução de teste** | o que `agent-autoloop try` faz |
+| **receita** | um cenário pronto em `examples/recipes/` |
+| **manual de tratamento** | o Skill que uma regra carrega |
+| **notificação de desktop** | o canal `desktop` |
+| **Uso** | o título dos textos de ajuda de cada comando |
+
+## 2. Marcadores de protocolo
+
+A primeira linha da última mensagem do Agent diz como a rodada terminou. Estes marcadores são
+interpretados por `worker/contract.ts` e **não podem ser alterados** sem alterar o protocolo:
+
+| Marcador | Significado | Efeito |
 |---|---|---|
-| 中台 | hub | **central** |
-| 内核 | kernel | **kernel** |
-| 外壳 / 运行外壳 | host | **host** |
-| 接单程序 | worker | **worker** |
-| 规则 | rule | **regra** |
-| 事件 | event | **evento** |
-| 来源 | source | **fonte** |
-| 通道 | channel | **canal** |
-| 卡片 | card | **cartão** |
-| 一轮 / 轮次 / 第几轮 | run / round | **rodada** / **nº da rodada** |
-| 派活 / 派 | dispatch | **despachar** / **despacho** |
-| 回执 | receipt | **recibo** |
-| 事实 / 事实日志 | fact / fact log | **fato** / **registro de fatos** |
-| 投影 | projection | **projeção** |
-| 事项 | thread / subject item | **assunto** |
-| 对象 | subject | **objeto** |
-| 到期 | due | **vencido** / **no prazo** |
-| 复查 | follow-up check | **reverificação** |
-| 跳数 | hops | **saltos** |
-| 挂起零消耗 | zero-cost wait | **espera de custo zero** |
-| 事件溯源 | event sourcing | **event sourcing** |
-| 指令数据分离 | code / data split | **separação entre instrução e dados** |
-| 跳数熔断 | hop circuit breaker | **disjuntor de saltos** |
-| 交付流水线 | delivery pipeline | **pipeline de entrega** |
-| 审查 | review | **revisão** |
-| 合并 | merge | **merge** |
-| 上线 | go live | **ir para produção** |
-| 密钥 | key | **chave** |
-| 主密钥 | master key | **chave mestra** |
-| 本人 | the owner | **o titular** |
-| 拍板 / 决定 | make the call | **decidir** / **decisão** |
-| 定时 | schedule | **agendamento** / **tarefa agendada** |
-| 暂停 / 恢复 / 补跑 | pause / resume / replay | **pausar** / **retomar** / **reexecutar** |
-| 试跑 | try run | **execução de teste** |
-| 场景模板 / 模板 | recipe | **receita** |
-| 处理手册 | task skill / manual | **manual de tratamento** |
-| 桌面通知 | desktop notification | **notificação de desktop** |
-| 用法 | usage | **Uso** |
+| `FALHOU:` | falha temporária | nova tentativa automática em alguns minutos |
+| `NADA A FAZER:` | nada havia a fazer | encerra sem retry e sem notificar |
+| `AGUARDANDO VOCÊ:` | bloqueio que só o titular resolve | encerra mantendo a pergunta aberta |
+| `não deixou resultado` | mensagem vazia | contado como falha |
+| `sem motivo informado` | `FALHOU` sem texto | motivo padrão |
 
-## 2. Marcadores de protocolo (NÃO alterar a forma)
-
-Estes marcadores aparecem na primeira linha da última mensagem do Agent e são interpretados
-por `worker/contract.ts`. A tradução é fixa e os testes dependem dela exatamente assim.
-
-| Chinês | **Português** | Observação |
-|---|---|---|
-| `没跑成：` | **`FALHOU:`** | falha temporária, nova tentativa automática |
-| `没事可做：` | **`NADA A FAZER:`** | nada havia para fazer |
-| `待你处理：` | **`AGUARDANDO VOCÊ:`** | bloqueio que só o titular resolve |
-| `没留下结果` | **`não deixou resultado`** | mensagem vazia |
-| `没说原因` | **`sem motivo informado`** | `FALHOU` sem texto |
-
-Os fallbacks em inglês já existentes (`FAILED`, `NOTHING`) são mantidos.
+Os fallbacks em inglês `FAILED` e `NOTHING` continuam aceitos por compatibilidade.
 
 ## 3. Estados e rótulos de interface
 
-| Chinês | **Português** |
+| Rótulo canônico | Onde aparece |
 |---|---|
-| 等你 | **Aguardando você** |
-| 在跑 | **Em execução** |
-| 排队 | **Na fila** |
-| 等重派 | **Aguardando novo despacho** |
-| 不确定 | **Incerto** |
-| 今天做完 | **Concluídas hoje** |
-| 做完了 | **Concluída** |
-| 停了 | **Interrompida** |
-| 在线 / 离线 | **Online** / **Offline** |
-| 正在做 | **Em andamento** |
-| 最近几轮 | **Rodadas recentes** |
-| 最近的卡片 | **Cartões recentes** |
-| 已回答 / 已完成 / 已关闭 / 已处理 | **Respondido** / **Concluído** / **Fechado** / **Resolvido** |
-| 决定（cartão） | **Decisão** |
-| 留意（cartão） | **Atenção** |
-| 推荐 | **recomendado** |
-| 暂停中 | **Pausadas** |
-| 定时 | **Agendamentos** |
-| 没有规则接的事件 | **Eventos sem regra** |
-| 到点了 | **horário atingido** |
-| 昨天 / 明天 | **ontem** / **amanhã** |
-| 周日…周六 | **dom, seg, ter, qua, qui, sex, sáb** |
-| 分钟 / 小时 | **minutos** / **horas** |
+| Aguardando você | contador de cartões pendentes |
+| Em execução / Na fila / Aguardando novo despacho / Incerto | contadores do `status` |
+| Concluídas hoje | contador do `status` |
+| Concluído / Concluída | desfecho de rodada (`done`) |
+| Interrompida | rodada parada (`cancelled`) |
+| Online / Offline | presença de Agents e canais |
+| Em andamento | seção de rodadas ativas |
+| Rodadas recentes / Cartões recentes | seções do `status` |
+| Respondido / Concluído / Fechado / Resolvido | estados de cartão (`decided`/`done`/`closed` e o desfecho de notice) |
+| Decisão / Atenção | tipo de cartão (`ask` / `notice`) |
+| recomendado | a opção sugerida num `ask` |
+| Pausadas | seção de regras pausadas |
+| Agendamentos | seção de tarefas por cron |
+| Eventos sem regra | eventos que nenhuma regra pegou |
+| horário atingido | o gatilho de um cron |
+| ontem / amanhã | dias relativos no `status` |
+| dom, seg, ter, qua, qui, sex, sáb | dias da semana |
+| minutos / horas | durações |
 
-Locale: `zh-CN` → **`pt-BR`** em `Intl.DateTimeFormat` e `toLocaleString`.
+Locale: toda formatação de data e hora usa **`pt-BR`** (`Intl.DateTimeFormat`, `toLocaleString`).
 
-## 4. Títulos fixos (âncoras de link)
+## 4. Títulos canônicos dos documentos
 
-Estes títulos são alvo de links entre documentos. A tradução **deve** ser literalmente a
-string da coluna da direita, para que as âncoras geradas pelo GitHub coincidam.
+Estes títulos são alvo de links entre documentos; as âncoras derivam deles no formato do GitHub
+(minúsculas, sem pontuação, espaços virando hífen, **acentos preservados**).
 
-### `README.md`
+- `README.md`: Que problema ele resolve? · Primeiros passos · Como uma tarefa flui · Como
+  configurar no dia a dia? · Receitas prontas para usar · Sistema de plugins: os quatro lados
+  são substituíveis · Os quatro mecanismos do kernel · Verifique você mesmo · Desempenho medido ·
+  Uso e conformidade · Mais documentação
+- `AGENTS.md`: Princípios · Como alterar · Contribuições da comunidade · Pontos de revisão ·
+  Como fechar um lote · Como publicar uma versão · Fronteiras do kernel · Fronteiras de plugins
+  e entrega · Escopo de verificação
+- `docs/plugins.md`: Escrever plugins · Comece executando · Plugin de Agent · Acesso ao
+  navegador · Plugin de canal · Plugin de eventos · O que o access realmente permite · Teste de
+  conformidade
+- `docs/protocol.md`: Protocolo · Seis palavras · Seis princípios · Regras · Fontes: transformar o
+  mundo em eventos · Agent: pegar trabalho, executar e entregar o recibo · O Agent só precisa
+  fazer uma coisa · Conectar um novo Agent · Canais: levar o cartão até você · O titular: visão
+  geral, respostas, encerramento e parada · Pausar, retomar, reexecutar e rodar agora · O que
+  acontece em caso de falha · Quem pode fazer o quê · Log e determinismo · Conformidade e
+  reprodução · ACP e MCP · Modelos de canal e exemplos de linha de comando · Receitas de negócio ·
+  Estrutura e medições · Crescimento do histórico na prática · Plugin de entrega · Versão e
+  compatibilidade
+- `skills/agent-autoloop/SKILL.md`: Central de automação de Agents · Acompanhar e responder ·
+  Editar regras · Escrever um manual de tratamento · Conectar um plugin de eventos · Conectar um
+  Agent · Conectar um canal · Pipeline de entrega · MCP e revogação de chaves · Servidor e
+  computadores adicionais · Log e recuperação · Versão e desinstalação
 
-| Original | **Título em pt-BR** |
+## 5. Nomes canônicos dos fixtures de teste
+
+`tests/rules.fixture.json` é compartilhado por dezenas de testes. Estes valores são fixos:
+
+| Papel | Nome canônico |
 |---|---|
-| `## 它解决什么问题？` | `## Que problema ele resolve?` |
-| `## 上手` | `## Primeiros passos` |
-| `## 一件事怎么转起来` | `## Como uma tarefa flui` |
-| `## 日常怎么配？` | `## Como configurar no dia a dia?` |
-| `## 拿来即用的场景模板` | `## Receitas prontas para usar` |
-| `## 插件体系：四个方向都能自由替换` | `## Sistema de plugins: os quatro lados são substituíveis` |
-| `## 内核的四个机制` | `## Os quatro mecanismos do kernel` |
-| `### 自己跑一遍` | `### Verifique você mesmo` |
-| `### 实测性能` | `### Desempenho medido` |
-| `## 用量与合规说明` | `## Uso e conformidade` |
-| `## 更多文档` | `## Mais documentação` |
+| Fonte `app` / `ops` / `hooks` | aplicativo / operações / externo |
+| Agent `a1` / `a2` / `a3` | alfa / beta / gama |
+| Canal `chat` / `plain` | chat / texto |
+| Regras | opiniões · alerta · alerta também registra · briefing matinal · inspeção |
+| Tarefa de outro lugar | limpeza semanal |
+| Pessoa genérica em dados de teste | Fulano (e Beltrano quando precisa de um segundo) |
 
-### `AGENTS.md`
+## 6. Política de fuso horário
 
-| Original | **Título em pt-BR** |
-|---|---|
-| `## 原则` | `## Princípios` |
-| `## 怎么改` | `## Como alterar` |
-| `## 社区贡献` | `## Contribuições da comunidade` |
-| `## 审查要点` | `## Pontos de revisão` |
-| `## 一批怎么收尾` | `## Como fechar um lote` |
-| `## 怎么发版` | `## Como publicar uma versão` |
-| `## 内核边界` | `## Fronteiras do kernel` |
-| `## 插件与交付边界` | `## Fronteiras de plugins e entrega` |
-| `## 验证范围` | `## Escopo de verificação` |
+Identificadores de fuso são **dados funcionais, não idioma**: `Asia/Shanghai` permanece
+`Asia/Shanghai` em fixtures, exemplos de `rules.json` e blocos de código, porque trocá-lo muda o
+resultado das expressões cron e quebra os testes de agendamento. Em prosa, escreva "fuso
+Asia/Shanghai (horário de Pequim)". Exemplos ilustrativos de horário dentro de strings de prompt
+podem usar `-03:00`.
 
-### `docs/plugins.md`
+## 7. Strings canônicas de validação de `rules.json`
 
-| Original | **Título em pt-BR** |
-|---|---|
-| `# 写插件` | `# Escrever plugins` |
-| `## 先跑起来` | `## Comece executando` |
-| `## Agent 插件` | `## Plugin de Agent` |
-| `### 浏览器接入` | `### Acesso ao navegador` |
-| `## 通道插件` | `## Plugin de canal` |
-| `## 事件插件` | `## Plugin de eventos` |
-| `## access 实际能做什么` | `## O que o access realmente permite` |
-| `## 一致性测试` | `## Teste de conformidade` |
+`protocol/rules.ts` produz estas mensagens e os testes as verificam. São fixas:
 
-### `docs/protocol.md`
+- `O rules.json tem problemas:` · `não pode ficar vazio` · `só pode usar letras minúsculas,
+  números e -` · `{onde} deve ser um objeto` · `{onde} deve ser uma lista` · `{onde} está sem
+  {campo}` · `{onde}: o campo {campo} {problema}` · `{onde} tem o campo desconhecido {campo}` ·
+  `o nome de regra "{n}" está duplicado` · `a regra "{n}": ` · `{onde} no when, ` · `{onde} no
+  emits, ` · `não é um Agent registrado` · `não é uma fonte registrada` · `deve ser um diretório
+  absoluto (por exemplo ~/code, /srv/app, C:\code ou \\servidor\compartilhamento)` · `deve ser
+  uma palavra só, começando com letra ou número e sem espaços; os únicos placeholders permitidos
+  são {id} e {subject}` · `deve ser um inteiro positivo` · `deve ser um inteiro positivo (em
+  minutos)` · `só pode ser true ou false` · `só pode ser {lista}` (itens separados por `, `) ·
+  `deve ser uma lista de identificadores de canal` · `deve ser uma lista de comandos` · `deve ser
+  o caminho de um programa` · `deve ser uma lista de textos` · `deve ser uma lista de tipos de
+  evento; pode usar x.* ou *` · `não é um cron válido` · `não é um fuso horário válido` · `{onde}
+  o agendamento nunca chega: {cron}` · `{onde} escreva pelo menos um entre skill e prompt` ·
+  `{onde} o campo channels tem um canal não registrado: {c}` · `o campo defaultChannels do
+  rules.json tem um canal não registrado: {c}` · `a fonte {id} é reservada: agendamentos usam o
+  cron da regra` · `o identificador da fonte {regra}: {id}` · `a fonte {id}: ` · `o identificador
+  do canal {regra}: {id}` · `o canal {id}: ` · `o identificador do Agent {regra}: {id}` · `o
+  Agent {id}: ` · `as regras do grupo "{g}" precisam ter o mesmo parallel` · `a tarefa agendada
+  "{n}" tem o mesmo nome de outra regra ou tarefa agendada` · `a tarefa agendada "{n}": ` · `a
+  tarefa agendada "{n}" diz o que fazer depois da resposta: falta o cwd onde continuar` · `a
+  tarefa agendada "{n}" tem cwd: escreva pelo menos um entre skill e prompt, o que fazer após a
+  resposta` · `não é JSON: {erro}`
 
-| Original | **Título em pt-BR** |
-|---|---|
-| `# 协议` | `# Protocolo` |
-| `## 六个词` | `## Seis palavras` |
-| `## 六条原则` | `## Seis princípios` |
-| `## 规则` | `## Regras` |
-| `## 来源：把世界变成事件` | `## Fontes: transformar o mundo em eventos` |
-| `## Agent：领活、干活、交回执` | `## Agent: pegar trabalho, executar e entregar o recibo` |
-| `### Agent 只需要做一件事` | `### O Agent só precisa fazer uma coisa` |
-| `### 接一个新 Agent` | `### Conectar um novo Agent` |
-| `## 通道：把卡片送到你面前` | `## Canais: levar o cartão até você` |
-| `## 本人：看全局、回答、结案、停止` | `## O titular: visão geral, respostas, encerramento e parada` |
-| `### 暂停、恢复、补跑、立即运行` | `### Pausar, retomar, reexecutar e rodar agora` |
-| `## 失败时会怎样` | `## O que acontece em caso de falha` |
-| `## 谁能做什么` | `## Quem pode fazer o quê` |
-| `## 日志与确定性` | `## Log e determinismo` |
-| `## 一致性和复现` | `## Conformidade e reprodução` |
-| `### ACP 和 MCP` | `### ACP e MCP` |
-| `### 通道模板与命令行示例` | `### Modelos de canal e exemplos de linha de comando` |
-| `## 业务场景模板` | `## Receitas de negócio` |
-| `## 结构与实测` | `## Estrutura e medições` |
-| `### 历史增长实测` | `### Crescimento do histórico na prática` |
-| `## 交付插件` | `## Plugin de entrega` |
-| `## 版本与兼容` | `## Versão e compatibilidade` |
+A lista padrão de ações que exigem decisão prévia (`askFirst`) é, nesta ordem: **apagar dados ·
+derrubar serviço · gastar dinheiro · enviar mensagens a terceiros · mudar a direção do produto ·
+criar ou rotacionar chaves · alterar permissões**. A fonte reservada de agendamento se chama
+`agendamento`.
 
-### `skills/agent-autoloop/SKILL.md`
+## 8. Sentinelas entre módulos
 
-| Original | **Título em pt-BR** |
-|---|---|
-| `# Agent 自动化中台` | `# Central de automação de Agents` |
-| `## 看情况、回答` | `## Acompanhar e responder` |
-| `## 改规则` | `## Editar regras` |
-| `## 写处理手册` | `## Escrever um manual de tratamento` |
-| `## 接一个事件插件` | `## Conectar um plugin de eventos` |
-| `## 接一个 Agent` | `## Conectar um Agent` |
-| `## 接一个通道` | `## Conectar um canal` |
-| `## 交付流水线` | `## Pipeline de entrega` |
-| `## MCP 与密钥撤销` | `## MCP e revogação de chaves` |
-| `## 放到服务器、加电脑` | `## Servidor e computadores adicionais` |
-| `## 日志与恢复` | `## Log e recuperação` |
-| `## 版本与卸载` | `## Versão e desinstalação` |
+Estes literais aparecem em mais de um diretório de código e são comparados por igualdade ou por
+regex em testes. A forma é obrigatória em todos os lados:
 
-## 5. Nomes fixos dos fixtures de teste
+- `Resolvido` — produzido por `kernel/decide.ts`, comparado em `cli/status.ts` e
+  `plugins/webhook/channel.ts`
+- `o titular` · `não deixou resultado` · `sem motivo informado` · `FALHOU` · `NADA A FAZER` ·
+  `Concluído` · `agendamento` · `canal` · `Feishu` · `notificação de desktop` · `alfa`/`beta`/`gama`
+- `Interrompida` · `não existe esse endereço` · `não existe essa rodada` · `esta fonte não aceita
+  Webhook` · `ainda não está instalado: rode antes agent-autoloop init` · `não é JSON` · `nome
+  fixo deste assunto` · `uma frase` · `respondeu ${response.status}` · `fora dos limites` ·
+  `verificado` · `Fechado` · `corrigido` · `escolha uma` · `escolha` · `um`/`dois`/`três` ·
+  `conteúdo` · `reverificação` · `fonte`
+- `Nota de tratamento` com maiúscula é o rótulo de UI na página do cartão (seguido de `: `);
+  `nota de tratamento` minúsculo compõe mensagens
+- `agent-autoloop try`: `execução de teste` · `experimente` · `Execução de teste: escolha uma
+  cor` · `Azul` · `Verde` · `Execute agent-autoloop status para ver`
+- `status`: `Online` · `Em andamento` · `Rodadas recentes` · `Cartões recentes` · `Eventos sem
+  regra` · `esta máquina` · `continuando a sessão da rodada anterior` · `Fonte: ` (com espaço)
+- Mensagens de plugin: `o ACP não devolveu um identificador de sessão` · `O Agent fez uma
+  pergunta a você` · `o Codex não concluiu nem deixou um resultado` · `o DSH não concluiu nem
+  deixou um resultado` · `o DSH não terminou esta rodada` · `o ZCode não concluiu nem deixou um
+  resultado` · `esta rodada esgotou o limite de saída` · `esta rodada foi abortada` · `esta
+  rodada travou e não concluiu` · `o rules.json está com erro; as regras antigas continuam em
+  uso` · `o worker não conectou` · `uma rodada que falhou só pode enviar notificação` · `fora do
+  escopo de verificação desta rodada` · `este trabalho não pertence a este token` · `o rótulo de
+  entrega foi retirado` · `entrega devolvida: ${reason}` · `a revisão encontrou problemas; merge
+  ainda não feito` · `não há rótulo de entrega pendente` · `Registrar e encerrar` · `não foi
+  possível confirmar que o merge automático foi encerrado` · `a mudança foi fechada ou o branch
+  de destino mudou; o merge é só para o main.` · `o pull request foi fechado; sem merge nem
+  publicação` · `NADA A FAZER: o pull request foi fechado` · `código de saída ${code}: `
 
-`tests/rules.fixture.json` é compartilhado por dezenas de testes. Os valores abaixo já foram
-traduzidos e **devem** ser usados exatamente assim em qualquer teste que precise dos mesmos
-nomes de exemplo:
+## 9. O que não se traduz
 
-| Papel | Chinês | **Português** |
-|---|---|---|
-| Fonte `app` | 应用 | **aplicativo** |
-| Fonte `ops` | 运维 | **operações** |
-| Fonte `hooks` | 外部 | **externo** |
-| Agent `a1` | 甲 | **alfa** |
-| Agent `a2` | 乙 | **beta** |
-| Agent `a3` | 丙 | **gama** |
-| Canal `chat` | 聊天 | **chat** |
-| Canal `plain` | 文字 | **texto** |
-| Regra | 意见 | **opiniões** |
-| Regra | 告警 | **alerta** |
-| Regra | 告警也记一笔 | **alerta também registra** |
-| Regra | 早报 | **briefing matinal** |
-| Regra | 巡检 | **inspeção** |
-| Tarefa de outro lugar | 每周清理 | **limpeza semanal** |
+Identificadores de código, nomes de arquivos e diretórios, chaves e nomes de campo JSON, comandos
+(`agent-autoloop status`), flags (`--json`, `--dry-run`, `--since`), variáveis de ambiente
+(`AGENT_AUTOLOOP_HOME`, `NO_COLOR`), URLs, endpoints HTTP (`/v1/state`, `/v1/stream`), expressões
+cron, nomes de serviços e tarefas agendadas, labels e nomes de branch do GitHub (`deliver`,
+`main`), SHA de ações, números de versão, limites numéricos e nomes de produtos e siglas (Node,
+SQLite, macOS, Linux, Windows, launchd, systemd, PowerShell, Claude Code, Codex, ACP, MCP,
+Feishu/Lark, lark-cli, DingTalk, WeCom, Slack, Discord, GitHub, GitLab).
 
-Para nomes de exemplo fora do fixture, use `alfa`/`beta`/`gama` no lugar de 甲/乙/丙, e
-`Fulano` no lugar de 王某.
+Caracteres de largura total que têm função técnica permanecem: os substitutos `］` e `＜` que
+impedem o WeCom de renderizar marcação injetada, a classe `[^\s；，。]` do regex de fronteira de
+URL e o `：` aceito depois dos marcadores de protocolo.
 
-## 6. Política de fuso horário (IMPORTANTE)
+## 10. Regras de estilo
 
-Identificadores de fuso horário são **dados funcionais, não idioma**. Eles NÃO devem ser
-traduzidos nem trocados:
-
-- `Asia/Shanghai` permanece `Asia/Shanghai` em fixtures de teste, exemplos de `rules.json` e
-  blocos de código. Trocar o fuso altera o resultado de cron e quebra os testes de
-  agendamento.
-- Em prosa, onde o original diz "北京时间" (horário de Pequim), escreva **"fuso Asia/Shanghai
-  (horário de Pequim)"** para manter a informação técnica correta.
-- Exemplos ilustrativos de horário com fuso dentro de strings de prompt (não funcionais)
-  podem usar `-03:00`.
-
-## 7. Strings fixas de validação de `rules.json`
-
-`protocol/rules.ts` produz estas mensagens e `tests/rules.test.ts` as verifica. A tradução é
-**fixa** — quem traduzir a fonte e quem traduzir o teste precisam gerar exatamente isto.
-
-### Lista padrão de ações que exigem decisão prévia (`ASK_FIRST`)
-
-| Chinês | **Português** |
-|---|---|
-| 删数据 | **apagar dados** |
-| 停服 | **derrubar serviço** |
-| 花钱 | **gastar dinheiro** |
-| 对外发消息 | **enviar mensagens a terceiros** |
-| 改产品方向 | **mudar a direção do produto** |
-| 新建或轮换密钥 | **criar ou rotacionar chaves** |
-| 修改权限 | **alterar permissões** |
-
-A fonte reservada de agendamento `rules.sources[SCHEDULE]` recebe `{ name: "agendamento" }`.
-
-### Mensagens
-
-| Chinês | **Português** |
-|---|---|
-| `rules.json 有问题：` | `rules.json tem problemas:` |
-| 不能为空 | `não pode ficar vazio` |
-| 只能用小写字母、数字和 - | `só pode usar letras minúsculas, números e -` |
-| `{onde}要是一个对象` | `{onde} deve ser um objeto` |
-| `{onde}要是一个列表` | `{onde} deve ser uma lista` |
-| `{onde}缺少 {campo}` | `{onde} está faltando {campo}` |
-| `{onde}的 {campo} {problema}` | `{onde}: o campo {campo} {problema}` |
-| `{onde}有不认识的字段 {campo}` | `{onde} tem o campo desconhecido {campo}` |
-| `规则名「{n}」重复了` | `o nome de regra "{n}" está duplicado` |
-| `规则「{n}」` (prefixo de local) | `a regra "{n}"` |
-| `{onde}的 when ` | `o when de {onde} ` |
-| `{onde}的 emits ` | `o emits de {onde} ` |
-| 不是已登记的 Agent：{x} | `não é um Agent registrado: {x}` |
-| 不是已登记的 Agent | `não é um Agent registrado` |
-| 不是已登记的来源：{x} | `não é uma fonte registrada: {x}` |
-| 不是已登记的来源 | `não é uma fonte registrada` |
-| 要是绝对目录（如 ~/code、/srv/app、C:\\code 或 \\\\服务器\\共享目录） | `deve ser um diretório absoluto (por exemplo ~/code, /srv/app, C:\code ou \\servidor\compartilhamento)` |
-| 要是字母或数字开头、不含空白的一个词，占位符只能用 {id}、{subject} | `deve ser uma palavra só, começando com letra ou número e sem espaços; os únicos placeholders permitidos são {id} e {subject}` |
-| 要是正整数 | `deve ser um inteiro positivo` |
-| 要是正整数（分钟） | `deve ser um inteiro positivo (minutos)` |
-| 只能是 true 或 false | `só pode ser true ou false` |
-| 只能是 {lista} | `só pode ser {lista}` (itens separados por `, `) |
-| 要是通道编号的列表 | `deve ser uma lista de identificadores de canal` |
-| 要是命令行的列表 | `deve ser uma lista de linha de comando` |
-| 要是一个程序的路径 | `deve ser o caminho de um programa` |
-| 要是文字的列表 | `deve ser uma lista de textos` |
-| 要是事件类型的列表，可以用 x.* 或 * | `deve ser uma lista de tipos de evento; pode usar x.* ou *` |
-| 要是事件类型的列表 | `deve ser uma lista de tipos de evento` |
-| 不是有效的 cron | `não é um cron válido` |
-| 不是有效的时区 | `não é um fuso horário válido` |
-| `{onde}的定时永远不会到来：{cron}` | `o agendamento de {onde} nunca vai chegar: {cron}` |
-| `{onde}的 skill 和 prompt 至少写一个` | `{onde} precisa de pelo menos um entre skill e prompt` |
-| `{onde}的 channels 不是已登记的通道：{c}` | `o channels de {onde} não é um canal registrado: {c}` |
-| `rules.json 的 defaultChannels 不是已登记的通道：{c}` | `o defaultChannels do rules.json não é um canal registrado: {c}` |
-| `来源 {id} 是保留的，定时用规则的 cron` | `a fonte {id} é reservada; para agendamento use o cron da regra` |
-| `来源的编号{regra}：{id}` | `o identificador da fonte {regra}: {id}` |
-| `来源 {id} ` (prefixo de local) | `a fonte {id} ` |
-| `通道的编号{regra}：{id}` | `o identificador do canal {regra}: {id}` |
-| `通道 {id} ` (prefixo de local) | `o canal {id} ` |
-| `Agent 的编号{regra}：{id}` | `o identificador do Agent {regra}: {id}` |
-| `Agent {id} ` (prefixo de local) | `o Agent {id} ` |
-| `组「{g}」里的规则 parallel 要一致` | `as regras do grupo "{g}" precisam ter o mesmo parallel` |
-| `定时任务「{n}」和别的规则或定时任务重名` | `a tarefa agendada "{n}" tem o mesmo nome de outra regra ou tarefa agendada` |
-| `定时任务「{n}」` (prefixo de local) | `a tarefa agendada "{n}"` |
-| `定时任务「{n}」写了回答后照什么做，还要写 cwd：在哪接着做` | `a tarefa agendada "{n}" definiu o que fazer após a resposta, mas falta cwd: onde continuar` |
-| `定时任务「{n}」写了 cwd，skill 和 prompt 至少写一个：回答后照什么做` | `a tarefa agendada "{n}" definiu cwd; escreva pelo menos um entre skill e prompt: o que fazer após a resposta` |
-| 不是 JSON：{erro} | `não é JSON: {erro}` |
-
-## 8. Âncoras de link
-
-As âncoras do GitHub **preservam acentos**: `## Versão e compatibilidade` gera
-`#versão-e-compatibilidade`. Ao traduzir um link com âncora, escreva o slug a partir do novo
-título em minúsculas, sem pontuação, com espaços virando hífen e **mantendo os acentos**.
-
-Não se preocupe em acertar o slug de primeira: ao final da conversão um script varre todos os
-`.md`, compara cada âncora com os títulos reais do arquivo de destino e corrige o que não
-bater. O importante é que o **texto do título** seja exatamente o fixado na seção 4.
-
-## 10. Sentinelas entre módulos (CRÍTICO)
-
-Estes literais aparecem em **mais de um diretório de código** e são comparados com `===` /
-`!==` ou verificados por regex em testes. Se dois módulos traduzirem de forma diferente, a
-comparação quebra em silêncio ou o teste falha. A tradução é **fixa e obrigatória**.
-
-### Alto risco (atravessam três módulos ou mais)
-
-| Chinês | **Português (obrigatório)** | Onde aparece |
-|---|---|---|
-| `已处理` | **`Resolvido`** | `kernel/decide.ts` (produz), `cli/status.ts` (compara), `plugins/webhook/channel.ts` (compara), testes |
-| `本人` | **`o titular`** | `kernel/`, `scripts/`, `sim/`, testes |
-| `没留下结果` | **`não deixou resultado`** | `worker/contract.ts`, `plugins/`, `examples/`, testes |
-| `没说原因` | **`sem motivo informado`** | `worker/contract.ts`, `kernel/`, testes |
-| `没跑成` | **`FALHOU`** | `worker/contract.ts`, testes |
-| `没事可做` | **`NADA A FAZER`** | `worker/contract.ts`, `cli/`, testes |
-| `做完了` | **`Concluído`** | `cli/`, `tests/helpers.ts`, testes |
-| `定时` | **`agendamento`** | `protocol/rules.ts` (nome da fonte reservada), `cli/`, testes |
-| `通道` | **`canal`** | `cli/`, `kernel/`, `sim/` |
-| `飞书` | **`Feishu`** | `plugins/`, `examples/`, testes |
-| `桌面通知` | **`notificação de desktop`** | `cli/`, `plugins/`, testes |
-| `甲` / `乙` / `丙` | **`alfa` / `beta` / `gama`** | `protocol/`, `sim/`, testes |
-| `意见` | **`opiniões`** | `scripts/`, testes (fixture) |
-| `早报` | **`briefing matinal`** | `examples/`, testes (fixture) |
-
-### Dois módulos
-
-| Chinês | **Português (obrigatório)** | Onde aparece |
-|---|---|---|
-| `已停止` | **`Interrompida`** | `kernel/`, `worker/`, testes |
-| `没有这个地址` | **`não existe esse endereço`** | `cli/`, `kernel/`, testes |
-| `没有这一轮` | **`não existe essa rodada`** | `host/`, `kernel/` |
-| `这个来源不收 Webhook` | **`esta fonte não aceita Webhook`** | `host/`, `kernel/` |
-| `还没装好：先运行 agent-autoloop init` | **`ainda não está instalado: rode antes agent-autoloop init`** | `cli/`, `host/` |
-| `不是 JSON` | **`não é JSON`** | `cli/`, `kernel/` |
-| `这件事的固定名字` | **`nome fixo deste assunto`** | `cli/`, `worker/contract.ts` |
-| `一句话` | **`uma frase`** | `worker/contract.ts`, testes |
-| `返回 ${response.status}` | **`respondeu ${response.status}`** | `examples/`, `plugins/` |
-| `越界` | **`fora dos limites`** | `protocol/`, testes |
-| `已核实` | **`verificado`** | `protocol/`, `scripts/` |
-| `已关闭` | **`Fechado`** | `cli/`, testes |
-| `处理说明` | **`nota de tratamento`** | `kernel/`, testes |
-| `改好了` | **`corrigido`** | `kernel/`, testes |
-| `选一个` | **`escolha uma`** | `sim/`, testes |
-| `选择` | **`escolha`** | `sim/`, testes |
-| `一` / `二` / `三` | **`um` / `dois` / `três`** | `kernel/`, testes |
-| `内容` | **`conteúdo`** | `sim/`, testes |
-| `复查` | **`reverificação`** | `sim/`, testes |
-| `来源` | **`fonte`** | `kernel/`, `sim/` |
-
-### `agent-autoloop try` (scripts/ ↔ cli/ ↔ testes)
-
-| Chinês | **Português (obrigatório)** |
-|---|---|
-| `试跑` | **`execução de teste`** |
-| `试一下` | **`experimente`** |
-| `试跑：选一个颜色` | **`Execução de teste: escolha uma cor`** |
-| `蓝色` | **`Azul`** |
-| `绿色` | **`Verde`** |
-| `运行 agent-autoloop status 查看` | **`Rode agent-autoloop status para ver`** |
-
-### Rótulos do `status` (cli/ ↔ testes)
-
-Já fixados na seção 3: `在线` → **Online**, `正在做` → **Em andamento**, `最近几轮` →
-**Rodadas recentes**, `最近的卡片` → **Cartões recentes**, `没有规则接的事件` → **Eventos sem
-regra**, `本机` → **esta máquina**, `接着上一轮的会话` → **continuando a sessão da rodada
-anterior**.
-
-### Mensagens de plugin (plugins/ ↔ testes)
-
-| Chinês | **Português (obrigatório)** |
-|---|---|
-| `ACP 没有返回会话编号` | **`o ACP não devolveu um identificador de sessão`** |
-| `Agent 问你一个问题` | **`Um Agent fez uma pergunta a você`** |
-| `Codex 没有完成并留下实际结果` | **`o Codex não concluiu nem deixou um resultado`** |
-| `DSH 没有完成并留下实际结果` | **`o DSH não concluiu nem deixou um resultado`** |
-| `DSH 没跑完这一轮` | **`o DSH não terminou esta rodada`** |
-| `ZCode 没有完成并留下实际结果` | **`o ZCode não concluiu nem deixou um resultado`** |
-| `这一轮用完了输出上限` | **`esta rodada esgotou o limite de saída`** |
-| `这一轮被中止了` | **`esta rodada foi abortada`** |
-| `这一轮被卡住了，没有完成` | **`esta rodada travou e não concluiu`** |
-| `rules.json 写错了，还在用旧规则` | **`o rules.json está com erro; as regras antigas continuam em uso`** |
-| `接单程序没连上` | **`o worker não conectou`** |
-| `没跑成的一轮只能发通知` | **`uma rodada que falhou só pode enviar notificação`** |
-| `不在本轮核对范围` | **`fora do escopo de verificação desta rodada`** |
-| `这件活不归这个令牌` | **`este trabalho não pertence a este token`** |
-| `交付标记已撤回` | **`o rótulo de entrega foi retirado`** |
-| `交付退回：${reason}` | **`entrega devolvida: ${reason}`** |
-| `审查发现问题，尚未合并` | **`a revisão encontrou problemas; merge ainda não feito`** |
-| `没有待交付的标记` | **`não há rótulo de entrega pendente`** |
-| `记录并结案` | **`Registrar e encerrar`** |
-| `无法确认自动合并已关闭` | **`não foi possível confirmar que o merge automático foi encerrado`** |
-| `改动已关闭或目标分支已变更，只合并到 main。` | **`a mudança foi fechada ou o branch de destino mudou; o merge é só para o main.`** |
-| `合并请求已关闭，未合并或发布` | **`o pull request foi fechado; sem merge nem publicação`** |
-| `没事可做：合并请求已关闭` | **`NADA A FAZER: o pull request foi fechado`** |
-
-## 11. Regras de estilo
-
-
-
-
-- **Não traduzir:** identificadores de código, nomes de arquivos, chaves JSON, nomes de
-  comandos (`agent-autoloop status`), variáveis de ambiente, URLs, expressões cron, nomes de
-  produtos (Claude Code, Codex, Feishu/Lark, DingTalk, WeCom, Slack, Discord, GitHub, GitLab).
-- **Agent** fica com inicial maiúscula e sem plural em "s" quando usado como o conceito do
-  projeto ("os Agents" é aceitável no plural).
-- Pontuação chinesa `，。；：！？、（）「」“”` → pontuação brasileira `, . ; : ! ? ( ) " "`.
-- Parênteses de largura total `（）` → `()`.
-- Manter a estrutura Markdown idêntica: mesmos níveis de título, mesmas tabelas, mesmas
-  cercas de código, mesmas tags `<details>`.
-- Blocos de código com JSON/exemplos: traduzir apenas os **valores textuais** que são prosa
-  (ex.: `"name": "早报"` → `"name": "Briefing matinal"`), nunca chaves.
-- Números, tabelas de benchmark e unidades: manter os valores; traduzir unidades
-  (`条/秒` → `eventos/s`, `毫秒` → `ms`).
-- Comentários de código: traduzir para pt-BR, mantendo o princípio do projeto de explicar
-  apenas o *porquê* que o código não mostra.
+- Pontuação brasileira; aspas curvas ou retas são aceitáveis, mas consistentes dentro de um
+  arquivo. Parênteses comuns, nunca de largura total.
+- Números no padrão pt-BR: vírgula decimal, ponto de milhar (`88,78 ms`, `2.394 eventos/s`).
+- Comentários de código em pt-BR, explicando apenas o *porquê* que o código não mostra.
+- Texto voltado ao usuário em português simples e direto, sem siglas técnicas, códigos de status,
+  caminhos de arquivo nem identificadores internos quando o leitor não vê o código.
+- Blocos de código com JSON: traduzir apenas valores de prosa, nunca chaves; o JSON deve
+  continuar válido.
+- O texto da licença MIT permanece como está: é texto legal e o nome do detentor dos direitos é
+  um nome próprio.

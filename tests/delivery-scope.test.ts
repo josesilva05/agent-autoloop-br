@@ -1,7 +1,8 @@
-// Failure modes: runtime Markdown, executable/symlink documents, renames, an unknown/divergent live
-// commit or an earlier unreleased code change suppresses Ship; PR settings replace main's settings; HTTP health escapes
-// the explicit localhost-only test switch. Git objects are read without a checkout, hooks, filters or project imports.
-// Reviewers by agent are listed with no account trusted to declare one, or a model or depth becomes a command option.
+// Modos de falha: Markdown em runtime, documentos executáveis/symlinks, renomeações, um commit em produção
+// desconhecido/divergente ou uma mudança de código anterior não publicada suprimem o Ship; as configurações do PR
+// substituem as da main; o health em HTTP escapa da opção explícita de teste restrita a localhost. Os objetos Git são
+// lidos sem checkout, hooks, filters nem imports do projeto. Revisores por Agent são listados sem nenhuma conta
+// confiável para declarar um, ou um modelo ou profundidade vira uma opção de comando.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -30,14 +31,14 @@ const config = {
   internal: ["docs/**/*.md"],
   review: { points: "AGENTS.md", status: "agent-review" },
 };
-test("the default review status is neutral and projects can override it", () => {
+test("o status de revisão padrão é neutro e os projetos podem sobrescrevê-lo", () => {
   assert.equal(settings({ ...config, review: { points: "AGENTS.md" } }).review.status, "agent-review");
   assert.equal(
     settings({ ...config, review: { points: "AGENTS.md", status: "project-review" } }).review.status,
     "project-review",
   );
 });
-test("reviewers by agent need trusted accounts, and a model or depth that can't be read as an option", () => {
+test("revisores por Agent exigem contas confiáveis, e modelo ou profundidade que não leia como opção", () => {
   const review = (extra: object) => settings({ ...config, review: { points: "AGENTS.md", ...extra } }).review;
   assert.deepEqual(review({}).agents, {});
   const agents = { codex: null, claude: { model: "gpt-6.1-sol", effort: "xhigh" }, gemini: { command: ["reviewer"] } };
@@ -57,7 +58,7 @@ test("reviewers by agent need trusted accounts, and a model or depth that can't 
 write("ops/delivery.json", JSON.stringify(config));
 const base = commit();
 git("update-ref", "refs/remotes/origin/main", base);
-test("release scope compares the entire healthy-live range and both sides of renames", () => {
+test("o escopo da publicação compara o intervalo saudável em produção e os dois lados das renomeações", () => {
   write("docs/a.md", "docs");
   const docs = commit();
   assert.equal(releaseRequired(root, base, docs, config.internal), false);
@@ -71,7 +72,7 @@ test("release scope compares the entire healthy-live range and both sides of ren
   git("mv", "app.ts", "docs/app.md");
   assert.equal(releaseRequired(root, base, commit(), config.internal), true);
 });
-test("executable or symlink documents and unknown history always need release", () => {
+test("documentos executáveis ou symlinks e histórico desconhecido sempre exigem publicação", () => {
   for (const mode of ["executable", "symlink"]) {
     git("reset", "--hard", base);
     if (mode === "executable") {
@@ -91,7 +92,7 @@ test("executable or symlink documents and unknown history always need release", 
   write("docs/a.md", "right");
   assert.equal(releaseRequired(root, left, commit(), config.internal), true);
 });
-test("only main provides configuration, with exact path patterns and explicit local health opt-in", () => {
+test("só a main fornece configuração, com padrões de caminho exatos e adesão explícita ao health local", () => {
   write("ops/delivery.json", JSON.stringify({ ...config, internal: ["**/*"] }));
   assert.deepEqual(readMainSettings(root).internal, config.internal);
   assert.ok(matches("docs/a/b.md", ["docs/**/*.md"]));
@@ -108,7 +109,7 @@ test("only main provides configuration, with exact path patterns and explicit lo
   assert.throws(() => settings({ ...config, health: { ...health, url: "http://192.168.1.2" } }, true));
   assert.throws(() => settings({ ...config, review: { ...config.review, command: "sh bad" } }));
 });
-test("unhealthy, redirected or malformed health cannot authorize skipping a release", async () => {
+test("health não saudável, redirecionado ou malformado não pode autorizar pular uma publicação", async () => {
   const s = settings({
     ...config,
     health: {

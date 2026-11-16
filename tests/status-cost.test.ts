@@ -1,9 +1,10 @@
-// The cost lines in `agent-autoloop status`, from the hub's completion-time totals. Failure cases: "today" is the
-// machine's or UTC's day and not the rules' time zone; a price nobody reported is counted as zero, or rounds that didn't report
-// are passed over in silence; a round that never started is counted, or one that's only waiting to try again; a week's worth
-// of rounds is cut off at the first page of 60, or a run stuck in the queue since long ago ends the paging early.
-// A run created before the reporting window can finish today behind many old completed runs. Tokens read from a cache, a
-// small part of the price, aren't told apart, so a day mostly served from cache reads as many times what it cost.
+// As linhas de custo do `agent-autoloop status`, a partir dos totais por hora de conclusão da central. Casos de falha: "hoje" é
+// o dia da máquina ou o do UTC e não o do fuso das regras; um preço que ninguém relatou é contado como zero, ou rodadas que não
+// relataram são deixadas de lado em silêncio; uma rodada que nunca começou é contada, ou uma que só espera para tentar de novo;
+// uma semana de rodadas é cortada na primeira página de 60, ou uma rodada presa na fila desde muito tempo encerra a paginação
+// cedo. Uma rodada criada antes da janela de relato pode terminar hoje atrás de muitas rodadas concluídas antigas. Tokens lidos
+// de um cache, uma parte pequena do preço, não são distinguidos, então um dia servido sobretudo do cache lê como muitas vezes o
+// que custou.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -18,7 +19,7 @@ import { spendingOf } from "../host/state.ts";
 import { dayStart } from "../kernel/cron.ts";
 
 const home = setup("status-cost");
-const now = Date.parse("2026-11-03T02:00:00Z"); // 10:00 in Asia/Shanghai
+const now = Date.parse("2026-11-03T02:00:00Z"); // 10:00 em Asia/Shanghai
 const ended = (at: string, usage: object | null) => ({ claimedAt: at, finishedAt: at, usage });
 
 function spendLine(
@@ -39,59 +40,60 @@ function spendLine(
   }
 }
 
-test("today is the rules' day; each figure says how many rounds didn't report it", () => {
+test("hoje é o dia das regras; cada número diz quantas rodadas não o relataram", () => {
   const runs = [
     ended("2026-11-03T01:00:00Z", { input: 5000, output: 5000, cached: 4000 }),
     ended("2026-11-03T00:30:00Z", null),
-    // 01:00 on the 3rd in Shanghai: today there, though it's still the 2nd in UTC.
+    // 01:00 do dia 3 em Xangai: hoje lá, embora ainda seja dia 2 no UTC.
     ended("2026-11-02T17:00:00Z", { input: 1000, output: 234, cost: 0.5 }),
-    // 18:00 on the 2nd in Shanghai: this week, not today.
+    // 18:00 do dia 2 em Xangai: esta semana, não hoje.
     ended("2026-11-02T10:00:00Z", { input: 10000, output: 0, cost: 1 }),
     ended("2026-10-28T02:00:00Z", { input: 1, output: 1, cost: 0 }),
-    // Eight days ago: past the week.
+    // Oito dias atrás: além da semana.
     ended("2026-10-26T02:00:00Z", { input: 999999, output: 999999, cost: 99 }),
   ];
   assert.equal(
     spendLine(runs, now, "Asia/Shanghai"),
-    "今天      3 轮 · 1.1 万 Token（其中缓存 36%；1 轮没上报） · $0.50（2 轮没上报）\n" +
-      "最近 7 天 5 轮 · 2.1 万 Token（其中缓存 19%；1 轮没上报） · $1.50（2 轮没上报）",
+    "Hoje           3 rodadas · 11,2 mil Tokens (36% em cache; 1 rodada sem relatório) · $0.50 (2 rodadas sem relatório)\n" +
+      "Últimos 7 dias 5 rodadas · 21,2 mil Tokens (19% em cache; 1 rodada sem relatório) · $1.50 (2 rodadas sem relatório)",
   );
 });
 
-test("rounds recorded before input counted the cache don't show a share of more than all of it", () => {
-  // Claude's input once left its cache out while cached took in reads and writes.
+test("rodadas registradas antes de o input contar o cache não mostram uma parcela maior que o todo", () => {
+  // O input do Claude já deixou o cache de fora enquanto cached incluía leituras e escritas.
   const old = [ended("2026-11-03T01:00:00Z", { input: 10, output: 2, cached: 60000 })];
   assert.equal(
     spendLine(old, now, "Asia/Shanghai"),
-    "今天      1 轮 · 12 Token · 费用没上报\n最近 7 天 1 轮 · 12 Token · 费用没上报",
+    "Hoje           1 rodada · 12 Tokens · Custo sem relatório\nÚltimos 7 dias 1 rodada · 12 Tokens · Custo sem relatório",
   );
 });
 
-test("nothing reported is said to be nothing reported, not zero; nothing run is zero rounds", () => {
+test("nada relatado é dito como nada relatado, não zero; nada executado é zero rodadas", () => {
   const quiet = [ended("2026-11-03T01:00:00Z", null), ended("2026-11-03T01:30:00Z", {})];
   assert.equal(
     spendLine(quiet, now, "Asia/Shanghai"),
-    "今天      2 轮 · Token 没上报 · 费用没上报\n最近 7 天 2 轮 · Token 没上报 · 费用没上报",
+    "Hoje           2 rodadas · Tokens sem relatório · Custo sem relatório\n" +
+      "Últimos 7 dias 2 rodadas · Tokens sem relatório · Custo sem relatório",
   );
-  assert.equal(spendLine([], now, "Asia/Shanghai"), "今天      0 轮\n最近 7 天 0 轮");
+  assert.equal(spendLine([], now, "Asia/Shanghai"), "Hoje           0 rodadas\nÚltimos 7 dias 0 rodadas");
 });
 
-test("only rounds that ended count: not one still going, one waiting to try again, or one stopped before it started", () => {
+test("só rodadas que terminaram contam: nem uma em curso, nem uma esperando para tentar de novo, nem uma parada antes de começar", () => {
   const at = "2026-11-03T01:00:00Z";
   const runs = [
     { claimedAt: at, finishedAt: null, usage: null },
     { claimedAt: null, finishedAt: null, usage: { input: 5, output: 5 } },
     { claimedAt: null, finishedAt: at, usage: null },
-    // Stopped while waiting to try again, after a try that did spend something.
+    // Parada enquanto esperava para tentar de novo, depois de uma tentativa que de fato gastou algo.
     { claimedAt: null, finishedAt: at, usage: { input: 5, output: 5 } },
   ];
   assert.equal(
     spendLine(runs, now, "Asia/Shanghai"),
-    "今天      1 轮 · 10 Token · 费用没上报\n最近 7 天 1 轮 · 10 Token · 费用没上报",
+    "Hoje           1 rodada · 10 Tokens · Custo sem relatório\nÚltimos 7 dias 1 rodada · 10 Tokens · Custo sem relatório",
   );
 });
 
-test("status includes runs beyond the first page, including old runs that finish today", async () => {
+test("status inclui rodadas além da primeira página, inclusive rodadas antigas que terminam hoje", async () => {
   const hub = await import("./hub.ts");
   const { serve } = await import("../host/http.ts");
   const server = serve(0);
@@ -113,9 +115,9 @@ test("status includes runs beyond the first page, including old runs that finish
   const round = (id: string, at: number, usage: object) => {
     hub.ingest("app", { id, type: "feedback.new", subject: id }, at);
     const job = hub.claimNext("w1", `claim-${id}`, at)!;
-    hub.finish(job.run, job.token, { outcome: "done", summary: "好了", usage }, at);
+    hub.finish(job.run, job.token, { outcome: "done", summary: "pronto", usage }, at);
   };
-  // Its worker never comes: from nine days ago on it's "active", so it shows at the tail of the first page.
+  // O worker dela nunca aparece: desde nove dias atrás ela está "ativa", então aparece no fim da primeira página.
   hub.ingest("ops", { id: "stuck", type: "alert.raised", subject: "stuck" }, clock - 9 * DAY);
   round("old", clock - 8 * DAY, { input: 1000, output: 0, cost: 9 });
   for (let i = 0; i < 65; i++) round(`week-${i}`, clock - 3 * DAY, { input: 10, output: 0, cost: 0.01 });
@@ -127,8 +129,11 @@ test("status includes runs beyond the first page, including old runs that finish
     { env: process.env },
   );
   const lines = stdout.split("\n");
-  assert.match(lines[0], /^等你 /);
-  assert.deepEqual(lines.slice(1, 3), ["今天      1 轮 · 100 Token · $1.00", "最近 7 天 66 轮 · 750 Token · $1.65"]);
+  assert.match(lines[0], /^Aguardando você /);
+  assert.deepEqual(lines.slice(1, 3), [
+    "Hoje           1 rodada · 100 Tokens · $1.00",
+    "Últimos 7 dias 66 rodadas · 750 Tokens · $1.65",
+  ]);
 
   for (const table of ["run_events", "runs", "events", "seen", "cards", "deliveries", "timers"] as const)
     hub.fixtureClear(table);
@@ -142,7 +147,7 @@ test("status includes runs beyond the first page, including old runs that finish
     { env: process.env },
   );
   assert.deepEqual(recent.stdout.split("\n").slice(1, 3), [
-    "今天      1 轮 · 1000 Token · $9.00",
-    "最近 7 天 1 轮 · 1000 Token · $9.00",
+    "Hoje           1 rodada · 1 mil Tokens · $9.00",
+    "Últimos 7 dias 1 rodada · 1 mil Tokens · $9.00",
   ]);
 });

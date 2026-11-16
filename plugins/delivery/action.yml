@@ -1,18 +1,18 @@
-name: 判断这次是否发布
-description: 对比健康版本和目标提交，保留尚未发布的代码变化
+name: Decidir se esta mudança vai para produção
+description: Compara a versão saudável com o commit de destino e preserva as mudanças de código ainda não publicadas
 inputs:
   target:
-    description: 要发布的完整提交编号，默认 github.sha
+    description: Hash de commit completo a publicar; o padrão é github.sha
     required: false
   test-local-health:
-    description: 仅用于测试，允许健康检查使用 http://127.0.0.1
+    description: Apenas para testes; permite que a verificação de saúde use http://127.0.0.1
     default: "false"
 outputs:
   release:
-    description: 是否需要发布
+    description: Se é preciso publicar
     value: ${{ steps.scope.outputs.release }}
   superseded:
-    description: 更新的 main 是否已含有需要另行发布的代码
+    description: Se a main mais nova já contém código que precisa de uma publicação separada
     value: ${{ steps.scope.outputs.superseded }}
 runs:
   using: composite

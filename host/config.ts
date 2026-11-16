@@ -1,5 +1,5 @@
-// What this machine is in the system: config.json, private to its owner. On a machine that runs everything it has all
-// of these; a machine that only does work has the hub's address and a worker's key.
+// O que esta máquina é dentro do sistema: config.json, privado para o seu titular. Numa máquina que roda tudo ele tem
+// todos estes campos; uma máquina que só executa trabalho tem o endereço da central e a chave de um worker.
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { HOME } from "./home.ts";
@@ -17,30 +17,30 @@ export type Config = {
 
 export const CONFIG_FILE = path.join(HOME, "config.json");
 
-/** The hub's address: host:port, or [host]:port for an IPv6 address. A bare port is a mistake, not every interface. */
+/** O endereço da central: host:porta, ou [host]:porta para um endereço IPv6. Só uma porta é um erro, não "todas as interfaces". */
 export function parseListen(listen: string) {
   const match = /^\[([0-9a-fA-F:.]+)\]:([0-9]+)$/.exec(listen) ?? /^([^:\s]+):([0-9]+)$/.exec(listen);
-  if (!match) throw new Error(`hub.listen 要写成 主机:端口（IPv6 用 [地址]:端口）：${listen}`);
+  if (!match) throw new Error(`hub.listen deve ser escrito como host:porta ([endereço]:porta para IPv6): ${listen}`);
   const port = Number(match[2]);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`hub.listen 的端口要在 1 到 65535 之间：${listen}`);
+    throw new Error(`a porta em hub.listen deve estar entre 1 e 65535: ${listen}`);
   }
   return { host: match[1], port };
 }
 
-/** What `up` says when it can't take its port. */
+/** O que `up` diz quando não consegue ocupar a sua porta. */
 export function cantListen(error: NodeJS.ErrnoException, platform = process.platform) {
-  const said = `can't listen: ${error}`;
+  const said = `não foi possível escutar: ${error}`;
   if (platform !== "win32" || error.code !== "EACCES") return said;
   return (
-    `${said}。这个端口可能在 Windows 的系统保留范围里（Hyper-V、WSL 常占一段，重启后还会变），` +
-    "运行 netsh int ipv4 show excludedportrange protocol=tcp 查看；" +
-    `换一个范围外的端口：改 ${CONFIG_FILE} 里的 url 和 hub.listen（hub.publicUrl 是本机地址时也改），再重启中台`
+    `${said}. Esta porta pode estar na faixa reservada pelo sistema no Windows (Hyper-V e WSL costumam ocupar um trecho, que ainda muda depois de reiniciar); ` +
+    "rode netsh int ipv4 show excludedportrange protocol=tcp para conferir; " +
+    `use uma porta fora dessa faixa: altere url e hub.listen em ${CONFIG_FILE} (e também hub.publicUrl, quando for um endereço local) e reinicie a central`
   );
 }
 
 export function readConfig(): Config {
-  if (!existsSync(CONFIG_FILE)) throw new Error("还没装好：先运行 agent-autoloop init");
+  if (!existsSync(CONFIG_FILE)) throw new Error("ainda não está instalado: rode antes agent-autoloop init");
   return JSON.parse(readFileSync(CONFIG_FILE, "utf8")) as Config;
 }
 

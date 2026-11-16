@@ -1,5 +1,5 @@
-// The hub as the Windows login task runs it, through background.js: output goes straight to files, without PowerShell
-// changing its encoding, and the hub's exit is this one's, so background.js starts both again.
+// A central como a tarefa de login do Windows a executa, por meio do background.js: a saída vai direto para arquivos,
+// sem o PowerShell mudar sua codificação, e a saída da central é a deste processo, então o background.js reinicia os dois.
 import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import path from "node:path";

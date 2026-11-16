@@ -1,6 +1,6 @@
-// Failure modes: completed history grows the hot heap or slows ordinary requests; a slow stream buffers the log;
-// restart loses ID high water, delivery updates, answers or timer state; SIGKILL loses an acknowledged receipt;
-// rebuilding trusts the saved projection or loads all facts into memory. Fixtures use the real kernel and WAL + FULL.
+// Modos de falha: histórico concluído faz o heap quente crescer ou lentifica requisições comuns; um stream lento acumula o log;
+// a reinicialização perde o limite máximo de ID, atualizações de entrega, respostas ou estado de timer; o SIGKILL perde um recibo
+// já confirmado; a reconstrução confia na projeção salva ou carrega todos os fatos na memória. Os fixtures usam o kernel real e WAL + FULL.
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -21,7 +21,7 @@ if (["seed", "server", "rebuild"].includes(mode)) {
       const now = base + n * 60_000;
       hub.ingest(
         "app",
-        { id: `history-${n}`, type: "feedback.new", subject: "recurring", detail: "业务资料。".repeat(100) },
+        { id: `history-${n}`, type: "feedback.new", subject: "recurring", detail: "Dados de negócio.".repeat(100) },
         now,
       );
       const first = hub.claimNext("w1", `first-${n}`, now)!;
@@ -31,15 +31,15 @@ if (["seed", "server", "rebuild"].includes(mode)) {
         {
           outcome: "done",
           usage: { input: 1200, output: 200, cost: 0.01 },
-          ask: [{ title: `问题 ${n}`, text: "需要确认的内容。".repeat(50), options: ["继续", "结束"] }],
-          later: [{ key: "check", at: new Date(now + 30_000).toISOString(), about: "检查结果" }],
+          ask: [{ title: `pergunta ${n}`, text: "Dados a confirmar.".repeat(50), options: ["continuar", "encerrar"] }],
+          later: [{ key: "check", at: new Date(now + 30_000).toISOString(), about: "verificar o resultado" }],
         },
         now,
       );
       const card = hub.nextCard("chat", now)!;
       assert.ok(card);
       hub.delivered("chat", card.id, card.version, `message-${n}`, now);
-      hub.answer(card.id, { choice: 0, by: "本人" }, now);
+      hub.answer(card.id, { choice: 0, by: "o titular" }, now);
       hub.tick(now + 31_000);
       const second = hub.claimNext("w1", `second-${n}`, now + 31_000)!;
       assert.equal(second.context.answers.length, 1);
@@ -105,7 +105,7 @@ if (["seed", "server", "rebuild"].includes(mode)) {
 } else {
   const home = mkdtempSync(join(tmpdir(), "agent-autoloop-history-"));
   const rules = JSON.parse(readFileSync(new URL("../tests/rules.fixture.json", import.meta.url), "utf8"));
-  rules.rules = rules.rules.filter((r: any) => r.name === "意见");
+  rules.rules = rules.rules.filter((r: any) => r.name === "opiniões");
   rules.elsewhere = [];
   rules.channels.chat.links = true;
   writeFileSync(join(home, "rules.json"), JSON.stringify(rules));
@@ -217,7 +217,10 @@ if (["seed", "server", "rebuild"].includes(mode)) {
       const ack = await server.request("/v1/events", "source", event);
       const { job } = await server.request(`/v1/work?wait=0&claim=recover-${mark}`, "worker");
       assert.ok(job);
-      const receipt = { outcome: "done", notice: [{ title: "恢复检查", text: "确认回执和投递没有丢失" }] };
+      const receipt = {
+        outcome: "done",
+        notice: [{ title: "Verificação de recuperação", text: "Confirmar que o recibo e a entrega não se perderam" }],
+      };
       const pending = server.request(`/v1/runs/${job.run}/result`, job.token, receipt).then(
         () => true,
         () => false,
@@ -236,13 +239,13 @@ if (["seed", "server", "rebuild"].includes(mode)) {
       const { card } = await server.request("/v1/cards/next?wait=0", "channel");
       assert.ok(card);
       const at = performance.now();
-      assert.match(await server.request(card.link, ""), /恢复检查/);
+      assert.match(await server.request(card.link, ""), /Verificação de recuperação/);
       const cardLinkMs = performance.now() - at;
       await server.request(`/v1/cards/${card.id}/delivered`, "channel", {
         version: card.version,
         ref: `recovery-${mark}`,
       });
-      await server.request(`/v1/cards/${card.id}/resolve`, "owner", { reason: "已核实" });
+      await server.request(`/v1/cards/${card.id}/resolve`, "owner", { reason: "verificado" });
       const { card: update } = await server.request("/v1/cards/next?wait=0", "channel");
       assert.equal(update.id, card.id);
       assert.equal(update.state, "closed");

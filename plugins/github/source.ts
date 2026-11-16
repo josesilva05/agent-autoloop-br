@@ -1,6 +1,7 @@
-// GitHub webhooks, checked against the repository's secret and turned into events: `issues.opened`,
-// `pull_request.labeled`, `issue_comment.created` and so on, the object's number as the subject. In rules.json:
-//   "sources": { "github": { "name": "GitHub", "adapter": "github" } }, and AGENT_AUTOLOOP_SECRET_GITHUB in secrets.env.
+// Webhooks do GitHub, conferidos contra o segredo do repositório e convertidos em eventos: `issues.opened`,
+// `pull_request.labeled`, `issue_comment.created` e assim por diante, com o número do objeto como subject.
+// No rules.json:
+//   "sources": { "github": { "name": "GitHub", "adapter": "github" } }, e AGENT_AUTOLOOP_SECRET_GITHUB no secrets.env.
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 type Input = { headers: Record<string, string | string[] | undefined>; body: string; secret: string };

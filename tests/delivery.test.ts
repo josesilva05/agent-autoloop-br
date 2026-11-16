@@ -1,24 +1,30 @@
-// Failure modes: missing labels/forks dispatch; draft or skipped checks authorize merging; a push
-// during review or main advancing after checks gets an unreviewed attestation; a dropped merge is repeated; auto-merge
-// survives a refusal; health hides a failed/unfinished Ship; a later release changes an already completed handoff;
-// a successful label deletion with a lost response turns a completed deployment into a false failure;
-// switching to review-only while checks run still merges the PR; a PR behind main ends the run after requesting a
-// sync and waits out the hub's growing retry delay while main keeps moving; commits GitHub synced beyond the main that was
-// read are reviewed as the branch's own; a delivery withdrawn while main moves on still syncs and reviews again; settings read
-// before main moved decide what a round against the newer main does, so a health check added there is skipped; another event
-// on a commit with findings reviews it again, and a review that misses them this time merges it; findings leave an earlier
-// attestation of the commit standing; a merged PR without the label is followed and written to, so a later failed release turns
-// a completed delivery into a failure; a PR someone merged during review doesn't have its release
-// followed; right after ready the newest run is still a draft one and stands for the full check; a matrix job never
-// matches the required name, so a passed check waits forever; a PR retargeted during checks is merged into the other branch; a
-// delivery withdrawn during checks leaves its status pending for good; a status write failing right after findings closes the
-// commit to further reviews with nobody told what they found; labels that only partly come off leave a merged PR stuck as failed
-// with no marker for the retry to go by, or leave a review-only PR looking like a full delivery that the retry then merges;
-// a change merged without a review, by its agent's exemption, is attested as reviewed, or passes as reviewed when a review
-// is asked for while it waits for its check; an out-of-date project toolkit is allowed to merge, an enabled auto-merge
-// survives a failed recheck of that toolkit; a lost auto-merge response triggers a second mutation; a lost branch-update
-// response ignores the already-synchronized head instead of continuing the same handoff; an accepted check with no jobs
-// waits through five half-hour retries, or is restarted repeatedly, and a draft or manual run then authorizes merging.
+// Modos de falha: rótulos ausentes/forks disparam o despacho; checks em draft ou pulados autorizam o merge; um
+// push durante a revisão, ou a main avançando depois dos checks, rende uma atestação sem revisão; um merge perdido
+// é repetido; o auto-merge sobrevive a uma recusa; o health esconde um Ship falho/inacabado; uma publicação
+// posterior altera um handoff já concluído; uma remoção de rótulo bem-sucedida com resposta perdida transforma
+// uma implantação concluída numa falha falsa; mudar para só-revisão enquanto os checks rodam ainda assim faz o
+// merge do PR; um PR atrás da main encerra a execução depois de pedir uma sincronização e espera passar o atraso
+// crescente de novas tentativas da central enquanto a main continua avançando; commits que o GitHub sincronizou
+// além da main que foi lida são revisados como se fossem do próprio branch; uma entrega retirada enquanto a main
+// segue em frente ainda sincroniza e revisa de novo; as configurações lidas antes de a main avançar decidem o que
+// faz uma rodada contra a main mais nova, então um health check acrescentado ali é pulado; outro evento num commit
+// com problemas encontrados o revisa de novo, e uma revisão que desta vez não os veja faz o merge dele; problemas
+// encontrados deixam de pé uma atestação anterior do commit; um PR com merge e sem o rótulo é acompanhado e
+// escrito, então uma publicação que falhe depois transforma uma entrega concluída em falha; um PR que alguém
+// mesclou durante a revisão não tem sua publicação acompanhada; logo depois de sair de draft a execução mais nova
+// ainda é uma do tempo de draft e vale pelo check completo; um job de matriz nunca corresponde ao nome exigido,
+// então um check aprovado espera para sempre; um PR com o destino trocado durante os checks é mesclado no outro
+// branch; uma entrega retirada durante os checks deixa seu status pendente para sempre; uma escrita de status que
+// falha logo depois dos problemas encontrados fecha o commit para novas revisões sem que ninguém saiba o que foi
+// achado; rótulos que só saem em parte deixam um PR com merge travado como falho e sem referência para a nova
+// tentativa se guiar, ou deixam um PR de só-revisão com cara de entrega completa que a nova tentativa então
+// mescla; uma mudança mesclada sem revisão, pela dispensa do seu Agent, é atestada como revisada, ou passa por
+// revisada quando se pede uma revisão enquanto ela espera seu check; uma ferramenta de entrega desatualizada do
+// projeto é autorizada a mesclar, e um auto-merge habilitado sobrevive a uma reconfirmação falha dela; uma
+// resposta de auto-merge perdida dispara uma segunda mutação; uma resposta de atualização de branch perdida
+// ignora o head já sincronizado em vez de continuar o mesmo handoff; um check aceito sem jobs espera por cinco
+// novas tentativas de meia hora, ou é reiniciado repetidamente, e então uma execução de draft ou manual autoriza
+// o merge.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -128,7 +134,7 @@ function fixture() {
   };
   return { io, state };
 }
-test("review, full check, exact-head attestation, merge, Ship and health all finish", async () => {
+test("revisão, check completo, atestação no head exato, merge, Ship e health terminam", async () => {
   const { io, state } = fixture();
   const result = await deliver("example/app", 1, io);
   assert.equal(result.merged, "merged");
@@ -139,15 +145,15 @@ test("review, full check, exact-head attestation, merge, Ship and health all fin
   );
   assert.ok(state.statuses.some((s: any) => s.context === "delivery" && s.state === "success"));
 });
-test("a change exempt from review merges with an attestation that says so", async () => {
+test("uma mudança dispensada de revisão é mesclada com uma atestação que diz isso", async () => {
   const { io, state } = fixture();
   io.review = async () => ({ exempt: "codex" });
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   const attested = state.statuses.find((s: any) => s.context === "my-review");
   assert.equal(attested.state, "success");
-  assert.match(attested.description, /codex.*免审/);
+  assert.match(attested.description, /codex.*dispensada de revisão/);
 });
-test("a missing label or closed PR launches nothing; forks are refused", async () => {
+test("um rótulo ausente ou um PR fechado não inicia nada; forks são recusados", async () => {
   for (const change of [{ labels: [] }, { state: "closed" }]) {
     const { io, state } = fixture();
     Object.assign(state.pr, change);
@@ -157,16 +163,16 @@ test("a missing label or closed PR launches nothing; forks are refused", async (
   }
   const { io, state } = fixture();
   state.pr.head.repo.full_name = "fork/app";
-  await assert.rejects(() => deliver("example/app", 1, io), /本仓库/);
+  await assert.rejects(() => deliver("example/app", 1, io), /deste repositório/);
   assert.equal(state.reviewed, 0);
 });
-test("a PR pushed during review gets no attestation and is never merged", async () => {
+test("um PR com push durante a revisão não recebe atestação e nunca é mesclado", async () => {
   const { io, state } = fixture();
   io.review = async () => {
     state.pr.head.sha = "someone-else";
     return [];
   };
-  await assert.rejects(() => deliver("example/app", 1, io), /提交/);
+  await assert.rejects(() => deliver("example/app", 1, io), /commit/);
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
@@ -191,7 +197,7 @@ function syncing(io: DeliveryIO, state: any) {
     return api(path, body, method);
   };
 }
-test("a branch-update response lost after acceptance is read back and the new head is reviewed", async () => {
+test("uma resposta de atualização de branch perdida depois de aceita é relida e o novo head é revisado", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   state.pr.head.sha = "behind";
@@ -209,7 +215,7 @@ test("a branch-update response lost after acceptance is read back and the new he
   );
   assert.equal(latest(state, "my-review").path, "statuses/synced-main");
 });
-test("main advancing after review syncs in the same run and attests only the re-reviewed head", async () => {
+test("a main que avança após a revisão sincroniza na mesma execução e atesta só o head revisado de novo", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   io.review = async () => {
@@ -225,7 +231,7 @@ test("main advancing after review syncs in the same run and attests only the re-
     ["statuses/synced-new-main"],
   );
 });
-test("main that keeps advancing stops after three rounds without merging", async () => {
+test("uma main que não para de avançar para depois de três rodadas sem mesclar", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   io.review = async () => {
@@ -237,11 +243,12 @@ test("main that keeps advancing stops after three rounds without merging", async
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("the review leaves out what GitHub synced beyond the main it was asked for", async () => {
+test("a revisão deixa de fora o que o GitHub sincronizou além da main que foi pedida", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   const { api, contains } = io;
-  // main moves on before GitHub applies the update, so the new head holds a main newer than the one read first.
+  // a main segue em frente antes de o GitHub aplicar a atualização, então o novo head traz uma main mais nova do
+  // que a lida primeiro.
   io.api = async (path, body, method) => {
     if (path === "pulls/1/update-branch") state.main = "newer";
     return api(path, body, method);
@@ -256,7 +263,7 @@ test("the review leaves out what GitHub synced beyond the main it was asked for"
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.deepEqual(bases, ["newer"]);
 });
-test("each round follows the settings of the main it reviews against", async () => {
+test("cada rodada segue as configurações da main contra a qual ela revisa", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   const { api } = io;
@@ -277,7 +284,7 @@ test("each round follows the settings of the main it reviews against", async () 
     ["newer-review"],
   );
 });
-test("a delivery withdrawn while main moves on stops without touching the branch again", async () => {
+test("uma entrega retirada enquanto a main segue em frente para sem tocar no branch de novo", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   io.review = async () => {
@@ -286,12 +293,12 @@ test("a delivery withdrawn while main moves on stops without touching the branch
     state.pr.labels = [];
     return [];
   };
-  assert.equal((await deliver("example/app", 1, io)).summary, "交付标记已撤回");
+  assert.equal((await deliver("example/app", 1, io)).summary, "o rótulo de entrega foi retirado");
   assert.equal(state.reviewed, 1);
   assert.equal(state.merges, 0);
   assert.ok(!state.writes.includes("pulls/1/update-branch"));
 });
-test("a PR retargeted during checks is not merged", async () => {
+test("um PR com o destino trocado durante os checks não é mesclado", async () => {
   const { io, state } = fixture();
   const { api } = io;
   io.api = async (path, body, method) => {
@@ -302,7 +309,7 @@ test("a PR retargeted during checks is not merged", async () => {
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("a delivery withdrawn during checks does not leave its status pending", async () => {
+test("uma entrega retirada durante os checks não deixa seu status pendente", async () => {
   const { io, state } = fixture();
   const phases: string[] = [];
   io.report = (phase) => {
@@ -313,18 +320,18 @@ test("a delivery withdrawn during checks does not leave its status pending", asy
     if (path.startsWith("actions/runs/1/jobs")) state.pr.labels = [];
     return api(path, body, method);
   };
-  assert.equal((await deliver("example/app", 1, io)).summary, "交付标记已撤回");
+  assert.equal((await deliver("example/app", 1, io)).summary, "o rótulo de entrega foi retirado");
   assert.equal(state.merges, 0);
   const last = state.statuses.filter((s: any) => s.context === "delivery").at(-1);
   assert.equal(last.state, "success");
-  assert.match(last.description, /撤回/);
-  assert.match(last.description, /未合并/);
+  assert.match(last.description, /retirado/);
+  assert.match(last.description, /sem merge/);
   assert.equal(phases.at(-1), "withdrawn");
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("findings and review-only mode stop before merge", async () => {
+test("problemas encontrados e o modo só-revisão param antes do merge", async () => {
   const first = fixture();
-  first.io.review = async () => [{ title: "数据会丢", text: "先修复" }];
+  first.io.review = async () => [{ title: "Os dados serão perdidos", text: "Corrija primeiro" }];
   const result = await deliver("example/app", 1, first.io);
   assert.equal(result.findings?.length, 1);
   assert.equal(first.state.merges, 0);
@@ -334,8 +341,8 @@ test("findings and review-only mode stop before merge", async () => {
   assert.equal(second.state.merges, 0);
 });
 const latest = (state: any, context: string) => state.statuses.filter((s: any) => s.context === context).at(-1);
-const problem = [{ title: "数据会丢", text: "先修复" }];
-test("another event on a commit with findings ends the run: no second review, no new status", async () => {
+const problem = [{ title: "Os dados serão perdidos", text: "Corrija primeiro" }];
+test("outro evento num commit com problemas encerra a execução: sem segunda revisão, sem status novo", async () => {
   const { io, state } = fixture();
   io.review = async () => {
     state.reviewed++;
@@ -354,7 +361,7 @@ test("another event on a commit with findings ends the run: no second review, no
   assert.equal(state.statuses.length, written);
   assert.equal(latest(state, "delivery").state, "failure");
 });
-test("a new commit after findings is reviewed and delivered", async () => {
+test("um commit novo depois dos problemas é revisado e entregue", async () => {
   const { io, state } = fixture();
   io.review = async () => problem;
   await deliver("example/app", 1, io);
@@ -372,18 +379,18 @@ test("a new commit after findings is reviewed and delivered", async () => {
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.equal(state.reviewed, 1);
 });
-test("only findings stop the run: another failure on the commit does not", async () => {
+test("só os problemas param a execução: outra falha no commit não", async () => {
   const { io, state } = fixture();
   state.statuses.push({
     path: "statuses/head",
     context: "delivery",
     state: "failure",
-    description: "完整检查没有通过",
+    description: "O check completo não passou",
   });
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.equal(state.reviewed, 1);
 });
-test("a commit with findings that someone merged by hand still goes on to Ship", async () => {
+test("um commit com problemas que alguém mesclou à mão ainda segue para o Ship", async () => {
   const { io, state } = fixture();
   io.review = async () => {
     state.reviewed++;
@@ -395,7 +402,7 @@ test("a commit with findings that someone merged by hand still goes on to Ship",
   assert.equal(state.reviewed, 1);
   assert.equal(latest(state, "delivery").state, "success");
 });
-test("a status write failing on findings leaves the commit open to a review that reports them", async () => {
+test("uma escrita de status que falha nos problemas deixa o commit aberto a uma revisão que os reporta", async () => {
   for (const context of ["delivery", "my-review"]) {
     const { io, state } = fixture();
     io.review = async () => problem;
@@ -414,23 +421,23 @@ test("a status write failing on findings leaves the commit open to a review that
     assert.equal(state.merges, 0);
   }
 });
-test("findings name the commit they were found on", async () => {
+test("os problemas nomeiam o commit em que foram achados", async () => {
   const { io, state } = fixture();
   syncing(io, state);
   state.pr.head.sha = "behind";
   io.review = async () => problem;
   assert.equal((await deliver("example/app", 1, io)).head, "synced-main");
 });
-test("findings replace an earlier attestation of the same commit", async () => {
+test("os problemas substituem uma atestação anterior do mesmo commit", async () => {
   const { io, state } = fixture();
-  state.statuses.push({ path: "statuses/head", context: "my-review", state: "success", description: "通过" });
+  state.statuses.push({ path: "statuses/head", context: "my-review", state: "success", description: "aprovada" });
   io.review = async () => problem;
   await deliver("example/app", 1, io);
   assert.equal(latest(state, "my-review").state, "failure");
   assert.equal(latest(state, "delivery").state, "failure");
   assert.equal(state.merges, 0);
 });
-test("review-only added during checks stops before the merge attestation", async () => {
+test("só-revisão acrescentada durante os checks para antes da atestação de merge", async () => {
   const { io, state } = fixture();
   const api = io.api;
   io.api = async (...args) => {
@@ -441,7 +448,7 @@ test("review-only added during checks stops before the merge attestation", async
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("review-only added while an exempt change waits for its check gets it reviewed, not called reviewed", async () => {
+test("só-revisão pedida enquanto uma dispensada espera o check faz ela ser revisada, não dada como tal", async () => {
   const { io, state } = fixture();
   const api = io.api;
   io.api = async (...args) => {
@@ -459,7 +466,7 @@ test("review-only added while an exempt change waits for its check gets it revie
   assert.equal(state.merges, 0);
 });
 
-test("a merge response lost after acceptance is read back, never repeated", async () => {
+test("uma resposta de merge perdida depois de aceita é relida, nunca repetida", async () => {
   const { io, state } = fixture();
   const merge = io.merge;
   io.merge = async (...args) => {
@@ -469,7 +476,7 @@ test("a merge response lost after acceptance is read back, never repeated", asyn
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.equal(state.merges, 1);
 });
-test("auto-merge uses the checked head and reads back a lost response before retrying", async () => {
+test("o auto-merge usa o head verificado e relê uma resposta perdida antes de tentar de novo", async () => {
   const { io, state } = fixture();
   const requested: string[] = [];
   io.enableAuto = async (requestedPR) => {
@@ -485,18 +492,18 @@ test("auto-merge uses the checked head and reads back a lost response before ret
   assert.deepEqual(requested, ["head"]);
   assert.equal(state.merges, 0);
 });
-test("a toolkit falling behind while auto-merge waits is refused with auto-merge off", async () => {
+test("uma ferramenta de entrega atrasada enquanto o auto-merge espera é recusada com ele desativado", async () => {
   const { io, state } = fixture();
   io.enableAuto = async () => {
     state.pr.auto_merge = {};
   };
-  io.verifyTools = async () => (state.pr.auto_merge ? "交付工具不是最新版" : null);
+  io.verifyTools = async () => (state.pr.auto_merge ? "A ferramenta de entrega não é a versão mais recente" : null);
   io.wait = async () => {};
-  await assert.rejects(() => deliver("example/app", 1, io), /不是最新版/);
+  await assert.rejects(() => deliver("example/app", 1, io), /não é a versão mais recente/);
   assert.equal(state.pr.auto_merge, null);
   assert.equal(state.merges, 0);
 });
-test("a release without deployable changes reports both its merge and successful Ship", async () => {
+test("uma publicação sem mudanças implantáveis reporta tanto seu merge quanto o Ship bem-sucedido", async () => {
   const { io, state } = fixture();
   const reported: any[] = [];
   io.report = (phase, head, metadata) => {
@@ -504,11 +511,11 @@ test("a release without deployable changes reports both its merge and successful
   };
   io.live = async () => ({ sha: "live-before", release: "live-before" });
   io.releaseRequired = async () => false;
-  assert.match((await deliver("example/app", 1, io)).summary, /无需发布/);
+  assert.match((await deliver("example/app", 1, io)).summary, /sem publicação necessária/);
   assert.deepEqual(reported.at(-1), { phase: "docs_only", head: "head", merge: "merged", ship: 1 });
   assert.equal(latest(state, "delivery").state, "success");
 });
-test("label removal reads back a lost response and does not report a false delivery failure", async () => {
+test("a remoção de rótulos relê uma resposta perdida e não reporta uma falha de entrega falsa", async () => {
   const { io, state } = fixture();
   const api = io.api;
   io.api = async (...args) => {
@@ -528,7 +535,7 @@ test("label removal reads back a lost response and does not report a false deliv
   };
   await assert.rejects(() => deliver("example/app", 1, second.io), /permission denied/);
 });
-/** Labels really come off here, except that one of them fails the first time. */
+/** Aqui os rótulos realmente saem, exceto que um deles falha na primeira vez. */
 function labelFailsOnce(io: DeliveryIO, state: any, failing: string) {
   const { api } = io;
   let failed = false;
@@ -543,7 +550,7 @@ function labelFailsOnce(io: DeliveryIO, state: any, failing: string) {
     return {};
   };
 }
-test("a merged PR whose labels only partly came off finishes on the retry", async () => {
+test("um PR com merge cujos rótulos só saíram em parte termina na nova tentativa", async () => {
   for (const failing of ["deliver-attended", "deliver-review", "deliver"]) {
     const { io, state } = fixture();
     state.pr.labels.push({ name: "deliver-attended" }, { name: "deliver-review" });
@@ -555,7 +562,7 @@ test("a merged PR whose labels only partly came off finishes on the retry", asyn
     assert.deepEqual(state.pr.labels, []);
   }
 });
-test("a review-only PR whose labels only partly came off is never merged by the retry", async () => {
+test("um PR de só-revisão cujos rótulos só saíram em parte nunca é mesclado pela nova tentativa", async () => {
   for (const failing of ["deliver-attended", "deliver-review", "deliver"]) {
     const { io, state } = fixture();
     state.pr.labels.push({ name: "deliver-attended" }, { name: "deliver-review" });
@@ -566,7 +573,7 @@ test("a review-only PR whose labels only partly came off is never merged by the 
     assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
   }
 });
-test("a different client merging during checks is followed without a second merge call", async () => {
+test("um cliente diferente mesclando durante os checks é acompanhado sem uma segunda chamada de merge", async () => {
   const { io, state } = fixture();
   const api = io.api;
   io.api = async (...args) => {
@@ -579,7 +586,7 @@ test("a different client merging during checks is followed without a second merg
   assert.equal((await deliver("example/app", 1, io)).merged, "merged");
   assert.equal(state.merges, 0);
 });
-test("a PR merged during review goes on to Ship", async () => {
+test("um PR mesclado durante a revisão segue para o Ship", async () => {
   for (const pushed of ["head", "pushed-then-merged"]) {
     const { io, state } = fixture();
     io.review = async () => {
@@ -594,7 +601,7 @@ test("a PR merged during review goes on to Ship", async () => {
     assert.ok(!state.statuses.some((s: any) => s.state === "failure"));
   }
 });
-test("a merged PR resumes directly at Ship without reviewing or merging again", async () => {
+test("um PR com merge retoma direto no Ship sem revisar nem mesclar de novo", async () => {
   const { io, state } = fixture();
   state.pr.merged_at = "before";
   state.pr.merge_commit_sha = "merged";
@@ -603,7 +610,7 @@ test("a merged PR resumes directly at Ship without reviewing or merging again", 
   assert.equal(state.reviewed, 0);
   assert.equal(state.merges, 0);
 });
-test("a merged PR without the label is left alone: no status, and no later release can fail it", async () => {
+test("PR com merge sem o rótulo é deixado em paz: sem status, e nenhuma publicação depois o reprova", async () => {
   const { io, state } = fixture();
   Object.assign(state.pr, { labels: [], state: "closed", merged_at: "before", merge_commit_sha: "merged" });
   const { api } = io;
@@ -611,11 +618,11 @@ test("a merged PR without the label is left alone: no status, and no later relea
     path.startsWith("actions/workflows/ship.yml")
       ? { workflow_runs: [run(1, "merged", "completed", "failure")] }
       : api(path, body, method);
-  assert.equal((await deliver("example/app", 1, io)).summary, "没有待交付的标记");
+  assert.equal((await deliver("example/app", 1, io)).summary, "não há rótulo de entrega pendente");
   assert.deepEqual(state.writes, []);
   assert.deepEqual(state.statuses, []);
 });
-test("only the latest exact-head full workflow and successful required job count", async () => {
+test("só contam o workflow completo mais recente no head exato e o job exigido bem-sucedido", async () => {
   for (const [workflow, job, want] of [
     [run(1, "head"), { name: "draft", conclusion: "success" }, "waiting"],
     [run(1, "old"), { name: "check", conclusion: "success" }, "waiting"],
@@ -629,7 +636,8 @@ test("only the latest exact-head full workflow and successful required job count
     assert.equal(await fullCheck("head", config, io), want);
   }
 });
-/** A draft whose newest run passed in the draft days: `next` is the run that going ready starts, once a wait has gone by. */
+/** Um draft cuja execução mais nova passou nos tempos de draft: `next` é a execução que sair de draft inicia,
+ * depois de uma espera. */
 function draftWithPassedRun(next?: any) {
   const { io, state } = fixture();
   state.pr.draft = true;
@@ -651,19 +659,19 @@ function draftWithPassedRun(next?: any) {
   }
   return { io, state, jobsOf };
 }
-test("a run from the draft days does not stand for the full check once ready", async () => {
+test("uma execução dos tempos de draft não vale pelo check completo depois de sair de draft", async () => {
   const { io, state } = draftWithPassedRun();
   await assert.rejects(() => deliver("example/app", 1, io), /still waiting/);
   assert.ok(state.writes.includes("pulls/1/ready"));
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("the run that going ready starts decides, passed or failed", async () => {
+test("a execução que sair de draft inicia é a que decide, aprovada ou reprovada", async () => {
   const passed = draftWithPassedRun(run(2, "head"));
   assert.equal((await deliver("example/app", 1, passed.io)).merged, "merged");
   assert.deepEqual(passed.jobsOf, ["actions/runs/2/jobs?filter=latest&per_page=100"]);
   const failed = draftWithPassedRun(run(2, "head", "completed", "failure"));
-  await assert.rejects(() => deliver("example/app", 1, failed.io), /检查/);
+  await assert.rejects(() => deliver("example/app", 1, failed.io), /check/);
   assert.equal(failed.state.merges, 0);
 });
 
@@ -695,9 +703,9 @@ function queuedFullCheck(status = "queued", age = 10 * 60_000 + 1, jobs: any[] =
 }
 const passedJob = { name: "check", status: "completed", conclusion: "success" };
 const stalledReason =
-  "GitHub 收下了检查却一直没开始跑（多半是 GitHub 出了事故），已重新触发一次仍不动。等 GitHub 恢复后重新交付。";
+  "O GitHub aceitou o check, mas ele nunca começou (provável incidente); já foi reacionado e segue parado. Reentregue quando o GitHub voltar.";
 
-test("an old accepted check without jobs is restarted once and only its new ready run can merge", async () => {
+test("um check aceito e antigo sem jobs é reiniciado uma vez e só sua nova execução pronta pode mesclar", async () => {
   for (const status of ["queued", "waiting", "pending"]) {
     const { io, state, checkJobs, jobsRead } = queuedFullCheck(status);
     const { api } = io;
@@ -733,7 +741,7 @@ test("an old accepted check without jobs is restarted once and only its new read
   }
 });
 
-test("a restarted check that also stalls is refused immediately without a second restart", async () => {
+test("um check reiniciado que também trava é recusado na hora, sem uma segunda reinicialização", async () => {
   const { io, state } = queuedFullCheck();
   const { api } = io;
   io.api = async (path, body, method) => {
@@ -763,7 +771,7 @@ test("a restarted check that also stalls is refused immediately without a second
   assert.equal(state.merges, 0);
 });
 
-test("an accepted check within ten minutes keeps waiting without a restart", async () => {
+test("um check aceito há menos de dez minutos continua esperando sem reinicialização", async () => {
   for (const age of [20_000, 10 * 60_000]) {
     const { io, state, checkJobs } = queuedFullCheck("queued", age);
     let waits = 0;
@@ -778,7 +786,7 @@ test("an accepted check within ten minutes keeps waiting without a restart", asy
   }
 });
 
-test("an old check with a queued job keeps waiting for a machine without a restart", async () => {
+test("um check antigo com um job na fila continua esperando uma máquina sem reinicialização", async () => {
   for (const name of ["check", "prepare"]) {
     const { io, state, checkJobs } = queuedFullCheck("queued", 15 * 60_000, [{ name, status: "queued" }]);
     let waits = 0;
@@ -793,7 +801,7 @@ test("an old check with a queued job keeps waiting for a machine without a resta
   }
 });
 
-test("the next delivery round remembers the restart only for the same head", async () => {
+test("a próxima rodada de entrega lembra a reinicialização só para o mesmo head", async () => {
   const { io, state } = queuedFullCheck();
   state.checkRuns[0].id = 12;
   io.checkRecovery = { head: "head", after: 11 };
@@ -805,7 +813,7 @@ test("the next delivery round remembers the restart only for the same head", asy
   assert.ok(next.state.writes.includes("pulls/1/draft"));
 });
 
-test("a matrix job counts as the required job, every leg of it", async () => {
+test("um job de matriz conta como o job exigido, cada perna dele", async () => {
   const done = { conclusion: "success", status: "completed" };
   const leg = (name: string, fields: object = done) => ({ name, ...fields });
   for (const [jobs, conclusion, want] of [
@@ -823,7 +831,7 @@ test("a matrix job counts as the required job, every leg of it", async () => {
     assert.equal(await fullCheck("head", config, io), want);
   }
 });
-test("a cancelled draft-only workflow does not fail the new ready check", async () => {
+test("um workflow só de draft cancelado não reprova o novo check pronto", async () => {
   const { io } = fixture();
   io.api = async (p) =>
     p.includes("/jobs")
@@ -831,7 +839,7 @@ test("a cancelled draft-only workflow does not fail the new ready check", async 
       : { workflow_runs: [{ ...run(1, "head", "completed", "cancelled"), event: "pull_request" }] };
   assert.equal(await fullCheck("head", config, io), "waiting");
 });
-test("failed full checks never attest or merge and existing auto-merge is confirmed off", async () => {
+test("check completo reprovado nunca atesta nem mescla, e o auto-merge é confirmado desativado", async () => {
   const { io, state } = fixture();
   state.pr.auto_merge = {};
   const api = io.api;
@@ -839,12 +847,12 @@ test("failed full checks never attest or merge and existing auto-merge is confir
     args[0].startsWith("actions/workflows/check")
       ? { workflow_runs: [{ ...run(1, "head", "completed", "failure"), event: "pull_request" }] }
       : api(...args);
-  await assert.rejects(() => deliver("example/app", 1, io), /检查/);
+  await assert.rejects(() => deliver("example/app", 1, io), /check/);
   assert.equal(state.pr.auto_merge, null);
   assert.equal(state.merges, 0);
   assert.ok(!state.statuses.some((s: any) => s.context === "my-review"));
 });
-test("auto-merge cancellation reads back dropped requests and refuses unknown state", async () => {
+test("o cancelamento do auto-merge relê requisições perdidas e recusa estado desconhecido", async () => {
   const { io, state } = fixture();
   state.pr.auto_merge = {};
   io.disableAuto = async () => {
@@ -855,9 +863,9 @@ test("auto-merge cancellation reads back dropped requests and refuses unknown st
   state.pr.auto_merge = {};
   io.disableAuto = async () => {};
   io.wait = async () => {};
-  await assert.rejects(() => disableAuto(1, io), /自动合并/);
+  await assert.rejects(() => disableAuto(1, io), /merge automático/);
 });
-test("auto-merge read-back failure is retried but never treated as disabled", async () => {
+test("uma falha na releitura do auto-merge é repetida, mas nunca tratada como desativado", async () => {
   const { io } = fixture();
   let reads = 0;
   io.wait = async () => {};
@@ -872,10 +880,10 @@ test("auto-merge read-back failure is retried but never treated as disabled", as
     reads++;
     throw new Error("HTTP 502");
   };
-  await assert.rejects(() => disableAuto(1, io), /无法确认自动合并/);
+  await assert.rejects(() => disableAuto(1, io), /não foi possível confirmar que o merge automático/);
   assert.equal(reads, 3);
 });
-test("live health cannot hide incomplete or failed Ship", async () => {
+test("o health em produção não pode esconder um Ship incompleto ou reprovado", async () => {
   for (const [status, conclusion] of [
     ["in_progress", null],
     ["completed", "failure"],
@@ -886,7 +894,7 @@ test("live health cannot hide incomplete or failed Ship", async () => {
     await assert.rejects(() => waitLive("merged", config, io));
   }
 });
-test("a completed delivery ignores later queued/failed releases; a successor needs to be live", async () => {
+test("entrega concluída ignora publicações na fila/reprovadas; a sucessora precisa estar em produção", async () => {
   for (const status of ["queued", "completed"]) {
     const { io } = fixture();
     io.contains = async (a, b) => a === b || (a === "merged" && b === "later");

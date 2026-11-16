@@ -1,9 +1,10 @@
-// Failure modes: a native Windows install cannot launch an Agent; shell metacharacters alter its arguments; restarting
-// the worker loses a running turn or its answer; cancelling a turn leaves its child processes running; a program in a
-// folder whose name the console code page can't write (a Chinese user name) isn't found, so nothing installs or runs; a
-// powershell.exe an Agent left in the turn's folder runs, outside its sandbox, in place of the system's; the npm.cmd and
-// npx.cmd that npm 10 and later write, which name their script through a variable, can't be run at all; a command line
-// longer than Windows starts fails with only "spawn ENAMETOOLONG", which doesn't say what is too long or what to do.
+// Modos de falha: uma instalação nativa no Windows não consegue lançar um Agent; metacaracteres de shell alteram seus
+// argumentos; reiniciar o worker perde uma rodada em execução ou a sua resposta; cancelar uma rodada deixa seus
+// processos filhos rodando; um programa numa pasta cujo nome a página de código do console não consegue escrever (um
+// nome de usuário em chinês) não é encontrado, então nada instala nem roda; um powershell.exe que um Agent deixou na
+// pasta da rodada roda, fora do seu sandbox, no lugar do sistema; o npm.cmd e o npx.cmd que o npm 10 e posterior
+// escrevem, que nomeiam seu script por uma variável, não conseguem ser executados; uma linha de comando mais longa do
+// que o Windows aceita falha só com "spawn ENAMETOOLONG", que não diz o que está longo demais nem o que fazer.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,8 +16,8 @@ import { POWERSHELL, powershell, psQuote } from "../host/command.ts";
 
 const windows = process.platform === "win32";
 const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-windows-"));
-process.env.AGENT_AUTOLOOP_HOME = join(scratch, "安装 ' & % 目录");
-// init links its manual into the user's Agents' folders; tests give it a profile of its own.
+process.env.AGENT_AUTOLOOP_HOME = join(scratch, "instalação ' & % diretório");
+// O init liga seu manual nas pastas de Agents do usuário; os testes dão a ele um perfil só seu.
 const person = join(scratch, "person");
 mkdirSync(person);
 after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -51,15 +52,15 @@ async function until(done: () => boolean, tick: () => Promise<unknown> = async (
     await tick();
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  assert.ok(done(), "Windows process did not reach the expected state");
+  assert.ok(done(), "o processo do Windows não chegou ao estado esperado");
 }
 
 test(
-  "Windows preserves literal arguments and recovers a finished turn after worker restart",
+  "o Windows preserva argumentos literais e recupera uma rodada concluída depois de reiniciar o worker",
   { skip: !windows },
   async () => {
     const agent = join(scratch, "literal.mjs");
-    const argument = '中文 \' "quoted" %PATH% & echo injected\nsecond line';
+    const argument = 'acentuação \' "quoted" %PATH% & echo injected\nsecond line';
     writeFileSync(agent, "process.stdout.write(process.argv[2]);");
     waiting.push(job(1, [process.execPath, agent, argument]));
     await worker().tick();
@@ -76,44 +77,48 @@ test(
   },
 );
 
-test("Windows cancellation ends the Agent and its child before reporting cancelled", { skip: !windows }, async () => {
-  const pidFile = join(scratch, "child.pid");
-  const agent = join(scratch, "parent.mjs");
-  writeFileSync(
-    agent,
-    `import { spawn } from 'node:child_process';
+test(
+  "o cancelamento no Windows encerra o Agent e seu filho antes de reportar cancelado",
+  { skip: !windows },
+  async () => {
+    const pidFile = join(scratch, "child.pid");
+    const agent = join(scratch, "parent.mjs");
+    writeFileSync(
+      agent,
+      `import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
 writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));
 setInterval(() => {}, 1000);`,
-  );
-  waiting.push(job(2, [process.execPath, agent]));
-  const running = worker();
-  await running.tick();
-  let pid = 0;
-  try {
-    await until(() => existsSync(pidFile));
-    pid = Number(readFileSync(pidFile, "utf8"));
-    const resumed = worker();
-    await resumed.tick();
-    assert.ok(!results.has(2), "a running Agent was treated as finished");
-    cancel = [2];
-    await until(
-      () => results.has(2),
-      () => resumed.tick(),
     );
-    assert.equal(results.get(2).outcome, "cancelled");
-    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
-  } finally {
-    cancel = [];
-    if (pid) spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
-  }
-});
+    waiting.push(job(2, [process.execPath, agent]));
+    const running = worker();
+    await running.tick();
+    let pid = 0;
+    try {
+      await until(() => existsSync(pidFile));
+      pid = Number(readFileSync(pidFile, "utf8"));
+      const resumed = worker();
+      await resumed.tick();
+      assert.ok(!results.has(2), "um Agent em execução foi tratado como concluído");
+      cancel = [2];
+      await until(
+        () => results.has(2),
+        () => resumed.tick(),
+      );
+      assert.equal(results.get(2).outcome, "cancelled");
+      assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+    } finally {
+      cancel = [];
+      if (pid) spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+    }
+  },
+);
 
-test("an npm command shim preserves a multiline prompt on Windows", { skip: !windows }, async () => {
+test("um shim de comando do npm preserva um prompt multilinha no Windows", { skip: !windows }, async () => {
   const agent = join(scratch, "npm-agent.cjs");
   const shim = join(scratch, "npm-agent.cmd");
-  const argument = '中文 "quotes" %PATH% & echo injected\nsecond line';
+  const argument = 'acentuação "quotes" %PATH% & echo injected\nsecond line';
   writeFileSync(agent, "process.stdout.write(process.argv[2]);");
   writeFileSync(shim, '@ECHO off\r\nSET "dp0=%~dp0"\r\nnode "%dp0%\\npm-agent.cjs" %*\r\n');
   waiting.push(job(3, [shim, argument]));
@@ -126,14 +131,14 @@ test("an npm command shim preserves a multiline prompt on Windows", { skip: !win
   assert.equal(readFileSync(join(process.env.AGENT_AUTOLOOP_HOME!, "worker/runs/3-1/stdout-1.log"), "utf8"), argument);
 });
 
-// npm writes this shim for a package whose bin is a native program; Claude Code installed with npm is one.
-test("an npm command shim for a native program runs it on Windows", { skip: !windows }, async () => {
+// O npm escreve este shim para um pacote cujo bin é um programa nativo; o Claude Code instalado com npm é um desses.
+test("um shim de comando do npm para um programa nativo o executa no Windows", { skip: !windows }, async () => {
   const bin = join(scratch, "node_modules", "native-agent", "bin");
   mkdirSync(bin, { recursive: true });
   copyFileSync(process.execPath, join(bin, "native-agent.exe"));
   const agent = join(scratch, "native-agent.cjs");
   const shim = join(scratch, "native-agent.cmd");
-  const argument = '中文 "quotes" %PATH% & echo injected\nsecond line';
+  const argument = 'acentuação "quotes" %PATH% & echo injected\nsecond line';
   writeFileSync(agent, "process.stdout.write(process.argv[2]);");
   writeFileSync(
     shim,
@@ -149,9 +154,9 @@ test("an npm command shim for a native program runs it on Windows", { skip: !win
   assert.equal(readFileSync(join(process.env.AGENT_AUTOLOOP_HOME!, "worker/runs/9-1/stdout-1.log"), "utf8"), argument);
 });
 
-// npm.cmd and npx.cmd from npm 10 on, as Node 22 and later ship them: an ACP agent is often started with npx.
+// O npm.cmd e o npx.cmd do npm 10 em diante, como o Node 22 e posterior os trazem: um Agent ACP costuma ser iniciado com npx.
 test(
-  "npm's own command shim, which names its script through a variable, runs it on Windows",
+  "o shim de comando do próprio npm, que nomeia seu script por uma variável, o executa no Windows",
   { skip: !windows },
   async () => {
     const bin = join(scratch, "node_modules", "npm", "bin");
@@ -185,18 +190,18 @@ test(
         "",
       ].join("\r\n"),
     );
-    waiting.push(job(11, [shim, "参数 & echo injected"]));
+    waiting.push(job(11, [shim, "parâmetros & echo injected"]));
     const running = worker();
     await until(
       () => results.has(11),
       () => running.tick(),
     );
     assert.equal(results.get(11).outcome, "done", JSON.stringify(results.get(11)));
-    assert.equal(results.get(11).summary, "npm: 参数 & echo injected");
+    assert.equal(results.get(11).summary, "npm: parâmetros & echo injected");
   },
 );
 
-test("a command line too long for Windows says so and what to do", { skip: !windows }, async () => {
+test("uma linha de comando longa demais para o Windows diz isso e o que fazer", { skip: !windows }, async () => {
   waiting.push(job(12, [process.execPath, "-e", "0", "x".repeat(40_000)]));
   const running = worker();
   await until(
@@ -204,15 +209,15 @@ test("a command line too long for Windows says so and what to do", { skip: !wind
     () => running.tick(),
   );
   assert.equal(results.get(12).outcome, "failed", JSON.stringify(results.get(12)));
-  assert.match(results.get(12).error, /命令行太长.*Skill/s);
+  assert.match(results.get(12).error, /Linha de comando longa demais.*Skill/s);
 });
 
-// where.exe prints in the console's code page; a Chinese folder name came back as a path that doesn't exist.
+// O where.exe imprime na página de código do console; um nome de pasta em chinês voltava como um caminho que não existe.
 test(
-  "an Agent on PATH under a folder the console code page can't write is found and runs",
+  "um Agent no PATH sob uma pasta que a página de código do console não consegue escrever é encontrado e roda",
   { skip: !windows },
   async () => {
-    const folder = join(scratch, "张三 的工具");
+    const folder = join(scratch, "ferramentas do Fulano");
     mkdirSync(folder);
     writeFileSync(join(folder, "cjk-agent.js"), "process.stdout.write('ran: ' + process.argv[2]);");
     writeFileSync(join(folder, "cjk-agent.cmd"), '@ECHO off\r\nnode "%~dp0\\cjk-agent.js" %*\r\n');
@@ -221,15 +226,15 @@ test(
     try {
       const { findProgram } = await import("../worker/agents.ts");
       const found = findProgram("cjk-agent");
-      assert.ok(found && existsSync(found), `found ${found}`);
-      waiting.push(job(5, ["cjk-agent", "参数"]));
+      assert.ok(found && existsSync(found), `encontrou ${found}`);
+      waiting.push(job(5, ["cjk-agent", "parâmetros"]));
       const running = worker();
       await until(
         () => results.has(5),
         () => running.tick(),
       );
       assert.equal(results.get(5).outcome, "done", JSON.stringify(results.get(5)));
-      assert.equal(results.get(5).summary, "ran: 参数");
+      assert.equal(results.get(5).summary, "ran: parâmetros");
     } finally {
       process.env.PATH = path;
     }
@@ -237,10 +242,10 @@ test(
 );
 
 test(
-  "init finishes when PATH has an agent-autoloop under a folder the console code page can't write",
+  "o init termina quando o PATH tem um agent-autoloop sob uma pasta que a página de código do console não consegue escrever",
   { skip: !windows },
   () => {
-    const folder = join(scratch, "李四 的命令");
+    const folder = join(scratch, "comandos do Beltrano");
     mkdirSync(folder);
     writeFileSync(join(folder, "agent-autoloop.cmd"), "@ECHO off\r\n");
     const home = join(scratch, "cjk init home");
@@ -253,36 +258,29 @@ test(
       },
     );
     assert.equal(initialized.status, 0, initialized.stderr);
-    assert.match(initialized.stdout, /先运行/);
+    assert.match(initialized.stdout, /Rode primeiro/);
   },
 );
 
-// Windows looks for a bare program name in its working folder first, and an Agent can write to the turn's folder.
-test(
-  "a powershell.exe left in the turn's folder doesn't run in place of the system's",
-  { skip: !windows },
-  async () => {
-    const folder = join(scratch, "planted");
-    mkdirSync(folder);
-    copyFileSync(
-      join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"),
-      join(folder, "powershell.exe"),
-    );
-    const agent = join(scratch, "planted-agent.mjs");
-    writeFileSync(agent, "process.stdout.write('ran');");
-    const input = job(6, [process.execPath, agent]);
-    input.rule.cwd = folder;
-    waiting.push(input);
-    const running = worker();
-    await until(
-      () => results.has(6),
-      () => running.tick(),
-    );
-    assert.equal(results.get(6).outcome, "done", JSON.stringify(results.get(6)));
-  },
-);
+// O Windows procura um nome de programa simples primeiro na sua pasta de trabalho, e um Agent pode escrever na pasta da rodada.
+test("um powershell.exe deixado na pasta da rodada não roda no lugar do sistema", { skip: !windows }, async () => {
+  const folder = join(scratch, "planted");
+  mkdirSync(folder);
+  copyFileSync(join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"), join(folder, "powershell.exe"));
+  const agent = join(scratch, "planted-agent.mjs");
+  writeFileSync(agent, "process.stdout.write('ran');");
+  const input = job(6, [process.execPath, agent]);
+  input.rule.cwd = folder;
+  waiting.push(input);
+  const running = worker();
+  await until(
+    () => results.has(6),
+    () => running.tick(),
+  );
+  assert.equal(results.get(6).outcome, "done", JSON.stringify(results.get(6)));
+});
 
-test("Windows ACP edit access rejects a sibling folder", { skip: !windows }, async () => {
+test("o acesso de edição ACP no Windows rejeita uma pasta irmã", { skip: !windows }, async () => {
   const { permission } = await import("../plugins/acp/bridge.ts");
   const answer = permission(
     { access: "edit", cwd: scratch },
@@ -297,7 +295,7 @@ test("Windows ACP edit access rejects a sibling folder", { skip: !windows }, asy
   assert.equal(answer.optionId, "no");
 });
 
-test("Windows keeps a turn after the worker process exits", { skip: !windows }, async () => {
+test("o Windows mantém uma rodada depois que o processo do worker sai", { skip: !windows }, async () => {
   const agent = join(scratch, "outlive.mjs");
   writeFileSync(agent, 'setTimeout(() => console.log("survived"), 1000);');
   const input = job(4, [process.execPath, agent]);
@@ -328,7 +326,7 @@ test("Windows keeps a turn after the worker process exits", { skip: !windows }, 
   assert.equal(results.get(4).summary, "survived", JSON.stringify(results.get(4)));
 });
 
-test("Windows init prints a working native command", { skip: !windows }, () => {
+test("o init no Windows imprime um comando nativo que funciona", { skip: !windows }, () => {
   const home = join(scratch, "init home");
   const cli = join(import.meta.dirname, "../bin/agent-autoloop.ts");
   const initialized = spawnSync(process.execPath, [cli, "init", "--no-service", "--command", "node"], {
@@ -337,11 +335,11 @@ test("Windows init prints a working native command", { skip: !windows }, () => {
   });
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.ok(existsSync(join(home, "config.json")));
-  assert.match(initialized.stdout, /先运行/);
+  assert.match(initialized.stdout, /Rode primeiro/);
 });
 
-// Agent discovery builds a command before any turn, so it has no context file to share with the Codex sandbox.
-test("Windows init discovers Codex before a task has a context file", { skip: !windows }, (t) => {
+// A descoberta de Agents monta um comando antes de qualquer rodada, então não tem arquivo de contexto para compartilhar com o sandbox do Codex.
+test("o init no Windows descobre o Codex antes de uma tarefa ter arquivo de contexto", { skip: !windows }, (t) => {
   if (spawnSync("where.exe", ["codex"], { windowsHide: true }).status !== 0) return t.skip("Codex is not installed");
   const home = join(scratch, "codex init");
   const initialized = spawnSync(
@@ -354,30 +352,34 @@ test("Windows init discovers Codex before a task has a context file", { skip: !w
   assert.equal(rules.agents.codex.use, "codex");
 });
 
-test("Windows init keeps its keys private even inside a shared directory", { skip: !windows }, () => {
-  const parent = join(scratch, "shared");
-  const home = join(parent, "private");
-  mkdirSync(parent);
-  const granted = spawnSync("icacls.exe", [parent, "/grant", "*S-1-1-0:(OI)(CI)F"], { encoding: "utf8" });
-  assert.equal(granted.status, 0, granted.stderr);
-  const initialized = spawnSync(
-    process.execPath,
-    [join(import.meta.dirname, "../bin/agent-autoloop.ts"), "init", "--no-service", "--command", "node"],
-    {
-      env: { ...process.env, AGENT_AUTOLOOP_HOME: home, USERPROFILE: person },
-      encoding: "utf8",
-    },
-  );
-  assert.equal(initialized.status, 0, initialized.stderr);
-  const sids = powershell(
-    `[IO.File]::GetAccessControl(${psQuote(join(home, "master.key"))}).Access.IdentityReference | ForEach-Object { $_.Translate([Security.Principal.SecurityIdentifier]).Value }`,
-  );
-  assert.ok(!sids.includes("S-1-1-0"), "Everyone can read the install's master key");
-});
+test(
+  "o init no Windows mantém suas chaves privadas mesmo dentro de um diretório compartilhado",
+  { skip: !windows },
+  () => {
+    const parent = join(scratch, "shared");
+    const home = join(parent, "private");
+    mkdirSync(parent);
+    const granted = spawnSync("icacls.exe", [parent, "/grant", "*S-1-1-0:(OI)(CI)F"], { encoding: "utf8" });
+    assert.equal(granted.status, 0, granted.stderr);
+    const initialized = spawnSync(
+      process.execPath,
+      [join(import.meta.dirname, "../bin/agent-autoloop.ts"), "init", "--no-service", "--command", "node"],
+      {
+        env: { ...process.env, AGENT_AUTOLOOP_HOME: home, USERPROFILE: person },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(initialized.status, 0, initialized.stderr);
+    const sids = powershell(
+      `[IO.File]::GetAccessControl(${psQuote(join(home, "master.key"))}).Access.IdentityReference | ForEach-Object { $_.Translate([Security.Principal.SecurityIdentifier]).Value }`,
+    );
+    assert.ok(!sids.includes("S-1-1-0"), "Everyone consegue ler a chave mestra da instalação");
+  },
+);
 
-test("Windows notification text remains data in PowerShell", { skip: !windows }, async () => {
+test("o texto de notificação do Windows permanece dado no PowerShell", { skip: !windows }, async () => {
   const { notifyCommand } = await import("../plugins/desktop/channel.ts");
-  const title = "中文 '; throw 'injected' & <tag> %PATH%\nsecond line";
+  const title = "acentuação '; throw 'injected' & <tag> %PATH%\nsecond line";
   const [program, args] = notifyCommand(title, "win32");
   assert.equal(program, POWERSHELL);
   const script = Buffer.from(args.at(-1)!, "base64")
@@ -391,18 +393,18 @@ test("Windows notification text remains data in PowerShell", { skip: !windows },
   });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout.trim()), {
-    title: "Agent 问你一个问题",
-    body: `${title}\n运行 agent-autoloop status 查看`,
+    title: "O Agent fez uma pergunta a você",
+    body: `${title}\nExecute agent-autoloop status para ver`,
   });
 });
 
-// The elevated Codex sandbox uses another Windows account, which cannot read a private hub's context file by default.
+// O sandbox elevado do Codex usa outra conta do Windows, que por padrão não consegue ler o arquivo de contexto de uma central privada.
 test(
-  "Windows Codex exposes its context to the sandbox, without exposing the master key",
+  "o Codex no Windows expõe seu contexto ao sandbox, sem expor a chave mestra",
   { skip: !windows || !!process.env.CI },
   async (t) => {
     const sid = powershell(
-      `try { ([Security.Principal.NTAccount]::new($env:COMPUTERNAME, 'CodexSandboxUsers')).Translate([Security.Principal.SecurityIdentifier]).Value } catch [Security.Principal.IdentityNotMappedException] { }`,
+      `try { ([Security.Principal.NTAccount]::new($env:COMPUTERNAME, 'CodexSandboxUsers')).Translate([Security.Principal.SecurityIdentifier]).Value } catch [System.Security.Principal.IdentityNotMappedException] { }`,
     );
     if (!sid) return t.skip("Codex elevated sandbox is not installed");
     const home = join(scratch, "sandbox-data");
@@ -427,8 +429,8 @@ test(
         `[IO.File]::GetAccessControl(${psQuote(file)}).Access | Where-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq ${psQuote(sid)} } | ForEach-Object { [int]$_.FileSystemRights }`,
       );
     const contextRights = Number(rights(contextFile));
-    assert.ok(contextRights & 1, "the sandbox cannot read its context");
-    assert.equal(contextRights & 2, 0, "the sandbox can overwrite its context");
-    assert.equal(rights(key), "", "the sandbox was given the master key");
+    assert.ok(contextRights & 1, "o sandbox não consegue ler seu contexto");
+    assert.equal(contextRights & 2, 0, "o sandbox consegue sobrescrever seu contexto");
+    assert.equal(rights(key), "", "o sandbox recebeu a chave mestra");
   },
 );

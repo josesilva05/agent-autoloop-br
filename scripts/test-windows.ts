@@ -1,5 +1,5 @@
-// The common behavior suite plus native process/service checks. POSIX shell fixtures and macOS install paths run on Unix;
-// windows.test.ts and install-smoke-windows.ts exercise their native launch, stop, recovery and installation counterparts.
+// A suíte de comportamento compartilhado mais verificações nativas de processo e serviço. Fixtures de shell POSIX e caminhos de
+// instalação do macOS rodam em Unix; windows.test.ts e install-smoke-windows.ts exercitam os equivalentes nativos de partida, parada, recuperação e instalação.
 import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 

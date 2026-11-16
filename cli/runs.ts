@@ -1,12 +1,13 @@
-// `agent-autoloop runs`: the finished runs before the few `status` shows, so `why` can be given a number. It pages through
-// /v1/state the way any owner's client can; picking one rule is done here, so the protocol stays as it is.
+// `agent-autoloop runs`: as rodadas concluídas anteriores às poucas que o `status` mostra, para que o `why` possa receber um
+// número. Percorre /v1/state em páginas como qualquer cliente do titular pode fazer; a seleção de uma regra é feita aqui, para
+// que o protocolo continue como está.
 import { finished, runRows } from "./status.ts";
 
 type Page = (before?: number) => Promise<any>;
 
 /**
- * Up to `want` finished runs, newest first, older than `before` and of `rule` when given. `more` is where the next list
- * starts, or null when there's nothing older.
+ * Até `want` rodadas concluídas, das mais novas para as mais antigas, anteriores a `before` e da regra `rule`, quando dada.
+ * `more` é onde a próxima lista começa, ou null quando não há nada mais antigo.
  */
 export async function findRuns(
   page: Page,
@@ -18,7 +19,8 @@ export async function findRuns(
   for (;;) {
     const state = await page(cursor);
     first ??= state;
-    // The newest page also carries every run still unsettled, however old; each is read on its own page instead.
+    // A página mais nova também traz toda rodada ainda não assentada, por mais antiga que seja; cada uma delas é lida na
+    // sua própria página.
     const own = state.runs.filter((run: any) => state.nextBefore === null || run.id >= state.nextBefore);
     const matching = own.filter((run: any) => finished(run) && (rule === undefined || run.rule === rule));
     for (const run of matching) {
@@ -35,12 +37,13 @@ export function runsText(
   found: Awaited<ReturnType<typeof findRuns>>,
   { rule, color, columns }: { rule?: string; color: boolean; columns?: number },
 ) {
-  if (!found.runs.length) return rule === undefined ? "还没有做完的轮次。" : `规则「${rule}」没有做完的轮次。`;
+  if (!found.runs.length)
+    return rule === undefined ? "Ainda não há rodadas concluídas." : `A regra "${rule}" não tem rodadas concluídas.`;
   const lines = runRows(found.state, found.runs, { color, columns });
-  lines.push("", "细节：agent-autoloop why <第几轮>");
+  lines.push("", "Detalhes: agent-autoloop why <nº da rodada>");
   if (found.more !== null) {
     const named = rule === undefined ? "" : ` ${/^[^\s"'\\$`]+$/.test(rule) ? rule : JSON.stringify(rule)}`;
-    lines.push(`更早的：agent-autoloop runs${named} --before ${found.more}`);
+    lines.push(`Mais antigas: agent-autoloop runs${named} --before ${found.more}`);
   }
   return lines.join("\n");
 }

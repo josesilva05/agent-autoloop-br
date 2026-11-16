@@ -1,97 +1,95 @@
 # Agent Autoloop
 
-**让你的命令行 Agent 在后台自己接活、自己跟进到底；平时不烦你，遇到拿不准的事才发卡片找你拍板。**
+**Deixe seus Agents de linha de comando pegarem trabalho sozinhos em segundo plano e o acompanharem até o fim; no dia a dia não incomodam você e só enviam um cartão pedindo sua decisão quando encontram algo incerto.**
 
-**中文** | [English](README.en.md)
+[Primeiros passos](#primeiros-passos) · [Receitas](#receitas-prontas-para-usar) · [Plugins](#sistema-de-plugins-os-quatro-lados-são-substituíveis) · [Kernel](#os-quatro-mecanismos-do-kernel) · [Documentação](#mais-documentação)
 
-[上手](#上手) · [场景模板](#拿来即用的场景模板) · [插件](#插件体系四个方向都能自由替换) · [内核](#内核的四个机制) · [文档](#更多文档)
+![Diagrama de arquitetura](docs/architecture.svg)
 
-![架构图](docs/architecture.svg)
+## Que problema ele resolve?
 
-## 它解决什么问题？
+No dia a dia, usamos Agents de linha de comando como Claude Code e Codex quase sempre "com uma pessoa grudada no terminal": você digita uma frase, fica olhando rodar e espera ele perguntar o próximo passo. Se fechar a janela ou se afastar, o trabalho para.
 
-平时我们用 Claude Code、Codex 这类命令行 Agent，大多是“人守着终端用”：你输一句话，盯着它跑，等它问你下一步；一旦关掉窗口或者人走开，事情就断了。
+**Agent Autoloop** é uma central de automação extremamente leve. Ele transforma o agendamento de tarefas em um **kernel** sem nenhuma dependência externa e separa as fontes de eventos, os Agents, os canais de notificação e até o pipeline de entrega de código em **plugins** que podem ser trocados a qualquer momento.
 
-**Agent Autoloop** 是一个极轻量的自动化中台。它把任务调度做成一个零外部依赖的**内核**，把事件来源、Agent、通知通道，甚至代码上线流水线全部拆成可随时插拔的**插件**。
+- **Um computador e um comando bastam.** Instala no seu Windows, Mac ou Linux, sem comprar servidor em nuvem e sem abrir porta pública.
+- **Uma linha de configuração conecta um Agent novo.** Sem SDK e sem alterar o código-fonte do Agent: serve qualquer ferramenta de linha de comando que receba um prompt e imprima a última resposta.
+- **Não há painel web.** Quando precisa da sua decisão, ele envia um cartão para Feishu, DingTalk, WeCom, Slack, Discord ou como notificação de desktop; para ver o andamento geral, digite um comando.
 
-- **一台电脑、一条命令就能跑。** 装在你的 Windows、Mac 或 Linux 上，不用买云服务器，也不用开放公网端口。
-- **一行配置接新 Agent。** 不需要 SDK，也不需要改 Agent 源码，能接收提示词并打印最后一条回复的命令行工具都能接。
-- **没有后台界面。** 需要你拍板时把卡片推到飞书、钉钉、企微、Slack、Discord 或桌面通知；想看全局进展，敲一行命令。
+## Primeiros passos
 
-## 上手
+Funciona em Windows, macOS e Linux. Você precisa de Node 24 ou mais novo, Git e um Agent de linha de comando já autenticado; macOS/Linux também precisam de curl. Não é necessária uma conta no GitHub. Você também pode entregar as [instruções de instalação](INSTALL.md) ao seu Agent.
 
-支持 Windows、macOS 和 Linux。需要 Node 24 或更新、Git，以及一个已经登录的命令行 Agent；macOS/Linux 还需要 curl，不需要 GitHub 账号。也可以把[安装说明](INSTALL.md)交给你的 Agent。
-
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.ps1 | iex
 ```
 
-macOS / Linux：
+macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KKKKhazix/agent-autoloop/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/josesilva05/agent-autoloop-br/main/install.sh | sh
 ```
 
-安装和 `agent-autoloop update` 都装最新的 [Release](https://github.com/KKKKhazix/agent-autoloop/releases)，那是通过了全部检查的版本。
+Tanto a instalação quanto `agent-autoloop update` instalam o [Release](https://github.com/josesilva05/agent-autoloop-br/releases) mais recente, que é a versão aprovada em todas as verificações.
 
-装好后用你本机的 Agent 真实走一遍“提问 → 退出等回复 → 拍板 → 接着干完”：
+Depois de instalar, percorra um ciclo real com o Agent da sua máquina: "pergunta → sai e espera a resposta → você decide → ele termina o trabalho":
 
 ```bash
 agent-autoloop try
 ```
 
-下面是在终端里的真实输出：
+A seguir, a saída real no terminal:
 
 ```text
-事件发出去了，Agent 开始干活……
+Evento enviado, o Agent começou a trabalhar...
 
-Agent 结束了这一轮，问了你一个问题。它现在不占进程、不花 Token。
+O Agent terminou esta rodada e fez uma pergunta a você. Agora ele não ocupa processo nem gasta tokens.
 
-【等你决定】#1 试跑：选一个颜色
-这是一次试跑，选哪个都行。
-  1. 蓝色
-  2. 绿色
-回答：agent-autoloop answer 1 <序号>
-答完运行 agent-autoloop status，能看到它接着把活干完。
+[AGUARDANDO SUA DECISÃO] #1 Execução de teste: escolha uma cor
+Esta é uma execução de teste, qualquer opção serve.
+  1. Azul
+  2. Verde
+Resposta: agent-autoloop answer 1 <número>
+Depois de responder, rode agent-autoloop status para ver que ele seguiu e terminou o trabalho.
 ```
 
-交互终端里直接输入数字回车；非交互终端运行 `agent-autoloop answer 1 2` 选择“绿色”。再跑 `agent-autoloop status`，就能看到它接上刚才的会话并显示“你选了绿色，试跑通过”，还有今天和最近 7 天的轮数、Token 和费用（[统计口径](skills/agent-autoloop/SKILL.md#看情况回答)）。
+Em um terminal interativo, digite o número e pressione Enter; em um terminal não interativo, rode `agent-autoloop answer 1 2` para escolher "verde". Rodando `agent-autoloop status` de novo, você vê que ele retomou a conversa anterior e mostra "você escolheu verde, execução de teste aprovada", além do número de rodadas, dos tokens e dos custos de hoje e dos últimos 7 dias ([critério de contagem](skills/agent-autoloop/SKILL.md#acompanhar-e-responder)).
 
-## 一件事怎么转起来
+## Como uma tarefa flui
 
-编号和上面的架构图一一对应：
+Os números correspondem um a um ao diagrama de arquitetura acima:
 
-1. **新事件进来。** 早上 9 点的定时任务、GitHub 上新提的 Issue、业务系统报的错，都变成一条标准事件送进内核。
-2. **按规则派活。** 内核照你写的规则，决定交给哪个 Agent、去哪个目录干。同一件事排队时又来的消息，会合并成一轮处理。
-3. **干完一轮就退出。** Agent 把结果写在最后一条回复里，进程直接退出。
-4. **拿不准才问你。** 碰到删数据、重启服务、花钱、对外发消息这类事，内核通过飞书或桌面通知发一张卡片给你。等你回复期间，它不占后台进程，也不消耗 Token。
-5. **点一下，接着干。** 你选完，它接上原来的对话，把剩下的活干完。
+1. **Chega um evento novo.** A tarefa agendada das 9h, um Issue recém-aberto no GitHub ou um erro reportado pelo sistema de negócio viram um evento padrão enviado ao kernel.
+2. **Despacho segundo as regras.** O kernel segue as regras que você escreveu para decidir qual Agent assume e em qual diretório trabalha. Mensagens que chegam para o mesmo assunto enquanto ele está na fila são agrupadas em uma única rodada.
+3. **Terminou a rodada, saiu.** O Agent escreve o resultado na última resposta e o processo encerra direto.
+4. **Só pergunta quando não tem certeza.** Diante de coisas como apagar dados, reiniciar serviço, gastar dinheiro ou enviar mensagem para fora, o kernel manda um cartão para você pelo Feishu ou por notificação de desktop. Enquanto espera sua resposta, ele não ocupa processo em segundo plano nem consome tokens.
+5. **Um clique e ele continua.** Depois que você escolhe, ele retoma a conversa original e termina o resto do trabalho.
 
-能自己搞定的事走图上方的自动闭环：直接办完，或者约个时间（比如半小时后）再醒来复查，全程不打扰你。
+O que ele consegue resolver sozinho segue o ciclo automático na parte de cima do diagrama: resolve na hora ou marca um horário (por exemplo, meia hora depois) para acordar e fazer uma reverificação, sem incomodar você em momento algum.
 
-## 日常怎么配？
+## Como configurar no dia a dia?
 
-### 写一份规则（`rules.json`）
+### Escrever uma regra (`rules.json`)
 
-不需要写胶水代码。打开 `~/.agent-autoloop/rules.json`，在 `rules` 里写清楚**什么事、交给谁、在哪个目录干**。`to` 填 `agents` 里已有的名字。比如每天早上 9 点写早报：
+Não é preciso escrever código de cola. Abra `~/.agent-autoloop/rules.json` e declare em `rules` **o que aconteceu, quem assume e em qual diretório trabalha**. Em `to` vá um nome que já exista em `agents`. Por exemplo, escrever o briefing matinal todo dia às 9h:
 
 ```json
 {
-  "name": "早报",
+  "name": "Briefing matinal",
   "when": { "cron": "0 9 * * *" },
   "to": "codex",
   "cwd": "~/notes",
-  "prompt": "整理昨天的笔记和提交，写今天的早报。"
+  "prompt": "Organize as notas e os commits de ontem e escreva o briefing de hoje."
 }
 ```
 
-外部事件写法一样，只是要先接好来源。比如有人提新 Issue 时交给 Codex，先按[说明](skills/agent-autoloop/SKILL.md#接一个事件插件)在 `sources` 里登记 `github`：
+Eventos externos funcionam do mesmo jeito, só que antes é preciso conectar a fonte. Por exemplo, para entregar Issues novos ao Codex, primeiro registre `github` em `sources` conforme a [instrução](skills/agent-autoloop/SKILL.md#conectar-um-plugin-de-eventos):
 
 ```json
 {
-  "name": "处理 issue",
+  "name": "Tratar issue",
   "when": { "source": "github", "types": ["issues.opened"] },
   "to": "codex",
   "cwd": "~/code/app",
@@ -100,170 +98,170 @@ Agent 结束了这一轮，问了你一个问题。它现在不占进程、不�
 }
 ```
 
-`agent-autoloop pause <规则>`、`resume <规则>` 暂停和恢复一条规则，暂停期间到点不跑、来事件不接也不排队，恢复后不自动补跑；恢复时会列出暂停期间跳过的事件，照着给出的 `agent-autoloop replay <规则> --since <时间>` 一次补跑，每条只补一次。`agent-autoloop run <规则>` 立即跑一轮。这些记在中台的日志里，不改 `rules.json`。`agent-autoloop runs [规则]` 列出做完的轮次，`--before <第几轮>` 往前翻，拿到编号再用 `agent-autoloop why <第几轮>` 看来龙去脉。
+`agent-autoloop pause <regra>` e `resume <regra>` pausam e retomam uma regra. Durante a pausa ela não roda no horário agendado, não aceita eventos e não os coloca na fila, e a retomada não reexecuta nada sozinha; ao retomar, ela lista os eventos pulados durante a pausa e você usa o `agent-autoloop replay <regra> --since <tempo>` indicado para reexecutá-los de uma vez, cada um apenas uma vez. `agent-autoloop run <regra>` roda uma rodada imediatamente. Tudo isso fica no log da central e não altera o `rules.json`. `agent-autoloop runs [regra]` lista as rodadas concluídas, `--before <nº da rodada>` pagina para trás e, com o número em mãos, `agent-autoloop why <nº da rodada>` mostra todo o contexto.
 
-保存后几秒内自动生效，可以运行 `agent-autoloop check` 检查，`agent-autoloop check <文件>` 检查一份草稿，不碰正在跑的中台；`agent-autoloop rules explain [文件]` 看生效的规则和下次定时（也可以指定一份草稿），`agent-autoloop emit <类型> --dry-run` 预演一条事件会派给谁（不连接中台、不写日志）。就算改错了，或者文件被删、读不到，系统也会继续按旧规则跑，并发卡片提醒你。
+As mudanças valem em poucos segundos após salvar. Você pode rodar `agent-autoloop check` para verificar, `agent-autoloop check <arquivo>` para verificar um rascunho sem tocar na central em execução, `agent-autoloop rules explain [arquivo]` para ver as regras em vigor e o próximo agendamento (também aceita um rascunho) e `agent-autoloop emit <tipo> --dry-run` para ensaiar para quem um evento seria despachado (sem conectar na central e sem gravar log). Mesmo que você erre a edição, ou que o arquivo seja apagado ou não possa ser lido, o sistema continua rodando com as regras antigas e manda um cartão avisando.
 
-### Agent 怎么跟中台配合？
+### Como o Agent se comunica com a central?
 
-中台对 Agent 只有一个约定：**在最后一条回复里交代结果**。事情办完了，正常输出一句结论就行。需要向你请示时，在回复末尾附一段 `agent-autoloop` 代码块：
+A central só pede uma coisa ao Agent: **informe o resultado na última resposta**. Se o trabalho foi feito, basta imprimir uma frase de conclusão. Quando precisar consultar você, ele anexa no fim da resposta um bloco de código `agent-autoloop`:
 
 ````text
-订单已经核对完毕，库存充足。
+A conferência dos pedidos foi concluída e o estoque é suficiente.
 
 ```agent-autoloop
 {
   "ask": [{
-    "title": "怎么发货？",
-    "text": "两种方式今天都能发出。",
-    "options": ["快递", "自提"],
+    "title": "Como enviar?",
+    "text": "As duas opções podem ser despachadas hoje.",
+    "options": ["Transportadora", "Retirada"],
     "key": "shipping"
   }]
 }
 ```
 ````
 
-除了提问（`ask`），还能发通知（`notice`）、关闭已解决的卡片（`resolve`）、预约复查（`later`）和触发新事件（`events`）。通告不需要回答，但结案时可以顺手写一句处理说明，这句话会留在卡片上；只是告诉一声的通告标成 `fyi`，不带按钮。万一 JSON 写错了，中台只让它在原会话里重写最后这段回复，不会把已经干完的业务重做一遍；重写也失败时，保留原结论并通知你回执没有生效（通用命令没有会话，直接走这一步）。接着旧会话跑也一样：会话接不上才开新的；接上了、干到一半断了，就算没跑成，过几分钟回到原会话重试，不开新会话重做。同一事项的新事件默认开新会话；规则写 `"resume": true` 就接着上一轮的会话。
+Além de perguntar (`ask`), ele pode enviar notificações (`notice`), fechar cartões já resolvidos (`resolve`), agendar reverificações (`later`) e disparar novos eventos (`events`). Um aviso não exige resposta, mas ao encerrá-lo você pode escrever de passagem uma nota de tratamento, que fica registrada no cartão; um aviso marcado como `fyi` serve apenas para informar e não traz botões. Se o JSON sair errado, a central só pede que ele reescreva esse trecho final na mesma sessão, sem refazer o trabalho de negócio já concluído; se a reescrita também falhar, ela mantém a conclusão original e avisa você de que o recibo não teve efeito (comandos genéricos não têm sessão, então vão direto para essa etapa). Continuar na sessão antiga funciona igual: só abre uma sessão nova quando não dá para retomar a anterior; se retomou e parou no meio, conta como falha e, alguns minutos depois, volta à sessão original para tentar de novo, sem abrir sessão nova para refazer. Um evento novo do mesmo assunto abre por padrão uma sessão nova; com `"resume": true` na regra, ele continua na sessão da rodada anterior.
 
-## 拿来即用的场景模板
+## Receitas prontas para usar
 
-每套模板都提供示例规则和启用说明。
+Cada receita traz regras de exemplo e instruções de ativação.
 
-| 想做什么 | 已经封装好的流程 |
+| O que você quer fazer | Fluxo já encapsulado |
 |---|---|
-| [每日早报](examples/recipes/morning-brief/README.md) | 默认每天 8 点整理本地笔记和 Git 提交，写入 `briefs/YYYY-MM-DD.md` |
-| [跟进 GitHub Issue](examples/recipes/github-issues/README.md) | 每 5 分钟查新 Issue，在本地改代码并通知你查看；不提交、不推送、不回复 Issue |
-| [线上告警排查](examples/recipes/ops-alerts/README.md) | 接收报错、对照代码查原因，需要重启时发卡片询问，回答后继续 |
-| [用户反馈处理](examples/recipes/feedback/README.md) | 重读反馈当前状态、修复、交付核实、准备回复；需要决定时飞书问你，回答后继续 |
-| [网站巡检](examples/recipes/website-watch/README.md) | 每 5 分钟检查状态和关键内容，首次异常交给 Agent，持续异常不重复通知，恢复后更新原卡片 |
-| [飞书周报与业务摘要](examples/recipes/feishu-brief/README.md) | 周日 18 点按你的权限读汇报和指定表格，生成本地摘要；飞书只发简短摘要，完整稿留在本机 |
-| [收件箱分诊](examples/recipes/inbox-triage/README.md) | 默认每天 8 点读过去 24 小时的未读邮件，写成清单和回复草稿；不发送、不改邮箱状态 |
-| [PR 自动交付](skills/agent-autoloop/SKILL.md#交付流水线) | 打上 `deliver` 标签后，审查、等 CI、合并、等发布并核对线上版本 |
+| [Briefing diário](examples/recipes/morning-brief/README.md) | Por padrão, às 8h, organiza as notas locais e os commits do Git e grava em `briefs/YYYY-MM-DD.md` |
+| [Acompanhar Issues do GitHub](examples/recipes/github-issues/README.md) | Verifica Issues novos a cada 5 minutos, altera o código localmente e avisa você para revisar; não faz commit, não dá push e não responde no Issue |
+| [Investigar alertas de produção](examples/recipes/ops-alerts/README.md) | Recebe o erro, compara com o código para achar a causa e, quando é preciso reiniciar, manda um cartão perguntando; continua depois da resposta |
+| [Tratar feedback de usuários](examples/recipes/feedback/README.md) | Relê o estado atual do feedback, corrige, entrega, verifica e prepara a resposta; pergunta a você no Feishu quando precisa de decisão e continua após a resposta |
+| [Monitorar site](examples/recipes/website-watch/README.md) | Checa status e conteúdo essencial a cada 5 minutos; a primeira anomalia vai para o Agent, anomalias persistentes não geram aviso repetido e, na recuperação, o cartão original é atualizado |
+| [Resumo semanal e de negócios no Feishu](examples/recipes/feishu-brief/README.md) | Domingo às 18h, lê os relatórios e as planilhas indicadas com as suas permissões e gera um resumo local; só um resumo curto vai para o Feishu, o texto completo fica na máquina |
+| [Triagem da caixa de entrada](examples/recipes/inbox-triage/README.md) | Por padrão, às 8h, lê os e-mails não lidos das últimas 24 horas e escreve uma lista com rascunhos de resposta; não envia e não altera o estado da caixa |
+| [Entrega automática de PR](skills/agent-autoloop/SKILL.md#pipeline-de-entrega) | Depois de aplicar o rótulo `deliver`, revisa, espera o CI, faz o merge, aguarda a publicação e confere a versão em produção |
 
-**启用：** 打开对应说明。模板带任务 Skill 时，把它放进所用 Agent 的 skills 目录。把示例规则合入 `~/.agent-autoloop/rules.json`，替换电脑名和路径，再运行 `agent-autoloop check`。
+**Para ativar:** abra a instrução correspondente. Quando a receita trouxer um Skill de tarefa, coloque-o no diretório de skills do Agent usado. Mescle as regras de exemplo em `~/.agent-autoloop/rules.json`, troque nomes de máquinas e caminhos e rode `agent-autoloop check`.
 
-反馈处理、网站巡检、飞书摘要和收件箱分诊默认使用北京时间，只发给本人的飞书私聊。样例数据都是虚构的；脚本和回执只用本地 HTTP 与假飞书 CLI 验证过，没有在真实账号上跑过完整业务。
+Tratamento de feedback, monitoramento de site, resumo no Feishu e triagem da caixa de entrada usam por padrão o fuso America/Sao_Paulo e enviam apenas para o chat privado do titular no Feishu. Os dados de exemplo são fictícios; os scripts e os recibos foram verificados apenas com HTTP local e uma CLI falsa do Feishu, nunca executados de ponta a ponta em uma conta real.
 
-更多模板：[Claude 委托 Codex 处理网页](examples/recipes/browser-handoff/README.md)、[每周代码清理](examples/skills/weekly-sweep/SKILL.md)。
+Mais receitas: [Claude delegando ao Codex o trabalho na web](examples/recipes/browser-handoff/README.md) e [limpeza semanal de código](examples/skills/weekly-sweep/SKILL.md).
 
-## 插件体系：四个方向都能自由替换
+## Sistema de plugins: os quatro lados são substituíveis
 
-内置插件随程序安装，填好配置即可启用；第三方插件用 `agent-autoloop add <git 地址>` 安装。
+Os plugins embutidos vêm com o programa e são ativados preenchendo a configuração; plugins de terceiros são instalados com `agent-autoloop add <endereço git>`.
 
-| 方向 | 内置 | 配置 |
+| Lado | Embutidos | Configuração |
 |---|---|---|
-| **事件**：怎么发现新活 | [GitHub Webhook](plugins/github/source.ts)、[GitLab Webhook](plugins/gitlab/source.ts)、[HTTP 接口](docs/protocol.md#来源把世界变成事件)、[定时规则](skills/agent-autoloop/SKILL.md#改规则)、[Issue 轮询脚本](examples/watch-github-issues.sh) | [说明](skills/agent-autoloop/SKILL.md#接一个事件插件) |
-| **Agent**：谁来干活 | [Claude Code](plugins/claude/agent.ts)、[Codex](plugins/codex/agent.ts)、[ACP](plugins/acp/agent.ts)、[DeepSeek Harness](plugins/dsh/agent.ts)、[ZCode](plugins/zcode/agent.ts)、[通用命令](plugins/command/agent.ts) | [说明](skills/agent-autoloop/SKILL.md#接一个-agent) |
-| **通道**：去哪找你拍板 | [桌面通知](plugins/desktop/channel.ts)（默认开启）、[飞书](plugins/feishu/channel.ts)、[钉钉 / 企微 / Slack / Discord](plugins/webhook/templates.ts) | [说明](skills/agent-autoloop/SKILL.md#接一个通道) |
-| **交付**：把 CI/CD 也做成插件 | [`delivery`](plugins/delivery/delivery.ts) | [说明](skills/agent-autoloop/SKILL.md#交付流水线) |
+| **Eventos**: como descobrir trabalho novo | [Webhook do GitHub](plugins/github/source.ts), [Webhook do GitLab](plugins/gitlab/source.ts), [Interface HTTP](docs/protocol.md#fontes-transformar-o-mundo-em-eventos), [Regras de agendamento](skills/agent-autoloop/SKILL.md#editar-regras), [Script de polling de Issues](examples/watch-github-issues.sh) | [Instrução](skills/agent-autoloop/SKILL.md#conectar-um-plugin-de-eventos) |
+| **Agents**: quem faz o trabalho | [Claude Code](plugins/claude/agent.ts), [Codex](plugins/codex/agent.ts), [ACP](plugins/acp/agent.ts), [DeepSeek Harness](plugins/dsh/agent.ts), [ZCode](plugins/zcode/agent.ts), [Comando genérico](plugins/command/agent.ts) | [Instrução](skills/agent-autoloop/SKILL.md#conectar-um-agent) |
+| **Canais**: onde procurar você para decidir | [Notificação de desktop](plugins/desktop/channel.ts) (ativada por padrão), [Feishu](plugins/feishu/channel.ts), [DingTalk / WeCom / Slack / Discord](plugins/webhook/templates.ts) | [Instrução](skills/agent-autoloop/SKILL.md#conectar-um-canal) |
+| **Entrega**: CI/CD também como plugin | [`delivery`](plugins/delivery/delivery.ts) | [Instrução](skills/agent-autoloop/SKILL.md#pipeline-de-entrega) |
 
-**实测情况：** Claude Code、Codex 和 ACP（官方 Codex ACP 适配器）跑通了多轮问答和跨进程会话续接；ZCode 跑通了提问、回答后接回原会话；飞书跑通了发送、按钮回调和卡片更新；四种 Webhook 模板只在本地模拟服务上验证过，GitLab Webhook 按官方文档的格式测试，没连过真实 GitLab。这些文字通道靠回答链接拍板，要把 `hub.publicUrl` 配成手机或电脑能打开的地址。
+**O que foi testado de fato:** Claude Code, Codex e ACP (adaptador ACP oficial do Codex) passaram por várias rodadas de perguntas e respostas e por retomada de sessão entre processos; o ZCode passou por pergunta, resposta e retomada da sessão original; o Feishu passou por envio, callback de botões e atualização de cartão; os quatro modelos de Webhook foram verificados apenas contra serviços simulados localmente, e o Webhook do GitLab foi testado no formato da documentação oficial, sem conexão com um GitLab real. Esses canais de texto decidem por um link de resposta, então `hub.publicUrl` precisa ser um endereço acessível pelo seu celular ou computador.
 
-**内置 Agent 走第三方网关。** Claude Code、Codex 要接第三方模型服务，或者启动前要先设好环境变量，写一个设好变量再启动它的小脚本，在 Agent 里写 `"program": "脚本路径"`，会话续接和用量统计照旧，见[说明](skills/agent-autoloop/SKILL.md#接一个-agent)。
+**Agents embutidos passando por um gateway de terceiros.** Se Claude Code ou Codex precisam usar um serviço de modelo de terceiros, ou se é preciso definir variáveis de ambiente antes de iniciar, escreva um script pequeno que define as variáveis e inicia o programa e coloque no Agent `"program": "caminho/do/script"`; a retomada de sessão e a contagem de uso continuam iguais. Veja a [instrução](skills/agent-autoloop/SKILL.md#conectar-um-agent).
 
-**其他命令行 Agent 一行接入。** 设置 `use: "command"` 并传入命令数组，`{prompt}` 作为独立参数传递，不会被当成 shell 代码执行。下面的命令整理自各家官方文档，我们还没有逐个跑过：
+**Outros Agents de linha de comando entram com uma linha.** Defina `use: "command"` e passe o array de comandos; `{prompt}` é passado como argumento isolado e nunca é executado como código de shell. Os comandos abaixo foram reunidos da documentação oficial de cada um e ainda não foram testados individualmente por nós:
 
-| Agent | 接入命令 |
+| Agent | Comando de conexão |
 |---|---|
-| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md#dsh-headless) 旧版（内置插件要 0.2.2 或更新） | `dsh --profile headless {prompt}` |
+| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md#dsh-headless) versões antigas (o plugin embutido exige 0.2.2 ou mais novo) | `dsh --profile headless {prompt}` |
 | [pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md) | `pi --print {prompt}` |
 | [OpenClaw](https://docs.openclaw.ai/cli/agent) | `openclaw agent exec {prompt}` |
 | [Hermes](https://hermes-agent.nousresearch.com/docs/user-guide/cli) | `hermes chat -Q -q {prompt}` |
 | [Cursor](https://cursor.com/docs/cli/reference/parameters) | `agent -p --trust {prompt}` |
 | [WorkBuddy / CodeBuddy](https://www.codebuddy.ai/docs/cli/headless) | `codebuddy -p {prompt}` |
 
-OpenClaw 的 `agent exec` 每次默认最多跑 600 秒，到点就算失败；要跑更久的，在命令里加 `--timeout <秒>`（`0` 不限时）。
+O `agent exec` do OpenClaw roda no máximo 600 segundos por padrão e, ao atingir o limite, conta como falha; para trabalhos mais longos, acrescente `--timeout <segundos>` ao comando (`0` significa sem limite).
 
-会说 ACP 的 Agent 用 `use: "acp"` 接，还能接着原来的会话做：[Gemini CLI](https://geminicli.com/docs/cli/acp-mode/) 写 `"command": ["gemini", "--acp"]`，[OpenCode](https://opencode.ai/docs/acp) 写 `"command": ["opencode", "acp"]`。这两条已经跑通了 ACP 握手（Gemini CLI 0.67.0、OpenCode 1.1.2），多轮问答和会话续接还没跑过。
+Agents que falam ACP conectam com `use: "acp"` e ainda conseguem continuar na sessão original: para o [Gemini CLI](https://geminicli.com/docs/cli/acp-mode/) escreva `"command": ["gemini", "--acp"]`, e para o [OpenCode](https://opencode.ai/docs/acp) escreva `"command": ["opencode", "acp"]`. Esses dois já passaram pelo handshake ACP (Gemini CLI 0.67.0, OpenCode 1.1.2); várias rodadas de perguntas e respostas e a retomada de sessão ainda não foram testadas.
 
-**交付流水线。** 配好交付规则后，给 GitHub PR 打上 `deliver` 标签后，它会自己跟进到上线：**审代码 → 等 CI → 合并 PR → 等部署 → 核对线上版本**。审查可以按写代码的 Agent 指定，也可以让多个项目共用一份策略。审查和交付配置只从 `main` 读取，绝不在接单电脑上检出或运行 PR 里的代码；排队、并发和重试直接复用内核。
+**Pipeline de entrega.** Depois de configurar as regras de entrega, ao aplicar o rótulo `deliver` em um PR do GitHub ele acompanha sozinho até ir para produção: **revisar o código → esperar o CI → fazer o merge do PR → esperar o deploy → conferir a versão em produção**. A revisão pode ser definida por Agent que escreveu o código, e vários projetos podem compartilhar uma mesma política. As configurações de revisão e entrega são lidas apenas de `main`, e o código do PR nunca é baixado nem executado na máquina que recebe o trabalho; fila, concorrência e nova tentativa reutilizam diretamente o kernel.
 
-**写自己的插件。** 从 [Agent](examples/plugins/hello-agent/agent.ts)、[通道](examples/plugins/hello-channel/channel.ts)、[事件](examples/plugins/hello-source/source.ts) 三个可运行的最小模板开始，见[插件开发说明](docs/plugins.md)。要让 Agent 操作网页，先看[浏览器接入](docs/plugins.md#浏览器接入)。命令行和 [MCP](skills/agent-autoloop/SKILL.md#mcp-与密钥撤销) 也能查看和回答卡片。
+**Escreva seus próprios plugins.** Comece pelos três modelos mínimos e executáveis de [Agent](examples/plugins/hello-agent/agent.ts), [canal](examples/plugins/hello-channel/channel.ts) e [evento](examples/plugins/hello-source/source.ts); veja a [documentação de desenvolvimento de plugins](docs/plugins.md). Para o Agent operar páginas web, leia antes [Acesso ao navegador](docs/plugins.md#acesso-ao-navegador). A linha de comando e o [MCP](skills/agent-autoloop/SKILL.md#mcp-e-revogação-de-chaves) também permitem consultar e responder cartões.
 
-## 内核的四个机制
+## Os quatro mecanismos do kernel
 
-内核没有运行时依赖。它不读系统时钟、不用随机数、不向外发请求，插件主动连进来，账号凭据留在各自的插件里；同样的输入永远得出同样的结果。它把四个计算机领域的成熟做法用到了命令行 Agent 上：
+O kernel não tem dependências de runtime. Ele não lê o relógio do sistema, não usa números aleatórios e não faz requisições para fora; os plugins é que conectam nele, e as credenciais das contas ficam em cada plugin. A mesma entrada produz sempre o mesmo resultado. Ele aplica a Agents de linha de comando quatro práticas consagradas da computação:
 
-- **挂起零消耗**：等你拍板时进程直接退出，等待状态存在数据库里，Agent 不用一直挂着。你三天没回，这三天就没有 Agent 进程在跑、不花 Token，只有很轻的中台在后台等着；你一回答，它接着原来的对话继续干。
-- **事件溯源**：所有状态都从一条只追加的日志算出来，日志和索引在同一个事务里写进磁盘，写完才应答。进程被强杀，已经确认的事不丢（整机断电没有单独测过）；任何一轮为什么跑、结果是什么，一条命令就能查清；数据格式变了就从日志重建，不用写迁移脚本。
-- **指令数据分离**：思路和 SQL 参数化一样。Issue 的标题和正文等外部文字只作为资料放进文件，不拼进提示词，提示词里只有校验过字符的类型、编号和链接；用哪个 Agent、在哪个目录、什么权限，只由你本机的规则决定，事件里带 `cwd`、`agent`、`access` 字段会被直接拒收。
-- **跳数熔断**：思路和网络包的 TTL 一样。Agent 交回的事件会再派给 Agent，层数一路累加，经过人工提问和定时复查也不清零，Agent 自己改不了；超过 8 层就只记录、不再派活，并发一张卡片告诉你。
+- **Espera de custo zero**: quando espera a sua decisão, o processo encerra direto e o estado de espera fica no banco de dados, sem deixar o Agent pendurado. Se você ficar três dias sem responder, nesses três dias não há nenhum processo de Agent rodando e nenhum token é gasto — só a central, bem leve, aguarda em segundo plano; assim que você responde, ela continua a conversa original.
+- **Event sourcing**: todo estado é calculado a partir de um log somente de acréscimos; log e índices são gravados em disco na mesma transação, e só depois disso há resposta. Se o processo for morto à força, os fatos já confirmados não se perdem (queda de energia da máquina inteira não foi testada separadamente); o porquê de qualquer rodada ter rodado e qual foi o resultado se descobre com um único comando; se o formato dos dados mudar, tudo é reconstruído a partir do log, sem escrever script de migração.
+- **Separação entre instrução e dados**: a ideia é a mesma da parametrização de SQL. Textos externos, como título e corpo de um Issue, entram apenas como dados em um arquivo e nunca são concatenados no prompt; no prompt vão somente tipo, número e link com caracteres validados. Qual Agent usar, em qual diretório e com quais permissões é decidido exclusivamente pelas regras da sua máquina; eventos que tragam os campos `cwd`, `agent` ou `access` são recusados de imediato.
+- **Disjuntor de saltos**: a ideia é a mesma do TTL de um pacote de rede. Eventos devolvidos por um Agent podem despachar outros Agents, e a contagem de saltos só cresce — não zera nem ao passar por perguntas a humanos nem por reverificações agendadas — e o Agent não consegue alterá-la. Passando de 8 saltos, o kernel apenas registra, não despacha mais e envia um cartão avisando você.
 
-### 自己跑一遍
+### Verifique você mesmo
 
-Windows 用 `npm run test:windows` 和 `node scripts/install-smoke-windows.ts`，运行共用行为测试与原生进程、安装检查；Unix shell 测试仍在 Linux/macOS 上跑。
+No Windows use `npm run test:windows` e `node scripts/install-smoke-windows.ts`, que executam os testes de comportamento compartilhados e as verificações nativas de processo e de instalação; os testes de shell Unix continuam rodando em Linux/macOS.
 
-在程序目录 `~/.agent-autoloop/app` 下运行：
+No diretório do programa, `~/.agent-autoloop/app`, rode:
 
-| 验证什么 | 命令 |
+| O que verificar | Comando |
 |---|---|
-| 任何一轮的来龙去脉 | `agent-autoloop why 1` |
-| 20 万步模拟断网、丢包、崩溃和重复提交，一个种子就能复现 | `node sim/random.ts 24301 200000` |
-| 强杀进程 1000 次，已确认的记录一条不丢 | `node sim/crash.ts 1000 12648430` |
-| 下面的性能数字 | `npm run benchmark` |
+| O contexto completo de qualquer rodada | `agent-autoloop why 1` |
+| 200 mil passos simulando queda de rede, perda de pacotes, travamentos e envios duplicados, reproduzíveis com uma única semente | `node sim/random.ts 24301 200000` |
+| 1000 mortes forçadas de processo sem perder nenhum registro confirmado | `node sim/crash.ts 1000 12648430` |
+| Os números de desempenho abaixo | `npm run benchmark` |
 
 ```text
-第 1 轮 · 演示
-11-03 20:47:25  规则版本 #1
-11-03 20:47:25  触发事件：来源 local · 类型 demo.start · 对象 example
-11-03 20:47:25  local 领取（演示程序）
-11-03 20:47:25  结束：演示完成
+Rodada 1 · Demonstração
+11-03 20:47:25  Versão das regras #1
+11-03 20:47:25  Evento disparador: fonte local · tipo demo.start · objeto example
+11-03 20:47:25  local pegou o trabalho (programa de demonstração)
+11-03 20:47:25  Encerrado: demonstração concluída
 ```
 
-### 实测性能
+### Desempenho medido
 
-Apple M5 Pro、24 GB、Node 24.21.0。写入逐条提交，事务落盘后才应答。
+Apple M5 Pro, 24 GB, Node 24.21.0. Cada gravação é confirmada individualmente, com resposta só depois que a transação chega ao disco.
 
-| 指标 | 实测 |
+| Métrica | Medido |
 |---|---:|
-| 冷启动 | 88.78 ms |
-| 空闲内存 | 59.94 MB RSS |
-| 1000 个同时等待的长轮询 | 170.49 MB RSS |
-| 持久化写入 | 2394 条/秒 |
-| 派活 p99 | 1.82 ms |
-| 排队 5000 时被挡下的心跳 p99 | 1.66 ms |
-| 110 万条事实时的启动 | 99.8 ms |
-| 运行时依赖 | 0 |
+| Inicialização a frio | 88,78 ms |
+| Memória em ociosidade | 59,94 MB RSS |
+| 1.000 long polls simultâneos em espera | 170,49 MB RSS |
+| Gravações duráveis | 2.394 eventos/s |
+| Despacho p99 | 1,82 ms |
+| Heartbeat retido p99 com 5.000 na fila | 1,66 ms |
+| Inicialização com 1,1 milhão de fatos | 99,8 ms |
+| Dependências de runtime | 0 |
 
-历史变大后，状态汇总会变慢，日志和索引也继续占磁盘；格式变化后的首次启动要从日志全量重建，110 万条用时 43.1 秒。[完整数据和测法](docs/protocol.md#历史增长实测)。
+Quando o histórico cresce, o resumo de estado fica mais lento e o log e os índices continuam ocupando disco; a primeira inicialização após uma mudança de formato reconstrói tudo a partir do log, o que levou 43,1 segundos para 1,1 milhão de fatos. [Dados completos e método de medição](docs/protocol.md#crescimento-do-histórico-na-prática).
 
-## 用量与合规说明
+## Uso e conformidade
 
-中台直接调用你本机已经安装并登录好的命令行工具，不会读取或转存你的账号凭据。模型调用消耗算在你自己的账号名下，额度和使用范围遵循各家模型厂商的服务条款。
+A central chama diretamente as ferramentas de linha de comando que você já instalou e autenticou na sua máquina; ela não lê nem guarda as credenciais da sua conta. O consumo das chamadas de modelo é cobrado na sua própria conta, e cotas e escopo de uso seguem os termos de serviço de cada fornecedor de modelo.
 
-在高频自动化场景下，各家厂商通常更建议使用 API Key（个人订阅额度主要是为日常人工交互设计的，详见 [Anthropic](https://code.claude.com/docs/en/legal-and-compliance) 与 [OpenAI](https://learn.chatgpt.com/docs/auth) 的官方说明）。如果你用它对外提供服务，请使用 API Key。本项目为独立开源项目，与上述厂商无隶属或背书关系。
+Em cenários de automação de alta frequência, os fornecedores geralmente recomendam usar API Key (a cota da assinatura pessoal foi pensada sobretudo para a interação humana do dia a dia; veja as explicações oficiais da [Anthropic](https://code.claude.com/docs/en/legal-and-compliance) e da [OpenAI](https://learn.chatgpt.com/docs/auth)). Se você for usá-lo para prestar serviço a terceiros, use API Key. Este é um projeto open source independente, sem vínculo nem endosso dos fornecedores citados.
 
-## 更多文档
+## Mais documentação
 
-- [安装说明](INSTALL.md)
-- [规则与交付流水线配置手册](skills/agent-autoloop/SKILL.md)
-- [如何编写插件](docs/plugins.md)
-- [完整通信协议](docs/protocol.md)
-- [安全边界说明](SECURITY.md)
-- [参与贡献与交流](CONTRIBUTING.md)
-- [项目开发约定](AGENTS.md)
+- [Instruções de instalação](INSTALL.md)
+- [Manual de configuração de regras e do pipeline de entrega](skills/agent-autoloop/SKILL.md)
+- [Como escrever plugins](docs/plugins.md)
+- [Protocolo de comunicação completo](docs/protocol.md)
+- [Limites de segurança](SECURITY.md)
+- [Como contribuir e conversar](CONTRIBUTING.md)
+- [Convenções de desenvolvimento do projeto](AGENTS.md)
 
 <details>
-<summary><strong>仓库目录</strong></summary>
+<summary><strong>Estrutura do repositório</strong></summary>
 
-| 位置 | 放什么 |
+| Local | O que contém |
 |---|---|
-| `kernel/` | 内核：决策、事实日志、状态投影、到期任务、规则匹配、接口行为与卡片表单 |
-| `host/` | 运行外壳：Node HTTP、文件与 SQLite 连接、时钟、配置、状态汇总、后台服务和插件加载 |
-| `protocol/` | 通信格式、JSON Schema、输入校验、HTTP 客户端和一致性检查 |
-| `worker/` | 接单程序：领活、运行 Agent、心跳与停止、读取和提交回执 |
-| `cli/`、`bin/` | 用户命令及启动入口，包括状态、回答、`why`、MCP、更新与卸载 |
-| `plugins/` | 内置 Agent、事件、通道和交付插件 |
-| `examples/recipes/` | 完整场景：规则、任务 Skill 和启用说明 |
-| `examples/plugins/`、`examples/skills/`、`examples/*.sh` | 最小插件模板、独立任务手册和 Shell 示例 |
-| `skills/agent-autoloop/` | 中台的正式配置与操作手册，安装时也提供给 Agent 使用 |
-| `docs/` | 通信协议、插件开发说明与中英文架构图 |
-| `tests/`、`sim/` | 日常行为测试，以及模拟、穷举、强杀和变异检查 |
-| `scripts/`、`.github/workflows/` | 性能与真机验证、安装冒烟脚本，以及 Windows / Linux / macOS CI |
-| 根目录文档与 `install.sh` | 中英文 README、安装说明、安全边界、开发约定、许可证与安装脚本 |
+| `kernel/` | Kernel: decisões, registro de fatos, projeções de estado, vencimentos, casamento de regras, comportamento das interfaces e formulários dos cartões |
+| `host/` | Host: HTTP do Node, conexões de arquivo e SQLite, relógio, configuração, resumo de estado, serviços em segundo plano e carregamento de plugins |
+| `protocol/` | Formatos de comunicação, JSON Schema, validação de entrada, cliente HTTP e verificações de conformidade |
+| `worker/` | Worker: pegar trabalho, executar o Agent, heartbeat e parada, leitura e envio de recibos |
+| `cli/`, `bin/` | Comandos do usuário e ponto de entrada, incluindo status, resposta, `why`, MCP, atualização e desinstalação |
+| `plugins/` | Plugins embutidos de Agent, evento, canal e entrega |
+| `examples/recipes/` | Cenários completos: regras, Skills de tarefa e instruções de ativação |
+| `examples/plugins/`, `examples/skills/`, `examples/*.sh` | Modelos mínimos de plugin, manuais de tarefa independentes e exemplos em Shell |
+| `skills/agent-autoloop/` | Manual oficial de configuração e operação da central, também disponibilizado ao Agent durante a instalação |
+| `docs/` | Protocolo de comunicação, documentação de desenvolvimento de plugins e diagrama de arquitetura |
+| `tests/`, `sim/` | Testes de comportamento do dia a dia, além de simulação, enumeração, morte forçada e verificação por mutação |
+| `scripts/`, `.github/workflows/` | Verificações de desempenho e em máquina real, scripts de smoke de instalação e CI para Windows / Linux / macOS |
+| Documentos da raiz e `install.sh` | README, instruções de instalação, limites de segurança, convenções de desenvolvimento, licença e script de instalação |
 
-读代码可以从 `bin/agent-autoloop.ts` → `cli/main.ts` 开始，再按功能进入 `host/`、`worker/` 或 `plugins/`；内核设计先看[协议](docs/protocol.md)。同名文件分属不同层：`host/http.ts` 转换 Node 请求，`kernel/http.ts` 定义接口行为；`protocol/rules.ts` 校验输入，`kernel/rules.ts` 定义规则类型和匹配。
+Para ler o código, comece por `bin/agent-autoloop.ts` → `cli/main.ts` e depois entre em `host/`, `worker/` ou `plugins/` conforme a funcionalidade; para o design do kernel, leia primeiro o [protocolo](docs/protocol.md). Arquivos com o mesmo nome pertencem a camadas diferentes: `host/http.ts` converte a requisição do Node, enquanto `kernel/http.ts` define o comportamento da interface; `protocol/rules.ts` valida a entrada, enquanto `kernel/rules.ts` define os tipos de regra e o casamento.
 
 </details>
 
-[MIT License](LICENSE)
+[Licença MIT](LICENSE)

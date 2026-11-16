@@ -1,18 +1,18 @@
-# 跟进线上报错
+# Acompanhar erros de produção
 
-## 解决什么
-收到报错后对照本地代码查原因，需要重启就发卡片问你；示例重启脚本只打印文字。
+## Que problema resolve
+Depois de receber um erro, procura a causa comparando com o código local e, se for preciso reiniciar, envia um cartão perguntando a você; o script de reinicialização de exemplo apenas imprime texto.
 
-## 怎么启用
-把 `SKILL.md` 复制到 `~/.codex/skills/ops-alerts/`；Claude Code 用 `~/.claude/skills/ops-alerts/`，把 `restart.sh` 放到服务代码目录。
-把 `rules.json` 并进 `~/.agent-autoloop/rules.json`，包括 `askFirst`；运行 `agent-autoloop check`，再用 `agent-autoloop key new source shop` 取得 `$SHOP_KEY`。
-报错系统用自己的来源密钥发事件：
+## Como ativar
+Copie o `SKILL.md` para `~/.codex/skills/ops-alerts/`; no Claude Code, use `~/.claude/skills/ops-alerts/`, e coloque o `restart.sh` no diretório do código do serviço.
+Mescle o `rules.json` em `~/.agent-autoloop/rules.json`, incluindo o `askFirst`; execute `agent-autoloop check` e obtenha `$SHOP_KEY` com `agent-autoloop key new source shop`.
+O sistema de erros envia eventos usando a própria chave de fonte:
 ```bash
-curl -fsS http://127.0.0.1:3350/v1/events -H "Authorization: Bearer $SHOP_KEY" -H 'Content-Type: application/json' -d '{"id":"checkout-20261104-0310","type":"alert.error","subject":"checkout","summary":"结账报错","detail":"TypeError: price is undefined at src/cart.ts:42"}'
+curl -fsS http://127.0.0.1:3350/v1/events -H "Authorization: Bearer $SHOP_KEY" -H 'Content-Type: application/json' -d '{"id":"checkout-20261104-0310","type":"alert.error","subject":"checkout","summary":"Erro no checkout","detail":"TypeError: price is undefined at src/cart.ts:42"}'
 ```
 
-## 要改哪几处
-- 两处 `worker`、`cwd` 换成接单电脑和代码目录；`use` 选 `codex` 或 `claude`。
-- 权限：`read`。只读代码和事件附带的调用栈，不需要联网；Claude 的 plan 是工具审批规则，不是系统沙箱，见[权限说明](../../../docs/plugins.md#access-实际能做什么)。
-- `restart.sh` 换成固定的重启及健康检查命令；跨电脑发送前先按[配置手册](../../../skills/agent-autoloop/SKILL.md#放到服务器加电脑)设置地址。
-- 不给 `shop-fix` 建外部来源密钥。重启脚本不受 `access` 限制，是否已获同意由 Skill 核对，不能当成强制审批。
+## O que alterar
+- Troque os dois `worker` e o `cwd` pelo computador do worker e pelo diretório do código; em `use`, escolha `codex` ou `claude`.
+- Permissão: `read`. Só lê o código e a pilha de chamadas que acompanha o evento, sem precisar de internet; o plan do Claude é uma regra de aprovação de ferramentas, não um sandbox do sistema. Veja a [explicação de permissões](../../../docs/plugins.md#o-que-o-access-realmente-permite).
+- Troque o `restart.sh` pelos comandos fixos de reinicialização e de verificação de saúde; antes de enviar entre computadores, configure o endereço seguindo o [manual de configuração](../../../skills/agent-autoloop/SKILL.md#servidor-e-computadores-adicionais).
+- Não crie uma chave de fonte externa para `shop-fix`. O script de reinicialização não é limitado pelo `access`; quem confere se houve consentimento é o Skill, o que não pode ser tratado como aprovação obrigatória.

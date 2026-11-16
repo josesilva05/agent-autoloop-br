@@ -1,14 +1,15 @@
-// Pausing, resuming and running a rule now, as the owner's facts in the log. Failure cases: a paused schedule still runs,
-// or piles up its moments and fires them all on resume; a resume after the hub slept through the pause runs a moment that
-// fell in it; a pause with an end doesn't end, or its end fires what was skipped; a paused event rule still takes the
-// event, or loses the record that it skipped it; another rule matching the same event is held back too; a run queued
-// before the pause, or an answer that came during it, is handed out while paused or lost; a pause is forgotten when the
-// projection is rebuilt from the log; running now doesn't go through the queue, isn't marked as the owner's, waits out a
-// retry backoff, runs a paused rule, or takes a subject no event could carry; an unknown rule is accepted; pausing again
-// with nothing new adds a fact or restarts the pause's clock. A resume doesn't say which pause it lifted; a replay hands
-// the rule anything but the events its pause skipped as they came, hands one over twice, goes ahead while the rule is
-// still paused, changes the event's own record, keeps it from another rule its pause also skipped it for, or leaves no
-// trace in the run's story that it was a replay.
+// Pausar, retomar e executar uma regra agora, como fatos do titular no log. Casos de falha: um agendamento pausado ainda
+// roda, ou acumula seus momentos e os dispara todos ao retomar; retomar depois de a central ter dormido durante a pausa
+// executa um momento que caiu nela; uma pausa com fim não termina, ou o seu fim dispara o que foi ignorado; uma regra de
+// eventos pausada ainda aceita o evento, ou perde o registro de que o ignorou; outra regra que casa com o mesmo evento
+// também é segurada; uma rodada enfileirada antes da pausa, ou uma resposta que chegou durante ela, é entregue enquanto
+// pausada ou se perde; uma pausa é esquecida quando a projeção é reconstruída a partir do log; executar agora não passa
+// pela fila, não é marcado como do titular, espera o backoff de uma nova tentativa, executa uma regra pausada, ou aceita
+// um objeto que evento nenhum poderia carregar; uma regra desconhecida é aceita; pausar de novo sem novidade acrescenta
+// um fato ou reinicia o relógio da pausa. Retomar não diz qual pausa suspendeu; uma reexecução entrega à regra qualquer
+// coisa que não sejam os eventos que a sua pausa ignorou como chegaram, entrega um duas vezes, segue em frente enquanto
+// a regra ainda está pausada, muda o registro do próprio evento, impede que outra regra para a qual a pausa também o
+// ignorou o receba, ou não deixa na história da rodada nenhum sinal de que foi uma reexecução.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
@@ -35,115 +36,120 @@ const replay = (name: string, events: number[], now: number) => execute("replayR
 const line = (name: string, now: number) => stateOf(now).lines.find((l: { name: string }) => l.name === name)!;
 const claim = (worker: string, now: number) => claimNext(worker, `c${Math.random()}`, now);
 
-test("a paused schedule lets its moments pass, and a resume runs only the next one", () => {
+test("um agendamento pausado deixa seus momentos passarem, e retomar executa apenas o próximo", () => {
   clean();
   tick(at(0));
-  const done = pause("巡检", { reason: "上游在修" }, at(1));
+  const done = pause("inspeção", { reason: "o upstream está em manutenção" }, at(1));
   assert.equal(done.changed, true);
   tick(at(5));
   tick(at(10));
-  assert.deepEqual(ticks(), [], "nothing ran while paused");
-  assert.deepEqual(runsOf("巡检"), []);
-  const shown = line("巡检", at(11));
-  assert.deepEqual([shown.paused?.by, shown.paused?.reason, shown.paused?.until], ["owner", "上游在修", null]);
+  assert.deepEqual(ticks(), [], "nada rodou enquanto estava pausado");
+  assert.deepEqual(runsOf("inspeção"), []);
+  const shown = line("inspeção", at(11));
+  assert.deepEqual(
+    [shown.paused?.by, shown.paused?.reason, shown.paused?.until],
+    ["owner", "o upstream está em manutenção", null],
+  );
   assert.equal(shown.skippedAt, "2026-10-18T02:10:00.000Z");
-  assert.equal(resume("巡检", at(12)).changed, true);
+  assert.equal(resume("inspeção", at(12)).changed, true);
   tick(at(12));
-  assert.deepEqual(ticks(), [], "no moment from the pause is owed");
+  assert.deepEqual(ticks(), [], "nenhum momento da pausa ficou devendo");
   tick(at(15));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:15:00.000Z"]);
-  assert.equal(line("巡检", at(16)).paused, null);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:15:00.000Z"]);
+  assert.equal(line("inspeção", at(16)).paused, null);
 });
 
-test("a hub asleep through the whole pause owes nothing for it on resume", () => {
+test("uma central que dormiu durante toda a pausa não deve nada por ela ao retomar", () => {
   clean();
   tick(at(0));
-  pause("巡检", {}, at(1));
-  resume("巡检", at(12));
+  pause("inspeção", {}, at(1));
+  resume("inspeção", at(12));
   tick(at(12));
-  assert.deepEqual(ticks(), [], "10:05 and 10:10 fell in the pause");
+  assert.deepEqual(ticks(), [], "10:05 e 10:10 caíram dentro da pausa");
   tick(at(15));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:15:00.000Z"]);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:15:00.000Z"]);
 });
 
-test("a pause with an end lifts itself then, and the moments inside it stay skipped", () => {
+test("uma pausa com fim se suspende ali, e os momentos dentro dela continuam ignorados", () => {
   clean();
   tick(at(0));
-  pause("巡检", { reason: "维护窗口", until: new Date(at(12)).toISOString() }, at(1));
+  pause("inspeção", { reason: "janela de manutenção", until: new Date(at(12)).toISOString() }, at(1));
   assert.ok(
     rows(getView(), "due").some((due) => due.kind === "pause"),
-    "the end has a deadline of its own",
+    "o fim tem um prazo só dele",
   );
   tick(at(5));
-  // Asleep from 10:05 to 10:13: 10:10 was in the pause, so nothing is owed when it wakes.
+  // Adormecida de 10:05 a 10:13: 10:10 estava dentro da pausa, então nada é devido quando ela acorda.
   tick(at(13));
   assert.deepEqual(ticks(), []);
-  assert.deepEqual(all("SELECT * FROM pauses"), [], "the ended pause is gone from the record");
+  assert.deepEqual(all("SELECT * FROM pauses"), [], "a pausa encerrada sumiu do registro");
   tick(at(15));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:15:00.000Z"]);
-  assert.throws(() => pause("巡检", { until: new Date(at(10)).toISOString() }, at(20)), /晚于现在/);
-  assert.throws(() => pause("巡检", { until: "2026-10-18 12:00" }, at(20)), /带时区/);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:15:00.000Z"]);
+  assert.throws(() => pause("inspeção", { until: new Date(at(10)).toISOString() }, at(20)), /posterior ao agora/);
+  assert.throws(() => pause("inspeção", { until: "2026-10-18 12:00" }, at(20)), /com fuso/);
 });
 
-test("a paused event rule skips the event and says so; another rule on the same event still takes it", () => {
+test("uma regra de eventos pausada ignora o evento e diz isso; outra regra sobre o mesmo evento ainda o aceita", () => {
   clean();
   heartbeat("w1", [], at(0));
   heartbeat("w2", [], at(0));
-  pause("告警也记一笔", { reason: "先别记" }, at(0));
+  pause("alerta também registra", { reason: "não registrar por enquanto" }, at(0));
   const ack = ingest("ops", { id: "a1", type: "alert.raised", subject: "db" }, at(1));
-  assert.deepEqual(ack.routed, ["告警"]);
-  assert.deepEqual(ack.paused, ["告警也记一笔"]);
-  assert.deepEqual(runsOf("告警也记一笔"), []);
-  assert.equal(runsOf("告警").length, 1);
+  assert.deepEqual(ack.routed, ["alerta"]);
+  assert.deepEqual(ack.paused, ["alerta também registra"]);
+  assert.deepEqual(runsOf("alerta também registra"), []);
+  assert.equal(runsOf("alerta").length, 1);
   const again = ingest("ops", { id: "a1", type: "alert.raised", subject: "db" }, at(2));
-  assert.deepEqual([again.duplicate, again.routed, again.paused], [true, ["告警"], ["告警也记一笔"]]);
+  assert.deepEqual([again.duplicate, again.routed, again.paused], [true, ["alerta"], ["alerta também registra"]]);
   const state = stateOf(at(3));
   assert.deepEqual(
     state.skipped.map((e: any) => [e.source, e.type, e.subject, e.rules]),
-    [["ops", "alert.raised", "db", ["告警也记一笔"]]],
+    [["ops", "alert.raised", "db", ["alerta também registra"]]],
   );
-  assert.ok(!state.unrouted.some((e: any) => e.key === "a1"), "a skipped event isn't one no rule takes");
-  resume("告警也记一笔", at(4));
-  assert.deepEqual(runsOf("告警也记一笔"), [], "the skipped event isn't taken later");
+  assert.ok(!state.unrouted.some((e: any) => e.key === "a1"), "um evento ignorado não é um que regra nenhuma aceita");
+  resume("alerta também registra", at(4));
+  assert.deepEqual(runsOf("alerta também registra"), [], "o evento ignorado não é aceito depois");
 });
 
-test("work queued before a pause, or an answer during one, waits for the resume", () => {
+test("trabalho enfileirado antes de uma pausa, ou uma resposta durante ela, espera pelo retorno", () => {
   clean();
   heartbeat("w1", [], at(0));
   ingest("app", { id: "f1", type: "feedback.new", subject: "#1" }, at(0));
-  pause("意见", {}, at(1));
-  assert.equal(claim("w1", at(2)), null, "queued, but held");
-  assert.equal(runsOf("意见")[0].state, "queued", "and not lost");
-  resume("意见", at(3));
+  pause("opiniões", {}, at(1));
+  assert.equal(claim("w1", at(2)), null, "na fila, mas segurado");
+  assert.equal(runsOf("opiniões")[0].state, "queued", "e não perdido");
+  resume("opiniões", at(3));
   const job = claim("w1", at(4))!;
-  assert.equal(job.rule.name, "意见");
+  assert.equal(job.rule.name, "opiniões");
   const asked = {
     outcome: "done",
-    ask: [{ title: "要不要回复", text: "用户问了", options: ["回", "不回"], key: "reply" }],
+    ask: [
+      { title: "responder ou não", text: "o usuário perguntou", options: ["responder", "não responder"], key: "reply" },
+    ],
   };
   finish(job.run, job.token, asked, at(5));
   const card = all<{ id: number }>("SELECT id FROM cards WHERE kind = 'ask'")[0];
-  pause("意见", {}, at(6));
-  execute("answer", [card.id, { choice: 0, by: "本人" }], at(7));
-  assert.equal(claim("w1", at(8)), null, "the answer is queued for the thread, not handed out");
-  resume("意见", at(9));
+  pause("opiniões", {}, at(6));
+  execute("answer", [card.id, { choice: 0, by: "o titular" }], at(7));
+  assert.equal(claim("w1", at(8)), null, "a resposta é enfileirada para o assunto, não entregue");
+  resume("opiniões", at(9));
   assert.equal(claim("w1", at(10))!.context.answers.length, 1);
 });
 
-test("running now queues one run through the usual path, marked as the owner's", () => {
+test("executar agora enfileira uma rodada pelo caminho de costume, marcada como do titular", () => {
   clean();
   heartbeat("w1", [], at(0));
-  const done = execute("runRule", ["巡检", "owner", { reason: "看一眼" }], at(1));
+  const done = execute("runRule", ["inspeção", "owner", { reason: "dar uma olhada" }], at(1));
   const job = claim("w1", at(2))!;
   assert.equal(job.run, done.run);
   assert.deepEqual(
     job.context.events.map((e) => [e.source, e.type, e.summary, e.detail]),
-    [["schedule", "run.manual", "owner 手动运行", "看一眼"]],
+    [["schedule", "run.manual", "owner executou manualmente", "dar uma olhada"]],
   );
   const shown = stateOf(at(3)).runs.find((r: any) => r.id === done.run)!;
   assert.equal(shown.manual, true);
   assert.equal(shown.events[0].type, "run.manual");
-  const eventRun = execute("runRule", ["意见", "owner", { subject: "#9" }], at(4));
+  const eventRun = execute("runRule", ["opiniões", "owner", { subject: "#9" }], at(4));
   const eventJob = claim("w1", at(5))!;
   assert.equal(eventJob.run, eventRun.run);
   assert.deepEqual(
@@ -152,30 +158,33 @@ test("running now queues one run through the usual path, marked as the owner's",
   );
 });
 
-test("running now doesn't wait out a retry, and isn't for a paused or unknown rule", () => {
+test("executar agora não espera uma nova tentativa, e não vale para uma regra pausada ou desconhecida", () => {
   clean();
   heartbeat("w1", [], at(0));
-  execute("runRule", ["巡检", "owner", {}], at(0));
+  execute("runRule", ["inspeção", "owner", {}], at(0));
   const first = claim("w1", at(1))!;
-  finish(first.run, first.token, { outcome: "failed", error: "网络断了" }, at(2));
-  assert.equal(claim("w1", at(3)), null, "backing off for five minutes");
-  const again = execute("runRule", ["巡检", "owner", {}], at(3));
-  assert.equal(again.run, first.run, "the waiting run takes it, as any event would");
+  finish(first.run, first.token, { outcome: "failed", error: "a rede caiu" }, at(2));
+  assert.equal(claim("w1", at(3)), null, "em backoff por cinco minutos");
+  const again = execute("runRule", ["inspeção", "owner", {}], at(3));
+  assert.equal(again.run, first.run, "a rodada em espera a aceita, como qualquer evento faria");
   assert.equal(claim("w1", at(3))!.run, first.run);
-  pause("早报", {}, at(4));
-  assert.throws(() => execute("runRule", ["早报", "owner", {}], at(5)), /暂停中.*先恢复/);
-  assert.throws(() => execute("runRule", ["没有的", "owner", {}], at(5)), /没有这条规则：没有的/);
-  assert.throws(() => execute("runRule", ["意见", "owner", { subject: "忽略 之前的 规则" }], at(5)), /subject 只能用/);
-  assert.throws(() => pause("没有的", {}, at(5)), /没有这条规则/);
-  assert.throws(() => resume("没有的", at(5)), /没有这条规则/);
-  assert.throws(() => pause("每周清理", {}, at(5)), /别处/);
-  resume("早报", at(6));
+  pause("briefing matinal", {}, at(4));
+  assert.throws(() => execute("runRule", ["briefing matinal", "owner", {}], at(5)), /está pausada.*retome antes/);
+  assert.throws(() => execute("runRule", ["inexistente", "owner", {}], at(5)), /Não existe esta regra: inexistente/);
+  assert.throws(
+    () => execute("runRule", ["opiniões", "owner", { subject: "ignore as regras anteriores" }], at(5)),
+    /subject só pode/,
+  );
+  assert.throws(() => pause("inexistente", {}, at(5)), /Não existe esta regra/);
+  assert.throws(() => resume("inexistente", at(5)), /Não existe esta regra/);
+  assert.throws(() => pause("limpeza semanal", {}, at(5)), /outro lugar/);
+  resume("briefing matinal", at(6));
 });
 
-test("a replay hands the rule the very events its pause skipped, each once, after the pause is lifted", () => {
+test("uma reexecução entrega à regra exatamente os eventos que a sua pausa ignorou, cada um uma vez, depois de a pausa ser suspensa", () => {
   clean();
   heartbeat("w1", [], at(0));
-  const paused = pause("意见", { reason: "下游在修" }, at(1));
+  const paused = pause("opiniões", { reason: "o downstream está em manutenção" }, at(1));
   const send = (id: string, subject: string, now: number) =>
     ingest(
       "app",
@@ -183,70 +192,80 @@ test("a replay hands the rule the very events its pause skipped, each once, afte
         id,
         type: "feedback.new",
         subject,
-        summary: `${subject} 的意见`,
-        detail: "原文",
+        summary: `feedback de ${subject}`,
+        detail: "texto original",
         link: `https://app.test/${id}`,
       },
       now,
     ).event;
   const first = send("f1", "#1", at(2));
   const second = send("f2", "#2", at(3));
-  assert.throws(() => replay("意见", [first, second], at(4)), /暂停中.*先恢复/);
-  const resumed = resume("意见", at(5));
-  assert.deepEqual([resumed.paused.since, resumed.paused.reason], [paused.paused.since, "下游在修"]);
-  const done = replay("意见", [first, second], at(6));
+  assert.throws(() => replay("opiniões", [first, second], at(4)), /está pausada.*retome antes/);
+  const resumed = resume("opiniões", at(5));
+  assert.deepEqual(
+    [resumed.paused.since, resumed.paused.reason],
+    [paused.paused.since, "o downstream está em manutenção"],
+  );
+  const done = replay("opiniões", [first, second], at(6));
   assert.deepEqual(done.events, [first, second]);
-  assert.equal(done.runs.length, 2, "a run for each subject, as if they had come now");
+  assert.equal(done.runs.length, 2, "uma rodada para cada objeto, como se tivessem chegado agora");
   const jobs = [claim("w1", at(7))!, claim("w1", at(7))!];
   assert.deepEqual(
     jobs.flatMap((job) => job.context.events.map((e) => [e.id, e.type, e.subject, e.summary, e.detail, e.link])).sort(),
     [
-      ["f1", "feedback.new", "#1", "#1 的意见", "原文", "https://app.test/f1"],
-      ["f2", "feedback.new", "#2", "#2 的意见", "原文", "https://app.test/f2"],
+      ["f1", "feedback.new", "#1", "feedback de #1", "texto original", "https://app.test/f1"],
+      ["f2", "feedback.new", "#2", "feedback de #2", "texto original", "https://app.test/f2"],
     ],
   );
-  assert.deepEqual(replay("意见", [first, second], at(8)), { events: [], runs: [] }, "never twice");
-  assert.equal(runsOf("意见").length, 2);
+  assert.deepEqual(replay("opiniões", [first, second], at(8)), { events: [], runs: [] }, "nunca duas vezes");
+  assert.equal(runsOf("opiniões").length, 2);
   const outcome = eventOutcome(getView(), "app", first)!;
   assert.deepEqual(
     [outcome.paused, outcome.runs.map((run) => [run.run, run.rule])],
-    [["意见"], [[done.runs[0], "意见"]]],
-    "the event stays as it came, and its source sees the run that took it",
+    [["opiniões"], [[done.runs[0], "opiniões"]]],
+    "o evento fica como chegou, e a sua fonte vê a rodada que o aceitou",
   );
-  assert.match(formatWhy(done.runs[0], why(done.runs[0])), /本人补跑暂停时跳过的事件/);
+  assert.match(formatWhy(done.runs[0], why(done.runs[0])), /O titular reexecutou eventos ignorados durante a pausa/);
 
-  pause("告警", {}, at(10));
-  pause("告警也记一笔", {}, at(10));
+  pause("alerta", {}, at(10));
+  pause("alerta também registra", {}, at(10));
   const both = ingest("ops", { id: "a1", type: "alert.raised", subject: "db" }, at(11));
-  assert.deepEqual(both.paused, ["告警", "告警也记一笔"]);
-  resume("告警", at(12));
-  assert.deepEqual(replay("告警", [both.event], at(13)).events, [both.event]);
-  assert.deepEqual(replay("告警", [both.event], at(13)).events, []);
-  resume("告警也记一笔", at(14));
-  assert.deepEqual(replay("告警也记一笔", [both.event], at(15)).events, [both.event], "still owed to the other rule");
+  assert.deepEqual(both.paused, ["alerta", "alerta também registra"]);
+  resume("alerta", at(12));
+  assert.deepEqual(replay("alerta", [both.event], at(13)).events, [both.event]);
+  assert.deepEqual(replay("alerta", [both.event], at(13)).events, []);
+  resume("alerta também registra", at(14));
+  assert.deepEqual(
+    replay("alerta também registra", [both.event], at(15)).events,
+    [both.event],
+    "ainda devido à outra regra",
+  );
   assert.deepEqual(
     eventOutcome(getView(), "ops", both.event)!.runs.map((run) => run.rule),
-    ["告警", "告警也记一笔"],
+    ["alerta", "alerta também registra"],
   );
 });
 
-test("pausing again with nothing new adds no fact and keeps when it started", () => {
+test("pausar de novo sem novidade não acrescenta fato e mantém quando começou", () => {
   clean();
-  const first = pause("意见", { reason: "先停" }, at(1));
+  const first = pause("opiniões", { reason: "parar primeiro" }, at(1));
   const before = logAfter().length;
-  assert.equal(pause("意见", { reason: "先停" }, at(2)).changed, false);
-  assert.equal(logAfter().length, before, "nothing new, nothing written");
-  const moved = pause("意见", { reason: "还在修" }, at(3));
-  assert.deepEqual([moved.changed, moved.paused.reason, moved.paused.since], [true, "还在修", first.paused.since]);
-  assert.equal(resume("意见", at(4)).changed, true);
-  assert.equal(resume("意见", at(5)).changed, false, "lifting twice changes nothing");
+  assert.equal(pause("opiniões", { reason: "parar primeiro" }, at(2)).changed, false);
+  assert.equal(logAfter().length, before, "nada novo, nada escrito");
+  const moved = pause("opiniões", { reason: "ainda em manutenção" }, at(3));
+  assert.deepEqual(
+    [moved.changed, moved.paused.reason, moved.paused.since],
+    [true, "ainda em manutenção", first.paused.since],
+  );
+  assert.equal(resume("opiniões", at(4)).changed, true);
+  assert.equal(resume("opiniões", at(5)).changed, false, "suspender duas vezes não muda nada");
 });
 
-// Last: a rebuild replays the whole log, including what the fixture resets above only cleared from the projection.
-test("a pause survives the projection being rebuilt from the log", () => {
-  pause("意见", { reason: "重启后也停着" }, at(30));
+// Por último: uma reconstrução reproduz o log inteiro, incluindo o que o fixture reiniciado acima só limpou da projeção.
+test("uma pausa sobrevive à projeção ser reconstruída a partir do log", () => {
+  pause("opiniões", { reason: "continua parada depois de reiniciar" }, at(30));
   rebuild(db, "throwaway");
   getView();
-  assert.deepEqual(ingest("app", { id: "after-rebuild", type: "feedback.new" }, at(31)).paused, ["意见"]);
-  assert.equal(line("意见", at(32)).paused?.reason, "重启后也停着");
+  assert.deepEqual(ingest("app", { id: "after-rebuild", type: "feedback.new" }, at(31)).paused, ["opiniões"]);
+  assert.equal(line("opiniões", at(32)).paused?.reason, "continua parada depois de reiniciar");
 });

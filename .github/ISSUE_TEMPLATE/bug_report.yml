@@ -1,48 +1,48 @@
-name: 问题反馈 / Bug report
-description: 报告可以复现的故障，帮助定位和修复。
+name: Relato de problema / Bug report
+description: Relate uma falha reproduzível para ajudar a localizar e corrigir.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        安装和配置问题也可以到 [使用问答](https://github.com/KKKKhazix/agent-autoloop/discussions/categories/q-a) 交流。
-        安全问题请按 [安全说明](https://github.com/KKKKhazix/agent-autoloop/blob/main/SECURITY.md) 联系维护者。
-        不要上传密钥、带权限的卡片链接、完整配置、数据库或真实业务资料。
+        Problemas de instalação e configuração também podem ser discutidos em [Perguntas de uso](https://github.com/josesilva05/agent-autoloop-br/discussions/categories/q-a).
+        Problemas de segurança: contate os mantenedores conforme as [instruções de segurança](https://github.com/josesilva05/agent-autoloop-br/blob/main/SECURITY.md).
+        Não envie chaves, links de cartão com permissão, configurações completas, bancos de dados nem materiais reais de negócio.
   - type: input
     id: version
     attributes:
-      label: 程序版本
-      description: 填写 agent-autoloop --version 的输出和安装或更新日期；源码运行时附提交号。
+      label: Versão do programa
+      description: Informe a saída de agent-autoloop --version e a data da instalação ou atualização; ao rodar a partir do código-fonte, anexe o número do commit.
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
-      label: 运行环境
-      description: 系统、Node.js 版本、相关 Agent 或插件，以及本机还是远程接单。
-      placeholder: macOS / Linux / Windows；node --version；Agent 名称与版本；相关通道。
+      label: Ambiente de execução
+      description: Sistema, versão do Node.js, Agent ou plugin relacionado e se a execução é local ou em worker remoto.
+      placeholder: macOS / Linux / Windows; node --version; nome e versão do Agent; canais relacionados.
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
-      label: 复现步骤
-      description: 提供最少的操作步骤；需要规则示例时使用虚构数据和占位符。
+      label: Passos de reprodução
+      description: Informe o menor número de passos possível; ao precisar de exemplo de regra, use dados fictícios e placeholders.
       placeholder: |
-        1. 配置……
-        2. 执行……
-        3. 出现……
+        1. Configurar...
+        2. Executar...
+        3. Ocorre...
     validations:
       required: true
   - type: textarea
     id: expected-actual
     attributes:
-      label: 预期结果与实际结果
-      placeholder: 预期……；实际……
+      label: Resultado esperado e resultado obtido
+      placeholder: Esperado...; obtido...
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: 日志或截图（可选）
-      description: 可附 doctor、status 或 why 的相关片段；先移除个人信息、业务正文和凭据。
+      label: Log ou captura de tela (opcional)
+      description: Pode anexar trechos relevantes de doctor, status ou why; remova antes informações pessoais, corpo de negócio e credenciais.

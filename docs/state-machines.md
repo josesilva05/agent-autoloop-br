@@ -1,76 +1,76 @@
-# 状态与转换
+# Estados e transições
 
-这里集中列出状态的权威位置、写入者和约束；HTTP 字段见[协议](protocol.md)。一轮 `done` 不代表事项没有后续，`delivery=success` 不代表一定上线。
+Aqui estão reunidos a localização autoritativa de cada estado, quem o escreve e suas restrições; os campos HTTP estão no [protocolo](protocol.md). Uma rodada `done` não significa que o assunto não tenha continuação, e `delivery=success` não significa que necessariamente foi para produção.
 
-## 事件、事项、轮次
+## Eventos, assuntos e rodadas
 
-| 对象 | 状态与存储 | 谁在哪里改 |
+| Objeto | Estado e armazenamento | Quem altera, e onde |
 | --- | --- | --- |
-| 事件 | `events` 的 `source + key` 去重；`routed/paused/hops` 区分已派、暂停跳过、无人接、超过 8 层未派，记下后不再改；补跑不改事件，接到这条规则的一轮上就算补过 | `kernel/decide.ts` 的 `ingest/recordEvent` 接来源、回执、回答、时钟和手动运行；`replayRule` 补跑暂停跳过的事件 |
-| 事项 | 没有单独状态列；`rule + lane` 对应的轮次、未结卡片、未来复查共同表达进展 | `enqueue/answer/tick/retryLater`；运行中来的事件排下一轮，失败时把同事项的队列合进重试轮次 |
-| 轮次 | `runs.state`: `queued → claimed → done/nothing/cancelled`；`claimed → unknown`；失败从 claimed/unknown 回 queued，`attempts/not_before` 表达等重试 | `claimNext/finish/applyReceipt/retryLater/cancel/stopRun/sweep`。unknown 不是失败，迟到结果照收，后续新活可以继续 |
-| 停止 | `claimed + cancel_at` 表示正在停；进程结束才 cancelled；排队可直接取消 | 本人 `cancel`，worker 停整个进程组后交结果；停止期间收到 failed 也归 cancelled，不能重派 |
-| 执行归属 | `agent/rules_version/issued/claim` 固定领取归属；`session/resume` 是续接提示 | `assignQueued/settleSession/claimNext/started/finish`。排队用最新规则，领取后保留原 worker 和规则快照；重复 claim 换 token |
+| Evento | Deduplicação por `source + key` em `events`; `routed/paused/hops` distinguem despachado, ignorado por pausa, sem ninguém para assumir e não despachado além de 8 saltos — depois de registrados, não mudam mais; a reexecução não altera o evento, que conta como reexecutado ao ser anexado a uma rodada desta regra | `ingest/recordEvent` em `kernel/decide.ts` recebe fontes, recibos, respostas, relógio e execuções manuais; `replayRule` reexecuta os eventos ignorados durante a pausa |
+| Assunto | Não há coluna de estado própria; as rodadas, os cartões em aberto e as reverificações futuras associadas a `rule + lane` expressam o progresso em conjunto | `enqueue/answer/tick/retryLater`; eventos que chegam durante a execução vão para a rodada seguinte e, em caso de falha, a fila do mesmo assunto é fundida na rodada de nova tentativa |
+| Rodada | `runs.state`: `queued → claimed → done/nothing/cancelled`; `claimed → unknown`; a falha volta de claimed/unknown para queued, e `attempts/not_before` expressam a espera por nova tentativa | `claimNext/finish/applyReceipt/retryLater/cancel/stopRun/sweep`. unknown não é falha: resultados atrasados continuam sendo aceitos e o trabalho novo seguinte pode prosseguir |
+| Parada | `claimed + cancel_at` indica que está parando; só vira cancelled quando o processo termina; na fila pode ser cancelado diretamente | `cancel` pelo titular; o worker para todo o grupo de processos e então entrega o resultado. Um failed recebido durante a parada também conta como cancelled e não pode ser despachado de novo |
+| Propriedade da execução | `agent/rules_version/issued/claim` fixam a propriedade da reserva; `session/resume` são indicações de continuação | `assignQueued/settleSession/claimNext/started/finish`. Na fila vale a regra mais recente; após a reserva, mantêm-se o worker original e o snapshot da regra; um claim repetido troca o token |
 
-`done + open 提问`、`done + 未来复查` 都合法：只结束这一轮。连续失败最多 10 次，终态轮次不能重排。本人要再做用新事件或手动 `run`。已交回的 `last_issued/last_result/last_answer` 保证同 token 同内容重交只确认一次，不同内容返回 409。
+`done + pergunta open` e `done + reverificação futura` são ambos válidos: apenas esta rodada termina. O máximo é de 10 falhas consecutivas, e rodadas em estado terminal não podem ser reagendadas. Para refazer, o titular usa um evento novo ou `run` manual. Os `last_issued/last_result/last_answer` já devolvidos garantem que reentregar o mesmo conteúdo com o mesmo token seja confirmado uma única vez; conteúdo diferente retorna 409.
 
-禁止同组同 lane 同时领取两轮、停止后自动重试、换 Agent 沿用旧 Agent 会话、回答/复查丢掉原 lane。unknown 放开组后，新轮仍不能打开可能在用的会话。并发、原会话及 token 检查在上述入口统一执行。
+É proibido reservar duas rodadas ao mesmo tempo no mesmo grupo e lane, tentar de novo automaticamente após a parada, trocar de Agent reaproveitando a sessão do Agent antigo, e perder o lane original em respostas/reverificações. Depois que o unknown libera o grupo, uma rodada nova ainda não pode abrir uma sessão que talvez esteja em uso. As verificações de concorrência, de sessão original e de token são feitas de forma unificada nas entradas citadas acima.
 
-## 卡片、投递、复查与暂停
+## Cartões, entrega, reverificação e pausa
 
-| 对象 | 状态与存储 | 谁在哪里改 |
+| Objeto | Estado e armazenamento | Quem altera, e onde |
 | --- | --- | --- |
-| 提问 | `cards.state`: `open → decided → done` 或 `open → closed` | `createCard` 创建；`answer` 核对本人、通道和消息 ref，只改 open，产生 `answer_event`；成功处理回答的 `applyReceipt` 才写 done；`resolve/closeCard` 表示无需决定 |
-| 通知 | 普通通知 open → closed；FYI 创建时就是 closed | `cardFromReceipt/notify/tell` 创建，本人或允许范围内的回执结案。decided 不等于执行过；续办被取消仍保留决定，不伪造 done |
-| 投递 | `deliveries[card_id:channel]` 的 `version/ref/tries/not_before/given_up` 组合：未发、已租出、重试等待、已同步、放弃 | `nextCard` 租给通道，`delivered` 确认，`failed` 排重试；卡片版本更高时更新原消息。超过窗口放弃，重复 tell 可重新启动已放弃投递 |
-| 复查 | `timers.event_id=null` 等待，非空已触发；同 `rule/lane/key` 只一个待触发 | `scheduleReview` 设置、改期、取消；`tick` 记唯一 timer.due 并派回原事项；删规则后到期只留记录、不派发 |
-| 定时计划 | `schedules.cron/next_at/skipped_at`，不是业务完成态 | `tick` 更新；错过只补最近一次，配置改变重新计时，暂停时跳过 |
-| 暂停 | `pauses[name]` 有效记录表示暂停，含 since/until；恢复删除，应答带回删掉的那条 | 本人 `pauseRule/resumeRule`、到期 `tick`。已经领取的不受影响，队列及回答复查留队，新来源事件跳过且恢复不自动补派；本人 `replayRule` 补跑 since 起跳过的事件，每条一次；暂停不能手动运行或补跑 |
+| Pergunta | `cards.state`: `open → decided → done` ou `open → closed` | `createCard` cria; `answer` confere titular, canal e ref da mensagem, altera apenas open e produz `answer_event`; só o `applyReceipt` que processar a resposta com sucesso escreve done; `resolve/closeCard` indicam que nenhuma decisão é necessária |
+| Notificação | Notificação comum: open → closed; FYI já nasce closed | `cardFromReceipt/notify/tell` criam; o titular ou um recibo dentro do escopo permitido encerram. decided não significa executado; se a continuação for cancelada, a decisão é preservada e done não é forjado |
+| Entrega | Combinação de `version/ref/tries/not_before/given_up` em `deliveries[card_id:channel]`: não enviada, alugada, aguardando nova tentativa, sincronizada, desistida | `nextCard` aluga para o canal, `delivered` confirma e `failed` agenda nova tentativa; quando a versão do cartão é mais alta, a mensagem original é atualizada. Além da janela, desiste; um tell repetido pode reiniciar uma entrega desistida |
+| Reverificação | `timers.event_id=null` significa aguardando; não nulo, já disparada. Só uma pendente por `rule/lane/key` | `scheduleReview` define, remaneja e cancela; `tick` registra o timer.due único e despacha de volta ao assunto original; depois que a regra é apagada, o vencimento apenas mantém o registro, sem despachar |
+| Agendamento | `schedules.cron/next_at/skipped_at`; não é um estado de conclusão de negócio | `tick` atualiza; uma ocorrência perdida compensa apenas a mais recente, mudar a configuração reinicia a contagem de tempo e, durante a pausa, é ignorada |
+| Pausa | Um registro válido em `pauses[name]` indica pausa, com since/until; retomar apaga, e a resposta devolve o registro apagado | `pauseRule/resumeRule` pelo titular e `tick` no vencimento. O que já foi reservado não é afetado; fila, respostas e reverificações permanecem na fila; eventos novos de fonte são ignorados e a retomada não os repõe automaticamente; `replayRule` do titular reexecuta os eventos ignorados desde since, uma vez cada; durante a pausa não é possível executar manualmente nem reexecutar |
 
-卡片的回答和结案只能有一个发生。失败回执只允许通知，提问、结案、复查、发事件不生效。卡片与投递版本不同只是待同步，不能理解成卡片重开。
+A resposta e o encerramento de um cartão são mutuamente exclusivos: só um dos dois pode acontecer. Um recibo de falha permite apenas notificar — pergunta, encerramento, reverificação e emissão de eventos não têm efeito. Cartão e entrega com versões diferentes é apenas uma sincronização pendente, e não deve ser entendido como cartão reaberto.
 
-复查保存创建者 `agent` 与 `session`，只有规则仍派给同一 Agent 才续接；旧日志缺 agent 的复查照常到期、保留资料，不再强行沿用旧会话，仍按规则的 resume 决定是否续接当前 Agent 最近的会话。不迁移旧事实。卡片的续接已有同样归属检查。
+A reverificação guarda o `agent` e a `session` de quem a criou, e só continua a sessão se a regra ainda despachar para o mesmo Agent. Reverificações de logs antigos sem `agent` vencem normalmente e mantêm os dados, sem forçar o reaproveitamento da sessão antiga; a decisão de continuar a sessão mais recente do Agent atual segue o resume da regra. Fatos antigos não são migrados. A continuação de cartões já tem a mesma verificação de propriedade.
 
-`due` 是 `kernel/due.ts` 算的时钟索引，和业务事实同事务提交；不是另一份业务状态。`kernel/store.ts` 独占追加事实，`kernel/evolve.ts` 独占持久投影写入。
+`due` é um índice de relógio calculado por `kernel/due.ts`, confirmado na mesma transação que o fato de negócio; não é um estado de negócio adicional. `kernel/store.ts` tem exclusividade sobre o acréscimo de fatos, e `kernel/evolve.ts` sobre a escrita das projeções persistentes.
 
-## worker 本地执行
+## Execução local do worker
 
-状态存在 `worker/runs/<run>-<attempt>/entry.json`、stdout 和 exit 文件，由 `worker/worker.ts` 改：`start` 先保存已领任务；`launch` 保存 turn 后启动带标记进程组；`check` 结合 pid、真实进程命令、退出标记区分运行、不可核实、退出；`stop` 保存 stopping/why，进程组确实结束后 `conclude` 得结果；回执重写由 repairs/turn/resume 表达，最多两次；`endWith` 先持久化 result，`settle` 才提交；接受或明确 4xx 拒收移除 entry，5xx/连接失败继续保留；`tidy` 只清没有 entry 的过期目录。
+O estado fica em `worker/runs/<run>-<attempt>/entry.json` e nos arquivos stdout e exit, e é alterado por `worker/worker.ts`: `start` salva primeiro a tarefa reservada; `launch` salva o turn e então inicia o grupo de processos marcado; `check` combina pid, comando real do processo e marca de saída para distinguir em execução, não verificável e encerrado; `stop` salva stopping/why e, quando o grupo de processos realmente termina, `conclude` obtém o resultado; a reescrita de recibos é expressa por repairs/turn/resume, no máximo duas vezes; `endWith` persiste o result primeiro e `settle` então confirma; aceite ou recusa explícita 4xx removem o entry, enquanto 5xx ou falha de conexão o mantêm; `tidy` limpa apenas diretórios expirados sem entry.
 
-进程读不到不等于已退出，退出码还没写不等于失败，已续接后中断不能换会话重做。
+Não conseguir ler o processo não significa que ele saiu, um código de saída ainda não escrito não significa falha, e uma interrupção depois de a sessão ter sido continuada não pode ser refeita em outra sessão.
 
-## PR 交付、审查、发布
+## Entrega de PR, revisão e publicação
 
-权威在 GitHub PR（head/base/draft/closed/merged/auto_merge）、标签、提交状态、工作流、健康版本。进度事件仅供展示。`plugins/delivery/delivery.ts` 每步重读，`run.ts/handoff.ts` 负责退回和约重查。
+A autoridade está no PR do GitHub (head/base/draft/closed/merged/auto_merge), nos rótulos, nos status de commit, nos workflows e na versão saudável. Eventos de progresso servem apenas para exibição. `plugins/delivery/delivery.ts` relê a cada passo, e `run.ts/handoff.ts` cuidam da devolução e da nova verificação agendada.
 
-| 状态 | 权威条件及改动入口 |
+| Estado | Condição autoritativa e ponto de alteração |
 | --- | --- |
-| 待交付 | 交接 CLI/本人加 deliver；`poll.ts` 按 PR、head、标签事件发稳定事件，不留游标 |
-| 已接手/审查中 | 执行器写 delivery=pending，读固定 main 上的设置；`review.ts` 执行策略 |
-| 等修复 | 审查状态 failure、可信审查账本含未处理项；不可同提交重新审一遍抹掉发现 |
-| 检查中 | 当前 head 最新 pull_request workflow 及要求的矩阵 job 都成功；转 ready 之前的检查不算 |
-| 合并中 | main/head/base/标签/策略仍匹配；执行器调用 merge/auto-merge 并读回，响应丢失先确认 |
-| 发布中 | PR 已合并且 deliver 仍在；`waitLive` 等覆盖 merge 的 Ship 成功并核对线上版本 |
-| live | Ship 成功且健康版本包含目标，执行器写 delivery=success、清标签、报阶段 |
-| merged/docs_only | 没线上服务只完成合并；或健康版本到目标全差异只有内部文档，无需上线；描述必须区分 |
-| reviewed | deliver-review 要求只审查，完成清标签；部分清除失败不能变成全文交付 |
-| returned | delivery=failure，去 deliver/deliver-review；deliver-attended 由交接者领取，三分钟未领才按既有规则转告 |
-| withdrawn | 检查中撤 deliver，关闭 auto-merge，成功结束但未合并发布，明确报告撤回；不等于 live |
-| retrying | 中台 later 的 delivery-retry 保存 head、GitHub/执行错误计数；换 head 清计数，达限退回；不可写结果时保留重交 |
+| Aguardando entrega | CLI de passagem/titular adiciona deliver; `poll.ts` emite eventos estáveis com base em eventos de PR, head e rótulo, sem manter cursor |
+| Assumido/em revisão | O executor escreve delivery=pending e lê as configurações fixadas na main; `review.ts` executa a política |
+| Aguardando correção | Status de revisão failure, ou livro de revisão confiável com itens pendentes; não vale revisar de novo o mesmo commit para apagar descobertas |
+| Em verificação | O workflow pull_request mais recente do head atual e os jobs de matriz exigidos foram bem-sucedidos; verificações anteriores à conversão em ready não contam |
+| Em merge | main/head/base/rótulos/política ainda coincidem; o executor chama merge/auto-merge e relê o resultado — se a resposta se perder, confirma primeiro |
+| Em publicação | PR já mesclado e deliver ainda presente; `waitLive` aguarda o sucesso de um Ship que cubra o merge e confere a versão em produção |
+| live | Ship bem-sucedido e a versão saudável contém o alvo; o executor escreve delivery=success, limpa o rótulo e reporta a fase |
+| merged/docs_only | Não há serviço em produção e só o merge foi concluído; ou a diferença completa entre a versão saudável e o alvo contém apenas documentação interna, sem necessidade de ir para produção; a descrição deve distinguir os casos |
+| reviewed | deliver-review pede apenas revisão; ao concluir, limpa o rótulo; falha ao limpar parcialmente não pode virar entrega completa |
+| returned | delivery=failure; remove deliver/deliver-review; deliver-attended é reservado por quem fez a passagem, e só depois de três minutos sem reserva o recado é transmitido pela regra existente |
+| withdrawn | deliver retirado durante a verificação, auto-merge desativado; termina com sucesso sem merge nem publicação e reporta a retirada explicitamente; não equivale a live |
+| retrying | O delivery-retry de um later da central guarda head e contadores de erro do GitHub/de execução; trocar o head zera os contadores e atingir o limite devolve; quando não é possível gravar o resultado, mantém-se a reentrega |
 
-关闭未合并的 PR 先写 delivery 失败再清标签，避免等待者卡 pending。ask-owner 是独立 Issue 的转告状态，转告成功才清除，不是上线阶段。来源只认可信账号的 `delivery-agent/<PR号>` 状态；PR 正文审查账本与可信状态绑定轮次、head、审查器和正文摘要。免审不是审查通过，填写「处理」不是复审完成。
+Ao fechar um PR não mesclado, escreve-se primeiro a falha de delivery e só depois se limpa o rótulo, evitando que quem espera fique preso em pending. ask-owner é o estado de recado de uma Issue separada: só é limpo quando o recado é entregue com sucesso, e não é uma fase de produção. A fonte só reconhece o status `delivery-agent/<nº do PR>` de contas confiáveis; o livro de revisão no corpo do PR vincula, ao status confiável, rodada, head, revisor e resumo do corpo. Estar dispensado de revisão não é ter sido aprovado na revisão, e preencher "tratado" não é concluir a nova revisão.
 
-## 历史依据与已知旧记录
+## Base histórica e registros antigos conhecidos
 
-| Git 提交 / PR | 原问题与约束 |
+| Commit Git / PR | Problema original e restrição |
 | --- | --- |
-| cbf158a / #111 | 停止后先交失败会重排；parallel 改动使回答/复查落错事项。失败停止归 cancelled，lane 保持 |
-| fdacb94 / #54 | 删规则后队列永久无人领取；现取消并通知 |
-| 4a0094f / #67 | 失败终止丢回执用量、会话及去重；现保留本次事实 |
-| c94a9c5 / #60 | 已续接中断改开新会话重做；现只在未接上时开新会话 |
-| 21594a5 / #211 | 实机事故明确记录：WebSocket 报错后回退 HTTPS 完成，仍被旧错误判失败；12 次成功重做，耗 111 万输入 Token。完成事件现清先前连接错误 |
-| ad0384f / #118 | FYI closed 却无 closed_at；新记录已修复，旧事实不伪造时间 |
-| f25ce4a / #113、4f971cd / #88 | 重复审查漏掉原发现；同步 main 后结束轮次导致一直追赶 main。现绑定提交、同轮同步 |
-| 5285e0e / #240、e8748fd / #242 | 多项目交付、可信审查账本、应急重试的现行边界，不能再按已退役交付进程推断 |
+| cbf158a / #111 | Entregar a falha primeiro após a parada causava reagendamento; a mudança em parallel fazia respostas/reverificações caírem no assunto errado. Parada com falha conta como cancelled, e o lane é preservado |
+| fdacb94 / #54 | Depois de apagar a regra, a fila ficava para sempre sem ninguém para reservá-la; agora é cancelada e notificada |
+| 4a0094f / #67 | Encerramento por falha perdia uso do recibo, sessão e deduplicação; agora os fatos desta execução são preservados |
+| c94a9c5 / #60 | Interrupção com sessão já continuada passava a abrir sessão nova e refazer; agora só se abre sessão nova quando não foi possível retomar |
+| 21594a5 / #211 | Incidente real registrado explicitamente: após erro de WebSocket, o fallback para HTTPS concluiu, mas ainda assim foi julgado como falha pelo erro antigo; 12 refações bem-sucedidas, consumindo 1,11 milhão de Tokens de entrada. O evento de conclusão agora limpa erros de conexão anteriores |
+| ad0384f / #118 | FYI closed sem closed_at; os registros novos foram corrigidos, e fatos antigos não têm horário forjado |
+| f25ce4a / #113, 4f971cd / #88 | Revisões repetidas deixavam de ver descobertas originais; encerrar a rodada depois de sincronizar a main fazia o sistema perseguir a main para sempre. Agora vincula-se ao commit e sincroniza-se na mesma rodada |
+| 5285e0e / #240, e8748fd / #242 | Fronteiras atuais de entrega multiprojeto, livro de revisão confiável e nova tentativa emergencial; não se pode mais inferir a partir do processo de entrega já aposentado |
 
-#245 用回归复现后修了三处：复查跨 Agent 携带会话、撤回缺进度终态、关闭 PR 留 pending，分别在 `tests/resume-thread.test.ts`、`tests/delivery.test.ts`、`tests/delivery-run.test.ts`。代码复现不等于已确认线上事故。
+#245 corrigiu três pontos depois de reproduzi-los em regressão: reverificação carregando sessão entre Agents, withdrawn sem estado terminal de progresso e PR fechado permanecendo em pending, cobertos respectivamente por `tests/resume-thread.test.ts`, `tests/delivery.test.ts` e `tests/delivery-run.test.ts`. Reproduzir em código não equivale a um incidente de produção confirmado.

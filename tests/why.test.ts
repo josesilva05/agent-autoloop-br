@@ -1,6 +1,7 @@
-// Failure modes: why dumps rules or JSON by default; related runs/events leak into the timeline; a question loses its
-// answer or continuation; receipt actions disappear; retry uses the wrong rules version; --json changes the raw facts;
-// local time is replaced by UTC or a year, columns drift; a provisional session link is presented after the agent has supplied its real session.
+// Modos de falha: why despeja as regras ou JSON por padrão; rodadas/eventos relacionados vazam para a linha do tempo; uma
+// pergunta perde a resposta ou a continuação dela; ações do recibo desaparecem; a nova tentativa usa a versão errada das
+// regras; --json muda os fatos brutos; a hora local é substituída por UTC ou por um ano, colunas desalinham; um link de
+// sessão provisório é apresentado depois de o Agent ter fornecido a sessão real.
 import assert from "node:assert/strict";
 import { rows } from "../kernel/evolve.ts";
 import { execFile } from "node:child_process";
@@ -14,12 +15,12 @@ const home = setup("why");
 const rulesFile = join(home, "rules.json");
 const rulesSaying = (prompt: string) =>
   JSON.stringify({
-    sources: { shop: { name: "商店" } },
-    agents: { helper: { name: "助手", worker: "mac-mini", use: "command", command: ["true"] } },
+    sources: { shop: { name: "loja" } },
+    agents: { helper: { name: "assistente", worker: "mac-mini", use: "command", command: ["true"] } },
     channels: {},
     rules: [
       {
-        name: "处理订单",
+        name: "tratar pedidos",
         when: { source: "shop", types: ["order.created"] },
         to: "helper",
         cwd: "/tmp",
@@ -54,7 +55,7 @@ const cli = async (...args: string[]) =>
   ).stdout;
 const start = Date.parse("2026-11-03T00:00:00Z");
 
-test("why prints the real event, rules version, worker, session, receipt, answer and continuation as a timeline", async () => {
+test("why imprime o evento real, a versão das regras, o worker, a sessão, o recibo, a resposta e a continuação como linha do tempo", async () => {
   hub.ingest("shop", { id: "order-42", type: "order.created", subject: "order-42" }, start + 1000);
   const job = hub.claimNext("mac-mini", "first", start + 2000)!;
   hub.started(job.run, job.token, { session: "pending", link: "https://example.com/sessions/pending" }, start + 2500);
@@ -64,16 +65,23 @@ test("why prints the real event, rules version, worker, session, receipt, answer
     job.token,
     {
       outcome: "done",
-      summary: "等你选择发货方式",
-      ask: [{ title: "怎么发货？", text: "两种方式都能送达。", options: ["快递", "自提"], key: "shipping" }],
-      notice: [{ title: "订单已核对", text: "库存充足" }],
-      later: [{ key: "stock", at: "2026-11-04T00:00:00Z", about: "核对库存" }],
+      summary: "aguardando a sua escolha do modo de envio",
+      ask: [
+        {
+          title: "Como enviar?",
+          text: "Os dois modos entregam.",
+          options: ["transportadora", "retirada"],
+          key: "shipping",
+        },
+      ],
+      notice: [{ title: "Pedido conferido", text: "Estoque suficiente" }],
+      later: [{ key: "stock", at: "2026-11-04T00:00:00Z", about: "verificar o estoque" }],
       events: [{ id: "checked-42", type: "order.done", subject: "order-42" }],
     },
     start + 4000,
   );
   const card = rows(hub.getView(), "cards").find((c) => c.run_id === job.run && c.kind === "ask")!;
-  hub.answer(card.id, { choice: 1, by: "本人" }, start + 5000);
+  hub.answer(card.id, { choice: 1, by: "o titular" }, start + 5000);
   const continued = hub.claimNext("mac-mini", "second", start + 6000)!;
   const output = await cli("why", String(job.run));
   for (const words of [
@@ -81,19 +89,19 @@ test("why prints the real event, rules version, worker, session, receipt, answer
     "shop",
     "order.created",
     "order-42",
-    "规则版本",
+    "Versão das regras",
     "mac-mini",
-    "开始",
-    "结束",
+    "Início",
+    "Fim",
     "https://example.com/sessions/example",
-    "等你选择发货方式",
-    "怎么发货？",
-    "自提",
-    "本人",
-    "订单已核对",
-    "核对库存",
+    "aguardando a sua escolha do modo de envio",
+    "Como enviar?",
+    "retirada",
+    "o titular",
+    "Pedido conferido",
+    "verificar o estoque",
     "order.done",
-    `回答后继续：第 ${continued.run} 轮`,
+    `Continua após a resposta: rodada ${continued.run}`,
   ])
     assert.ok(output.includes(words), words + "\n" + output);
   assert.ok(!output.includes("private-rule-instructions"));
@@ -101,20 +109,20 @@ test("why prints the real event, rules version, worker, session, receipt, answer
   assert.ok(!output.trim().startsWith("["));
   assert.ok(!output.includes("https://example.com/sessions/pending"));
   assert.deepEqual(JSON.parse(await cli("why", String(job.run), "--json")), hub.why(job.run));
-  hub.finish(continued.run, continued.token, { outcome: "done", summary: "已安排自提" }, start + 7000);
+  hub.finish(continued.run, continued.token, { outcome: "done", summary: "retirada agendada" }, start + 7000);
 });
-test("why retains failed attempts and uses each attempt's rules version without printing the rules", async () => {
+test("why mantém as tentativas que falharam e usa a versão das regras de cada tentativa sem imprimir as regras", async () => {
   hub.ingest("shop", { id: "retry", type: "order.created", subject: "retry" }, start + 10000);
   const first = hub.claimNext("mac-mini", "retry-1", start + 11000)!;
-  hub.finish(first.run, first.token, { outcome: "failed", error: "连接断开" }, start + 12000);
+  hub.finish(first.run, first.token, { outcome: "failed", error: "conexão interrompida" }, start + 12000);
   const before = hub.getView().get("config", "rules")!.version;
   writeFileSync(rulesFile, rulesSaying("changed-private-instructions"));
   hub.reloadRules();
   const afterVersion = hub.getView().get("config", "rules")!.version;
   hub.claimNext("mac-mini", "retry-2", start + 312000);
   const output = await cli("why", String(first.run));
-  assert.ok(output.includes("连接断开"));
-  assert.ok(output.includes(`规则版本 #${before}`));
-  assert.ok(output.includes(`规则版本 #${afterVersion}`));
+  assert.ok(output.includes("conexão interrompida"));
+  assert.ok(output.includes(`Versão das regras #${before}`));
+  assert.ok(output.includes(`Versão das regras #${afterVersion}`));
   assert.ok(!output.includes("private-instructions"));
 });

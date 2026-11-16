@@ -1,6 +1,6 @@
-// Who holds up.pid. Failure cases: the number left behind is this very process's own (always so for pid 1 in a container, and
-// possible after any restart), so it says it's already running and can't start until someone deletes the file; a second one
-// starts beside one that really is running.
+// Quem detém o up.pid. Casos de falha: o número deixado para trás é o deste próprio processo (sempre é para o pid 1 num
+// contêiner, e é possível depois de qualquer reinicialização), então ele diz que já está em execução e não consegue
+// iniciar até alguém apagar o arquivo; um segundo inicia ao lado de um que realmente está rodando.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -21,7 +21,7 @@ const freePort = () =>
     });
   });
 
-test("a number left in up.pid that is now its own doesn't stop it starting; a second one still can't", async (t) => {
+test("um número deixado no up.pid que agora é o dele próprio não o impede de iniciar; um segundo ainda não consegue", async (t) => {
   const home = mkdtempSync(join(tmpdir(), "agent-autoloop-up-lock-"));
   const standIns = join(home, "stand-ins");
   mkdirSync(standIns);
@@ -45,7 +45,8 @@ test("a number left in up.pid that is now its own doesn't stop it starting; a se
   );
   assert.equal(init.status, 0, init.stderr);
 
-  // exec keeps the shell's number, so the file names the process that's about to read it, as a restart that drew it would.
+  // O exec mantém o número do shell, então o arquivo nomeia o processo que está prestes a lê-lo, como faria uma
+  // reinicialização que o tivesse sorteado.
   const wrote = 'printf %s "$$" > "$AGENT_AUTOLOOP_HOME/up.pid"; exec "$@"';
   const up = spawn("/bin/sh", ["-c", wrote, "sh", process.execPath, ...program, "up"], { env, stdio: "ignore" });
   const ended = new Promise((resolve) => up.once("exit", resolve));
@@ -64,10 +65,10 @@ test("a number left in up.pid that is now its own doesn't stop it starting; a se
     );
     if (!ready) await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  assert.ok(ready, "it started");
+  assert.ok(ready, "ele iniciou");
   assert.equal(readFileSync(join(home, "up.pid"), "utf8"), String(up.pid));
 
   const second = spawnSync(process.execPath, [...program, "up"], { env, encoding: "utf8", timeout: 30_000 });
   assert.notEqual(second.status, 0);
-  assert.match(second.stderr, /已经在跑了/);
+  assert.match(second.stderr, /já está em execução/);
 });
