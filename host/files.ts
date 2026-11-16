@@ -1,4 +1,4 @@
-// POSIX modes do not protect Windows secrets. A private directory gives new files only the owner's and SYSTEM's access.
+// Modos POSIX não protegem segredos no Windows. Um diretório privado dá aos arquivos novos apenas o acesso do titular e do SYSTEM.
 import { chmodSync, mkdirSync } from "node:fs";
 import { powershell, psQuote } from "./command.ts";
 
@@ -10,7 +10,7 @@ export function privateDirectory(directory: string) {
     $acl.SetAccessRuleProtection($true, $false)
     $owner = [Security.Principal.WindowsIdentity]::GetCurrent().User
     $folder = ${psQuote(directory)}
-    # Setting even the same owner needs the right to take ownership, which a data drive's Modify doesn't give.
+    # Definir até o mesmo dono exige o direito de assumir a propriedade, que o Modify de uma unidade de dados não concede.
     if ([IO.Directory]::GetAccessControl($folder, 'Owner').GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $owner.Value) {
       $acl.SetOwner($owner)
     }

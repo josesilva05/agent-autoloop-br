@@ -1,5 +1,5 @@
-// Login services: launchd on macOS, systemd on Linux, Task Scheduler on Windows. Each starts the hub at login and again if
-// it stops.
+// Serviços de login: launchd no macOS, systemd no Linux, Task Scheduler no Windows. Cada um inicia a central no login e
+// de novo se ela parar.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -10,7 +10,7 @@ import { stablePath } from "./node-path.ts";
 import { powershell, processCommandSync, psQuote } from "./command.ts";
 
 const PROGRAM = path.join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
-/** Another install on this machine (another AGENT_AUTOLOOP_HOME) has a service of its own. */
+/** Outra instalação nesta máquina (outro AGENT_AUTOLOOP_HOME) tem um serviço próprio. */
 const label = () =>
   HOME === path.join(homedir(), ".agent-autoloop")
     ? "agent-autoloop"
@@ -22,8 +22,8 @@ const LAUNCHER = path.join(import.meta.dirname, "background.js");
 const windowsArgument = (word: string) => `"${word.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"`;
 const task = () => `Get-ScheduledTask | Where-Object { $_.TaskName -eq ${psQuote(label())} -and $_.TaskPath -eq '\\' }`;
 
-/** What the login task starts. Started straight from it, node gets a console window on the desktop, and the task doesn't
- * start it again when it exits. wscript has no console: background.js starts the hub hidden and again when it stops. */
+/** O que a tarefa de login inicia. Iniciado direto por ela, o node ganha uma janela de console no desktop, e a tarefa não
+ * o inicia de novo quando ele sai. O wscript não tem console: o background.js inicia a central oculta e de novo quando ela para. */
 export function windowsLauncher() {
   return {
     program: path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "wscript.exe"),
@@ -36,7 +36,7 @@ export function windowsLauncher() {
   };
 }
 
-/** PowerShell that puts a shortcut starting the same thing in `folder` (a PowerShell expression). */
+/** PowerShell que coloca em `folder` (uma expressão PowerShell) um atalho que inicia a mesma coisa. */
 export function startupShortcut(folder = "[Environment]::GetFolderPath('Startup')") {
   const { program, args, directory } = windowsLauncher();
   return (
@@ -45,17 +45,18 @@ export function startupShortcut(folder = "[Environment]::GetFolderPath('Startup'
   );
 }
 
-/** For an account that can't, or shouldn't, have the login task: the desktop starts it, with the desktop's rights. */
+/** Para uma conta que não pode, ou não deveria, ter a tarefa de login: o desktop a inicia, com os direitos do desktop. */
 export const startupInstead = () =>
-  "可以改用「启动」文件夹：在 PowerShell 里运行下面这行，以后登录时由桌面以普通权限拉起中台，退出后照样自动重启，" +
-  "现在注销再登录一次就开始跑。这样起的中台不算系统服务：doctor 会说服务没在跑；重新运行安装器更新时加 --no-service，" +
-  "不然它又去建登录任务；更新之后注销再登录一次才用上新版。\n\n" +
+  'Dá para usar a pasta "Inicializar": rode a linha abaixo no PowerShell e, a cada login, o desktop iniciará a central com permissões comuns, ' +
+  "reiniciando-a automaticamente quando ela sair. Faça logoff e login outra vez agora para ela começar a rodar. Uma central iniciada assim não conta como serviço do sistema: " +
+  "o doctor dirá que o serviço não está em execução; ao rodar o instalador de novo para atualizar, acrescente --no-service, " +
+  "senão ele vai criar outra tarefa de login; depois de atualizar, faça logoff e login outra vez para passar a usar a versão nova.\n\n" +
   startupShortcut();
 
 function installWindowsService() {
   const { program, args, directory } = windowsLauncher();
-  // Registering with -Force replaces the task in place, so the old one and the hub it runs are left alone until Windows
-  // has taken the new one: a registration it refuses must not leave the person with no hub.
+  // Registrar com -Force substitui a tarefa no lugar, então a antiga e a central que ela roda ficam intactas até o
+  // Windows assumir a nova: um registro que ele recusa não pode deixar a pessoa sem central.
   try {
     powershell(`
     $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -66,20 +67,22 @@ function installWindowsService() {
     Register-ScheduledTask -TaskName ${psQuote(label())} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
   `);
   } catch (error) {
-    // The built-in Administrator with UAC on can't make any task without elevating, however the task is written.
+    // O Administrator embutido, com UAC ligado, não consegue criar tarefa nenhuma sem elevar, seja como for que a tarefa esteja escrita.
     if (!String((error as { stderr?: string }).stderr ?? error).includes("0x80070005")) throw error;
-    throw new Error(`Windows 不让这个账号建登录任务（拒绝访问）。${startupInstead()}`);
+    throw new Error(
+      `O Windows não permite que esta conta crie uma tarefa de login (acesso negado). ${startupInstead()}`,
+    );
   }
-  // Stopping the task ends wscript, not the hub it started; that one, or one started by hand, is stopped after it.
+  // Parar a tarefa encerra o wscript, não a central que ele iniciou; esta, ou uma iniciada à mão, é parada em seguida.
   powershell(`$task = ${task()}; if ($task.State -eq 'Running') { $task | Stop-ScheduledTask }`);
   stopUp();
   powershell(`Start-ScheduledTask -TaskName ${psQuote(label())}`);
 }
 
 /**
- * Whether a process holds an administrator's full token while the desktop of its session doesn't: more than the person
- * signed in has. With UAC off, or an Administrator that isn't filtered, the desktop has it too and the Startup folder
- * gives no less. Not knowing (it ended, or isn't ours to ask about) counts as no.
+ * Se um processo detém o token completo de administrador enquanto o desktop da sua sessão não: mais do que a pessoa que
+ * fez login tem. Com o UAC desligado, ou um Administrator que não é filtrado, o desktop também o tem, e a pasta
+ * Inicializar não concede menos. Não saber (ele terminou, ou não é nosso para perguntar) conta como não.
  */
 export function aboveDesktop(pid: number) {
   return (
@@ -124,7 +127,8 @@ export type UnitOptions = {
 };
 
 const systemdItem = (text: string, escapeDollar = false) => {
-  if (/[\u0000-\u001f\u007f]/u.test(text)) throw new Error("systemd unit 的值不能包含控制字符");
+  if (/[\u0000-\u001f\u007f]/u.test(text))
+    throw new Error("o valor de uma unit do systemd não pode conter caracteres de controle");
   let escaped = text.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%");
   if (escapeDollar) escaped = escaped.replaceAll("$", () => "$$");
   return `"${escaped}"`;
@@ -160,7 +164,7 @@ export function unit(options: UnitOptions = { home: HOME, executable: process.ex
     .map((part) => systemdItem(part, true))
     .join(" ");
   return `[Unit]
-Description=Agent 自动化中台
+Description=Central de automação de Agents
 
 [Service]
 Environment=${environment}
@@ -184,11 +188,12 @@ export function installService() {
   if (process.platform === "darwin") {
     mkdirSync(path.dirname(plistFile()), { recursive: true });
     writeFileSync(plistFile(), plist());
-    // launchd refuses to load a plist others can write, as an unhelpful "Bootstrap failed: 5"; and rewriting one a
-    // umask-0 install left world-writable keeps its mode, so the mode is set on every install.
+    // O launchd se recusa a carregar um plist que outros podem escrever, com um inútil "Bootstrap failed: 5"; e
+    // reescrever um que uma instalação com umask 0 deixou gravável por todos mantém o modo dele, então o modo é
+    // definido a cada instalação.
     chmodSync(plistFile(), 0o644);
     spawnSync("launchctl", ["bootout", `${domain()}/${label()}`], { stdio: "ignore" });
-    // bootout returns before the old one is gone; loading before that fails and leaves none.
+    // O bootout retorna antes de o antigo sumir; carregar antes disso falha e não deixa nenhum.
     for (let tries = 0; tries < 100 && launchdHasIt(); tries++) pause(100);
     execFileSync("launchctl", ["bootstrap", domain(), plistFile()]);
   } else {
@@ -208,7 +213,7 @@ export function removeService() {
       $task | Unregister-ScheduledTask -Confirm:$false
       'removed'
     }`);
-    // Stopping the task ends wscript, not the hub it started, and nothing starts that again now.
+    // Parar a tarefa encerra o wscript, não a central que ele iniciou, e nada a inicia de novo agora.
     if (removed === "removed") stopUp();
     return;
   }
@@ -229,7 +234,7 @@ export function removeService() {
   }
 }
 
-/** The process that left its number in up.pid, if it still is that process: the number may be someone else's by now. */
+/** O processo que deixou seu número em up.pid, se ele ainda é aquele processo: o número pode já ser de outro agora. */
 export function runningUp() {
   const file = path.join(HOME, "up.pid");
   if (!existsSync(file)) return null;
@@ -241,7 +246,7 @@ export function runningUp() {
   return /agent-autoloop(\.ts)?"? up\b/.test(command) ? Number(pid) : null;
 }
 
-/** Stopping a service returns before its process is gone, and one started by hand has no service to stop it. */
+/** Parar um serviço retorna antes de o processo dele sumir, e um iniciado à mão não tem serviço que o pare. */
 export function stopUp() {
   const pid = runningUp();
   if (pid === null) return;
@@ -251,7 +256,7 @@ export function stopUp() {
   for (let tries = 0; tries < 50 && runningUp() !== null; tries++) pause(100);
 }
 
-/** The service this program installs and can restart. */
+/** O serviço que este programa instala e consegue reiniciar. */
 export function serviceRunning() {
   if (process.platform === "win32")
     return powershell(`$task = ${task()}; [string]($task -and $task.State -eq 'Running')`) === "True";
@@ -259,7 +264,7 @@ export function serviceRunning() {
   return spawnSync("systemctl", ["--user", "is-active", "--quiet", label()], { stdio: "ignore" }).status === 0;
 }
 
-/** Whether its manager has the service going or starting: one stopped by hand, or no manager at all, isn't waited for. */
+/** Se o gerenciador dele tem o serviço em execução ou em partida: um parado à mão, ou a ausência total de gerenciador, não é esperado. */
 function serviceStarting() {
   if (process.platform !== "linux") return serviceRunning();
   const state = spawnSync("systemctl", ["--user", "is-active", label()], { encoding: "utf8" }).stdout?.trim();
@@ -267,8 +272,9 @@ function serviceStarting() {
 }
 
 /**
- * A manager says it has started the hub before the hub can answer, and whatever runs next finds nothing there. Waits for
- * it while its manager has it: true once it answers, false if it doesn't in time, null when there's nothing to wait for.
+ * Um gerenciador diz que iniciou a central antes de a central conseguir responder, e o que rodar em seguida não encontra
+ * nada ali. Espera por ela enquanto o gerenciador a tiver: true assim que ela responde, false se não responder a tempo,
+ * null quando não há nada para esperar.
  */
 export async function untilAnswering(url: string, patience = 20_000) {
   if (!serviceStarting()) return null;
@@ -284,20 +290,22 @@ export async function untilAnswering(url: string, patience = 20_000) {
   }
 }
 
-/** Where the service's own output goes. */
+/** Para onde vai a saída do próprio serviço. */
 export const serviceLogs = () =>
   process.platform === "linux" ? `journalctl --user -u ${label()}` : path.join(HOME, "logs", "up.log");
 
-/** The name of a system-level unit running this, as a server run by root might have. It's its owner's to restart. */
+/** O nome de uma unit em nível de sistema que executa isto, como um servidor rodado por root poderia ter. Cabe ao dono dela reiniciá-la. */
 export function systemUnit() {
   if (process.platform === "win32") return null;
   if (process.platform === "darwin") return null;
   return spawnSync("systemctl", ["is-active", "--quiet", label()], { stdio: "ignore" }).status === 0 ? label() : null;
 }
 
-/** New code counts once what's running starts again. What can't be restarted from here is said back, for the owner. */
+/** O código novo conta uma vez só quando o que está rodando reinicia. O que não pode ser reiniciado daqui é dito de volta, para o titular. */
 export function restartService() {
   if (serviceRunning()) return void installService();
   const name = systemUnit();
-  return name ? `这台电脑用的是系统级服务，运行 systemctl restart ${name} 才会用上新版。` : undefined;
+  return name
+    ? `Este computador usa um serviço em nível de sistema; rode systemctl restart ${name} para passar a usar a versão nova.`
+    : undefined;
 }

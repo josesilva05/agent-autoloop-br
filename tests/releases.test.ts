@@ -1,9 +1,11 @@
-// What someone installing or updating gets. Failure cases: they get main as it stands, checked or not, instead of the newest
-// release; version numbers sort as text, so v1.9.0 beats v1.10.0; a tag that isn't a release is taken for one; an install
-// made before releases, sitting on main, is left there; a copy from a repository given by hand is sent to tags it was never
-// asked to follow, or run over with the installer and left unable to update; a failed look at the releases counts as being
-// up to date or as there being none, which would install main, or an update with nothing new restarts the service; installing says
-// something about detached HEADs; a copy that fetched only its own tag can't say which release it is. No network: git's own insteadOf points the public address at a repository made here.
+// O que alguém instalando ou atualizando recebe. Casos de falha: a pessoa recebe a main como está, verificada ou não, em
+// vez do Release mais novo; números de versão são ordenados como texto, então v1.9.0 vence v1.10.0; uma tag que não é um
+// Release é tomada por um; uma instalação feita antes dos Releases, parada na main, é deixada lá; uma cópia de um
+// repositório informado à mão é enviada a tags que nunca lhe pediram para seguir, ou é sobrescrita pelo instalador e
+// fica sem conseguir atualizar; uma consulta aos Releases que falha conta como estando em dia ou como não havendo
+// nenhum, o que instalaria a main, ou uma atualização sem novidade reinicia o serviço; a instalação diz algo sobre HEAD
+// desanexado; uma cópia que baixou só a própria tag não consegue dizer qual Release é. Sem rede: o insteadOf do próprio
+// git aponta o endereço público para um repositório criado aqui.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -23,7 +25,7 @@ import { after, test } from "node:test";
 import { updateCode } from "../cli/update.ts";
 import { releaseOf } from "../host/version.ts";
 
-const PUBLISHED = "https://github.com/KKKKhazix/agent-autoloop.git";
+const PUBLISHED = "https://github.com/josesilva05/agent-autoloop-br.git";
 const script = join(import.meta.dirname, "..", "install.sh");
 const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-autoloop-releases-")));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -39,7 +41,7 @@ process.env.GIT_CONFIG_SYSTEM = "/dev/null";
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 
-/** What's published: a program that only says it was run, a commit for each version, and main ahead of them all. */
+/** O que está publicado: um programa que só diz que foi executado, um commit para cada versão, e a main à frente de todos. */
 mkdirSync(join(original, "bin"), { recursive: true });
 git(original, "init", "-q");
 function publish(words: string, tag?: string) {
@@ -65,7 +67,7 @@ const copy = (...args: string[]) => {
 };
 const at = (root: string) => git(root, "rev-parse", "HEAD");
 
-test("an update goes to the newest release, by version number, not to main", () => {
+test("uma atualização vai para o Release mais novo, pelo número de versão, não para a main", () => {
   const root = copy("--branch", "v1.2.0", PUBLISHED);
   const done = updateCode(root);
   assert.deepEqual(done, { changed: true, to: "v1.10.0" });
@@ -73,21 +75,21 @@ test("an update goes to the newest release, by version number, not to main", () 
   assert.equal(releaseOf(root), "v1.10.0");
 });
 
-test("with nothing newer it says so, and nothing has changed", () => {
+test("sem nada mais novo, ele diz isso, e nada mudou", () => {
   const root = copy("--branch", "v1.10.0", PUBLISHED);
   assert.deepEqual(updateCode(root), { changed: false, to: "v1.10.0" });
   assert.equal(at(root), versions["v1.10.0"]);
   assert.equal(releaseOf(root), "v1.10.0");
 });
 
-test("an install made before releases leaves main for the newest release", () => {
+test("uma instalação feita antes dos Releases troca a main pelo Release mais novo", () => {
   const root = copy(PUBLISHED);
   assert.equal(at(root), tip);
   assert.deepEqual(updateCode(root), { changed: true, to: "v1.10.0" });
   assert.equal(at(root), versions["v1.10.0"]);
 });
 
-test("a copy from a repository given by hand follows that repository", () => {
+test("uma cópia de um repositório informado à mão segue aquele repositório", () => {
   const root = copy(`file://${original}`);
   const before = at(root);
   assert.equal(before, tip);
@@ -97,7 +99,7 @@ test("a copy from a repository given by hand follows that repository", () => {
   assert.deepEqual(updateCode(root), { changed: false, to: null });
 });
 
-test("a failed look at the releases is a failure, not news that nothing changed", () => {
+test("uma consulta aos Releases que falha é uma falha, não a notícia de que nada mudou", () => {
   const root = copy("--branch", "v1.9.0", PUBLISHED);
   git(root, "config", "remote.origin.url", PUBLISHED);
   writeFileSync(gitConfig, readFileSync(gitConfig, "utf8").replace(`file://${original}`, `file://${dir}/nowhere`));
@@ -110,8 +112,8 @@ test("a failed look at the releases is a failure, not news that nothing changed"
 });
 
 /**
- * install.sh as someone runs it: its `git` is real, and the program it sets up only says it was run. PATH is folders of this
- * test's own and nothing else, because the script puts its command in the first one it can write to.
+ * O install.sh como alguém o executa: seu `git` é real, e o programa que ele instala só diz que foi executado. O PATH
+ * contém apenas pastas deste próprio teste, porque o script coloca seu comando na primeira em que consegue escrever.
  */
 function runInstaller(person: string, env: NodeJS.ProcessEnv = {}) {
   const ran = join(person, "ran");
@@ -148,7 +150,7 @@ function install(person: string, env: NodeJS.ProcessEnv = {}) {
   };
 }
 
-test("the installer installs the newest release, and running it again moves on to a newer one", () => {
+test("o instalador instala o Release mais novo, e rodá-lo de novo passa para um mais recente", () => {
   const person = join(dir, "someone");
   mkdirSync(person);
   const first = install(person);
@@ -160,11 +162,11 @@ test("the installer installs the newest release, and running it again moves on t
   const newer = publish("v1.11.0", "v1.11.0");
   const again = install(person);
   assert.equal(at(again.app), newer);
-  assert.match(again.out, /更新好了/);
+  assert.match(again.out, /Atualização concluída/);
   assert.equal(existsSync(join(again.app, ".git")), true);
 });
 
-test("a repository given to the installer by hand is installed as it stands", () => {
+test("um repositório informado ao instalador à mão é instalado como está", () => {
   const person = join(dir, "by-hand");
   mkdirSync(person);
   const expected = at(original);
@@ -172,7 +174,7 @@ test("a repository given to the installer by hand is installed as it stands", ()
   assert.equal(at(it.app), expected);
 });
 
-test("the installer stops when it can't look at the releases, rather than installing main", () => {
+test("o instalador para quando não consegue consultar os Releases, em vez de instalar a main", () => {
   const person = join(dir, "no-look");
   mkdirSync(join(person, "tools"), { recursive: true });
   const real = execFileSync("/bin/sh", ["-c", "command -v git"], { encoding: "utf8" }).trim();
@@ -184,14 +186,14 @@ test("the installer stops when it can't look at the releases, rather than instal
   assert.equal(existsSync(join(person, "hub", "app")), false);
 });
 
-test("the installer run over a copy from elsewhere leaves it following there, and update goes on working", () => {
+test("o instalador rodado sobre uma cópia vinda de outro lugar a deixa seguindo aquele lugar, e o update continua funcionando", () => {
   const person = join(dir, "over-by-hand");
   mkdirSync(person);
   const it = install(person, { AGENT_AUTOLOOP_REPO: `file://${original}` });
   writeFileSync(join(person, "hub", "config.json"), "{}");
   const newer = publish("newer still, on main");
   install(person);
-  assert.equal(at(it.app), newer, "not sent to a release");
+  assert.equal(at(it.app), newer, "não foi enviada a um Release");
   assert.equal(git(it.app, "rev-parse", "--abbrev-ref", "HEAD"), "main");
   assert.deepEqual(updateCode(it.app), { changed: false, to: null });
 });

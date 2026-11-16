@@ -1,5 +1,6 @@
-// Failure modes: the Windows login task does not start the installed hub, its status is wrong, it leaves a window on the
-// desktop, a hub that stops isn't started again, an update keeps the old process, or removal leaves the hub running.
+// Modos de falha: a tarefa de login do Windows não inicia a central instalada, seu status está errado, ela deixa uma
+// janela no desktop, uma central que para não é iniciada de novo, uma atualização mantém o processo antigo, ou a remoção
+// deixa a central rodando.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -9,7 +10,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { powershell, psQuote } from "../host/command.ts";
 
-/** Titles of the terminal windows on the signed-in desktop. Only a task in that session can see them. */
+/** Títulos das janelas de terminal no desktop onde se fez login. Só uma tarefa naquela sessão consegue vê-los. */
 function terminalWindows(scratch: string) {
   const probe = join(scratch, "windows.ps1");
   const output = join(scratch, "windows.txt");
@@ -58,11 +59,11 @@ Move-Item -Force "$Output.tmp" $Output
 }
 
 test(
-  "Windows login task runs the hub without a window, starts it again when it stops, updates and removes it",
+  "a tarefa de login do Windows roda a central sem janela, a inicia de novo quando ela para, e a atualiza e remove",
   { skip: process.platform !== "win32" || !!process.env.CI },
   async () => {
     const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-service-"));
-    const home = join(scratch, "家 ' & 目录");
+    const home = join(scratch, "home ' & diretório");
     const person = join(scratch, "person");
     mkdirSync(person);
     process.env.AGENT_AUTOLOOP_HOME = home;
@@ -104,12 +105,12 @@ test(
     }
     try {
       service.installService();
-      await until(healthy, "the scheduled task did not start the hub");
+      await until(healthy, "a tarefa agendada não iniciou a central");
       assert.ok(service.serviceRunning());
       assert.deepEqual(
         terminalWindows(scratch).filter((title) => title.includes("node.exe")),
         [],
-        "the hub has a window on the desktop",
+        "a central tem uma janela no desktop",
       );
 
       const first = service.runningUp();
@@ -118,18 +119,18 @@ test(
       await until(async () => {
         const now = service.runningUp();
         return now !== null && now !== first && (await healthy());
-      }, "a hub that stopped was not started again");
+      }, "uma central que parou não foi iniciada de novo");
 
       const second = service.runningUp();
       service.restartService();
       await until(() => {
         const now = service.runningUp();
         return now !== null && now !== second;
-      }, "update kept the old process");
+      }, "a atualização manteve o processo antigo");
 
       service.removeService();
       assert.equal(service.serviceRunning(), false);
-      assert.equal(service.runningUp(), null, "removal left the hub running");
+      assert.equal(service.runningUp(), null, "a remoção deixou a central rodando");
     } finally {
       service.removeService();
       service.stopUp();

@@ -1,50 +1,50 @@
-# 协议
+# Protocolo
 
-整个系统是一个循环，三个口子。
+O sistema inteiro é um ciclo, com três aberturas.
 
 ```
-          事件                领活
-  来源 ─────────▶  中台  ◀───────── 接单程序 ── Agent
-                   ▲ │
-              回答 │ │ 卡片
-                   │ ▼
-                  通道 ◀──▶ 你
+         eventos              pegar trabalho
+  Fontes ─────────▶  Central  ◀───────── worker ── Agent
+                      ▲ │
+            respostas │ │ cartões
+                      │ ▼
+                     Canais ◀──▶ você
 ```
 
-**中台的内核不主动连接任何东西。** 来源、接单程序、通道都是它们自己连进来：内核不用知道它们在哪、用什么语言写、是哪家的产品，也不保管它们的凭据；你的电脑不用开放任何端口。协议就是下面这份 HTTP + JSON，写一个新插件只要会发 HTTP 请求。
+**O kernel da central não conecta nada por iniciativa própria.** Fontes, workers e canais é que se conectam a ela: o kernel não precisa saber onde estão, em que linguagem foram escritos nem de que fornecedor são, e não guarda as credenciais deles; o seu computador não precisa abrir nenhuma porta. O protocolo é este HTTP + JSON abaixo, e escrever um plugin novo exige apenas saber enviar requisições HTTP.
 
-一台电脑上用时，一条命令把三样都跑在一个进程里，它们之间照样走这份协议。
+No uso em um único computador, um comando executa os três no mesmo processo, e eles continuam trocando mensagens por este protocolo.
 
-**中台没有界面。** 你和它打交道靠通道和命令行。想要一个页面或大屏，用「本人」一节的几个请求自己做，它和命令行是同等的客户端。
+**A central não tem interface.** Você interage com ela pelos canais e pela linha de comando. Se quiser uma página ou um painel grande, monte você mesmo com as requisições da seção “O titular”: ela é um cliente em pé de igualdade com a linha de comando.
 
-## 六个词
+## Seis palavras
 
-跨对象的状态、写入者与历史约束集中在[状态与转换](state-machines.md)。
+Os estados, escritores e restrições de histórico que atravessam objetos estão concentrados em [Estados e transições](state-machines.md).
 
-| 词       | 是什么                                                                                                                   |
-| -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **事件** | 发生了一件事：来源、编号、类型、对象、一句话、详情、回原处的链接。时间到了是事件，你点了卡片也是事件。                   |
-| **规则** | 写在 `rules.json` 里：什么事件，交给哪个 Agent，在哪个目录，用哪个 Skill，什么时候告诉你。                               |
-| **事项** | 同一条规则下同一个对象的事。事件归进事项，卡片、到期复查、会话都挂在事项上。规则没写 `parallel` 时，整条规则是一个事项。 |
-| **一轮** | 一次执行：领一批事件，交一份回执，然后结束。一轮会结束，事项会继续。                                                     |
-| **回执** | Agent 的最后一条消息。它想让中台做的事全写在这里，这一轮结束时在一个事务里一次生效。                                     |
-| **卡片** | 给你看的东西。带选项的是提问，你选了就是一条新事件，事项接着往前走；不带选项的是通知。                                   |
+| Palavra    | O que é                                                                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Evento** | Algo aconteceu: fonte, número, tipo, objeto, uma frase, detalhes e um link de volta à origem. O horário atingido é um evento, e o seu clique em um cartão também é.     |
+| **Regra**  | Escrita em `rules.json`: que evento, para qual Agent, em qual diretório, com qual Skill e quando avisar você.                                                          |
+| **Assunto** | O que diz respeito ao mesmo objeto sob a mesma regra. Os eventos são agrupados em assuntos, e cartões, reverificações vencidas e sessões ficam pendurados no assunto. Quando a regra não define `parallel`, a regra inteira é um único assunto. |
+| **Rodada** | Uma execução: pega um lote de eventos, entrega um recibo e termina. A rodada termina; o assunto continua.                                                               |
+| **Recibo** | A última mensagem do Agent. Tudo o que ele quer que a central faça está escrito aqui e entra em vigor de uma vez, em uma única transação, ao fim da rodada.             |
+| **Cartão** | Aquilo que é mostrado a você. Com opções é uma pergunta: o que você escolher vira um novo evento e o assunto segue em frente; sem opções é uma notificação.             |
 
-## 六条原则
+## Seis princípios
 
-1. **注意力最贵。** 默认安静。没事不说话，能自己做的自己做完，只有规则写明要先问的事、确实需要本人解除的阻塞才打断你。
-2. **一切都是事件。** 外部系统、时间、到期复查、你的决定，走的是同一条路。
-3. **一切都连进来。** 内核没有对外的请求。凭据留在用它的地方，出事的范围也留在那里。
-4. **Agent 就是一个进程。** 给它提示词，它打印最后一条消息。Claude Code、Codex、任何命令行 Agent、一段脚本、一条 CI 流水线都一样，不需要 SDK。要启动远端工作的进程，负责跟到真正做完才退出。
-5. **一轮不等人。** 要问你就结束这一轮，收到回答后再开始处理，尽量接着原来的会话。等你的时候不占进程、不花 Token，重启也不丢。
-6. **规则才是指令。** 事件决定不了交给谁、在哪个目录、用哪个 Skill、给什么权限，这些只由规则决定。别人写的话不进提示词，只放进标明“是资料”的文件。这挡不住所有提示注入，但把最坏的结果限制在规则给定的范围里。
+1. **Atenção é o recurso mais caro.** O padrão é o silêncio. Nada de falar sem necessidade; o que dá para fazer sozinho é feito até o fim, e só interrompem você as coisas que a regra manda perguntar antes e os bloqueios que realmente exigem que o titular os desfaça.
+2. **Tudo é evento.** Sistemas externos, tempo, reverificações vencidas e as suas decisões seguem pelo mesmo caminho.
+3. **Tudo se conecta para dentro.** O kernel não faz requisições para fora. As credenciais ficam onde são usadas, e o raio de um incidente fica lá também.
+4. **O Agent é simplesmente um processo.** Recebe um prompt e imprime a última mensagem. Claude Code, Codex, qualquer Agent de linha de comando, um script, um pipeline de CI: tudo igual, sem necessidade de SDK. O processo que dispara trabalho remoto é responsável por acompanhar até o fim de verdade antes de encerrar.
+5. **A rodada não espera ninguém.** Se precisar perguntar, encerra a rodada e só volta a processar depois de receber a resposta, retomando a sessão original sempre que possível. Enquanto espera você, não ocupa processo nem gasta tokens, e uma reinicialização não perde nada.
+6. **Só a regra é instrução.** O evento não decide para quem vai, em que diretório, com qual Skill nem com que permissões; isso só a regra decide. O que outras pessoas escreveram não entra no prompt, vai apenas para arquivos marcados como “material de referência”. Isso não impede toda injeção de prompt, mas limita o pior resultado ao escopo que a regra concedeu.
 
-## 规则
+## Regras
 
 ```jsonc
 {
-  "timezone": "Asia/Shanghai", // 定时和“今天”用的时区，默认系统时区
-  "askFirst": ["删数据", "停服", "花钱", "对外发消息"], // 只有这几类事 Agent 才先问你
+  "timezone": "Asia/Shanghai", // fuso usado para agendamentos e para o “hoje”; padrão é o fuso do sistema
+  "askFirst": ["apagar dados", "derrubar serviço", "gastar dinheiro", "enviar mensagem para fora"], // só nestas categorias o Agent pergunta a você antes
   "sources": { "shop": { "name": "shop" }, "github": { "name": "GitHub", "adapter": "github" } },
   "agents": {
     "claude": {
@@ -54,8 +54,8 @@
       "model": "…",
       "effort": "high",
       "access": "edit",
-      "tier": "…", // 可选：服务档位，现在只有 Codex 插件用，原样传成它的 service_tier，比如 "priority" 就是 Codex 应用里的 Fast；不写就跟那台电脑上 Codex 自己的配置
-      "program": "…", // 可选：内置插件启动这个程序，代替自动找到的那个，比如设好环境变量再 exec claude 的脚本
+      "tier": "…", // opcional: nível de serviço; hoje só o plugin do Codex usa, repassado como está para o service_tier dele — por exemplo, "priority" é o Fast no app do Codex; sem isso, segue a configuração do próprio Codex naquele computador
+      "program": "…", // opcional: o plugin embutido inicia este programa em vez do detectado automaticamente, por exemplo um script que prepara variáveis de ambiente e então dá exec em claude
     },
     "cursor": {
       "name": "Cursor",
@@ -64,147 +64,147 @@
       "command": ["agent", "-p", "--trust", "{prompt}"],
     },
   },
-  "channels": { "feishu": { "name": "飞书", "answerers": ["ou_xxx"] } },
-  "defaultChannels": ["feishu"], // 可选：自己没写 channels 的卡片和通知（tell、中台自己的告警、别处定时任务的提问、没写 channels 的规则）只发到这几个通道，不写就发到所有通道
+  "channels": { "feishu": { "name": "Feishu", "answerers": ["ou_xxx"] } },
+  "defaultChannels": ["feishu"], // opcional: cartões e notificações que não definem channels por conta própria (tell, alertas da própria central, perguntas de tarefas agendadas em outro lugar, regras sem channels) só são enviados a estes canais; se omitido, vão para todos os canais
   "rules": [
     {
-      "name": "处理告警",
-      "when": { "source": "shop", "types": ["alert.*"] }, // 或 { "cron": "0 9 * * *" }
+      "name": "Tratar alertas",
+      "when": { "source": "shop", "types": ["alert.*"] }, // ou { "cron": "0 9 * * *" }
       "to": "claude",
       "cwd": "~/code/shop",
       "skill": "run-ops",
-      "prompt": "按其中……一节处理。",
-      "title": "alert-{id}", // 可选：会话标题，放在提示词第一行；{subject} 是这一轮事件共同的对象，{id} 是它按 / # : 分开的最后一段
-      "group": "ops", // 同一组一次一轮，默认就是规则名
-      "parallel": 3, // 写了就按对象分事项：同一对象一次一轮，这一组最多 3 轮，还受接单程序的 worker.capacity 限制（默认 2）
-      "resume": true, // 同一事项的新事件接着上一轮的会话，默认每次开新会话
-      "tell": "needed", // always 每轮做成都发（没事可做、没跑成不发）/ needed 只在有卡片时（默认）/ never 只压住回执里的通知，提问和中台自己的告警照发
-      "emits": { "source": "shop", "types": ["pr.*"] }, // 回执里能发什么事件，不写就不能发
-      "channels": ["feishu"], // 这条规则的卡片和通知只发到这几个通道，不写就照 defaultChannels
+      "prompt": "Processe conforme a seção …… dele.",
+      "title": "alert-{id}", // opcional: título da sessão, colocado na primeira linha do prompt; {subject} é o objeto comum aos eventos desta rodada e {id} é o último segmento dele após dividir por / # :
+      "group": "ops", // o mesmo grupo executa uma rodada por vez; o padrão é o nome da regra
+      "parallel": 3, // quando definido, os assuntos são divididos por objeto: o mesmo objeto executa uma rodada por vez, este grupo no máximo 3 rodadas, ainda limitado pelo worker.capacity do worker (padrão 2)
+      "resume": true, // eventos novos do mesmo assunto retomam a sessão da rodada anterior; o padrão é abrir uma sessão nova a cada vez
+      "tell": "needed", // always envia em toda rodada concluída (não envia em NADA A FAZER nem em FALHOU) / needed só quando há cartões (padrão) / never suprime apenas as notificações do recibo; perguntas e alertas da própria central continuam sendo enviados
+      "emits": { "source": "shop", "types": ["pr.*"] }, // quais eventos o recibo pode emitir; sem isso, não pode emitir nenhum
+      "channels": ["feishu"], // os cartões e notificações desta regra só vão para estes canais; se omitido, segue defaultChannels
     },
   ],
   "elsewhere": [
     {
-      "name": "每周清理",
+      "name": "Limpeza semanal",
       "source": "shop",
       "to": "claude",
       "cron": "0 6 * * 0",
-      "where": "Claude 应用的定时任务",
-      "model": "…", // 可选：应用里给它设的模型和推理强度，只用来显示
+      "where": "Tarefa agendada do app Claude",
+      "model": "…", // opcional: o modelo e o nível de raciocínio definidos para ela no app; usados apenas para exibição
       "effort": "high",
       "cwd": "~/code/shop",
       "skill": "weekly-sweep",
-      "prompt": "按其中“回答来了”一节处理。", // 可选：要问你时写，回答后在这里照这个接着做
+      "prompt": "Processe conforme a seção “A resposta chegou” dele.", // opcional: usado quando precisa perguntar a você; depois da resposta, continua aqui seguindo isto
     },
   ],
 }
 ```
 
-`cwd` 由接单电脑解释，可用 Unix 绝对路径、Windows 盘符或 UNC 路径、`~/` 或 `~\` 开头的家目录路径；中台与接单电脑可以用不同操作系统。接受 Windows 路径是兼容的能力扩展，原有 `/v1`、规则与插件用法不变。
+`cwd` é interpretado pelo computador que aceita o trabalho; podem ser usados caminhos absolutos Unix, letras de unidade ou caminhos UNC do Windows e caminhos de diretório pessoal começando com `~/` ou `~\`. A central e o computador que aceita o trabalho podem usar sistemas operacionais diferentes. Aceitar caminhos do Windows é uma extensão de capacidade compatível: `/v1`, as regras e o uso dos plugins continuam iguais.
 
-`elsewhere` 是在别处定时跑的任务：中台不启动它们，只在 `agent-autoloop status` 里列出来，它们要找你时用 `POST /v1/tell`。写了 `cwd`（还要写 `skill` 或 `prompt`）的也能问你：卡片带选项，你答了，中台像规则的一轮那样叫醒 `to`，在 `cwd` 照 `skill`、`prompt` 接着做，这一轮的组就是任务名，一次一轮，不接定时任务自己的会话。规则写错了，文件改动不生效，旧规则继续跑，并推一张卡片告诉你错在哪。可以给它写上 `model` 和 `effort`，也就是应用里给这个任务设的模型和推理强度：中台不用它们启动任何东西，只随 `GET /v1/state` 的 `elsewhere` 带出来，给显示这些任务的客户端用；没写就不带。这是兼容的扩展，原有规则文件不用改。
+`elsewhere` são tarefas agendadas executadas em outro lugar: a central não as inicia, apenas as lista em `agent-autoloop status`, e elas usam `POST /v1/tell` quando precisam falar com você. As que definem `cwd` (junto com `skill` ou `prompt`) também podem fazer perguntas: o cartão vem com opções e, quando você responde, a central acorda o `to` como em uma rodada de regra e continua em `cwd` seguindo `skill` e `prompt`. O grupo dessa rodada é o nome da tarefa, uma rodada por vez, sem retomar a sessão da própria tarefa agendada. Se a regra estiver escrita errado, a alteração do arquivo não entra em vigor, as regras antigas continuam rodando e um cartão é enviado dizendo onde está o erro. Você pode preencher `model` e `effort`, ou seja, o modelo e o nível de raciocínio definidos para essa tarefa no app: a central não os usa para iniciar nada, apenas os devolve no `elsewhere` de `GET /v1/state` para os clientes que exibem essas tarefas; se não forem definidos, não são enviados. É uma extensão compatível: os arquivos de regra existentes não precisam mudar.
 
-写了 `resume`，一轮开始时如果事项的上一轮做完了（包括没事可做）、留下了会话，就接着那个会话；会话越接越长，Token 和费用也会跟着涨。这几种情况开新会话：上一轮被停掉了（你停的，或连续失败停下的），接着它多半还是同样的结果；上一轮是别的 Agent 跑的；上一轮没有会话。没写 `parallel` 时整条规则是一个事项，所有事件接同一个会话；事件不带 `subject` 时也都算同一个事项。回答和到期的复查在 Agent 没变时回到提问和约定时的会话，重派的也留在自己的会话。复查的旧日志若没有记录会话所属 Agent，会保留复查资料，不强行沿用旧会话，仍按 resume 规则决定是否续接当前 Agent 最近的会话。
+Com `resume` definido, se ao começar a rodada a rodada anterior do assunto estiver concluída (inclusive NADA A FAZER) e tiver deixado uma sessão, aquela sessão é retomada; a sessão vai ficando cada vez mais longa e os tokens e o custo sobem junto. Abre-se uma sessão nova nestes casos: a rodada anterior foi interrompida (por você ou por falhas consecutivas), e retomá-la muito provavelmente daria o mesmo resultado; a rodada anterior foi executada por outro Agent; a rodada anterior não deixou sessão. Sem `parallel`, a regra inteira é um assunto e todos os eventos usam a mesma sessão; eventos sem `subject` também contam como o mesmo assunto. Respostas e reverificações vencidas voltam à sessão da pergunta e do combinado quando o Agent não mudou, e as rodadas reexpedidas também permanecem na própria sessão. Se o log antigo da reverificação não registrou a qual Agent pertencia a sessão, o material da reverificação é preservado, a sessão antiga não é reaproveitada à força e a regra de resume continua decidindo se a sessão mais recente do Agent atual é retomada.
 
-回答和复查接回原会话要把整段会话重读一遍，会话很长时，什么都没做的一轮也要花上十几万 Token。要隔很久、一遍遍等外部恢复的（接口、额度、审核），不要反复用 `later` 接回长会话：另写一条 `use: "command"` 的规则（写上 `emits`）定时跑脚本探测，恢复了才发事件，没恢复不花 Token；接着做的规则不写 `resume`，开新会话，要的背景写进事件或 Skill。`later` 留给会话还不长、或者要接着这段会话的上下文做的复查。
+Retomar a sessão original para respostas e reverificações exige reler a sessão inteira; quando ela é longa, até uma rodada que não fez nada pode gastar mais de 100 mil tokens. Para o que espera muito tempo e repetidamente por uma recuperação externa (interface, cota, moderação), não use `later` de forma recorrente para voltar a sessões longas: escreva outra regra com `use: "command"` (com `emits`) que rode um script de sondagem por agendamento e só emita o evento quando houver recuperação — sem recuperação, nenhum token é gasto. A regra que continua o trabalho não define `resume`, abre sessão nova, e o contexto necessário vai no evento ou na Skill. Deixe `later` para reverificações em que a sessão ainda é curta ou em que é preciso seguir o contexto daquela sessão.
 
-`title` 给按第一条消息起名的客户端用：写了就单独占提示词的第一行（Codex 插件在提示词前另加一段说明，不在第一行），同一事项的各轮名字一样，不同事项分得开。它要是字母或数字开头、不含空白的一个词：有的客户端只取第一个词；提示词作为参数交给 Agent 的命令行，对象不能打头，免得 `-` 或 `/` 开头的对象被当成选项或命令。占位符只认 `{id}` 和 `{subject}`。`subject` 只含校验过的字符，本来就进提示词；这一轮的事件对象不止一个，或者都没有对象（比如定时），占位符就留空。不写 `title` 的规则提示词和以前一样。
+`title` serve para os clientes que nomeiam pela primeira mensagem: quando definido, ocupa sozinho a primeira linha do prompt (o plugin do Codex acrescenta um trecho explicativo antes do prompt, então não fica na primeira linha), as rodadas do mesmo assunto têm o mesmo nome e assuntos diferentes ficam separados. Deve ser uma única palavra que comece com letra ou número e não contenha espaços: alguns clientes pegam apenas a primeira palavra, e o prompt é passado como argumento para a linha de comando do Agent, então o objeto não pode vir no início, para que objetos começando com `-` ou `/` não sejam interpretados como opção ou comando. Só os marcadores `{id}` e `{subject}` são reconhecidos. `subject` contém apenas caracteres validados e já entra no prompt; se os eventos desta rodada tiverem mais de um objeto, ou nenhum objeto (como em agendamentos), o marcador fica vazio. Sem `title`, o prompt da regra é igual ao de antes.
 
-同组规则的 `parallel` 是整组上限。还可以给单条规则设置 `maxActive`，限制该规则同时领取的轮数，各事项仍各自排队。给 `agents` 里的某个 Agent 设置 `maxActive`，则限制它跨所有规则同时领取的轮数。两个值都可省略，填写时用正整数。三个上限同时生效，调低后等已领取的轮次收尾再派新单。
+O `parallel` de regras do mesmo grupo é o limite do grupo inteiro. Também é possível definir `maxActive` para uma regra individual, limitando quantas rodadas aquela regra pode pegar ao mesmo tempo; cada assunto continua com a própria fila. Definir `maxActive` para um Agent em `agents` limita quantas rodadas ele pode pegar ao mesmo tempo em todas as regras. Os dois valores são opcionais e, quando preenchidos, devem ser inteiros positivos. Os três limites valem simultaneamente; depois de reduzi-los, espera-se as rodadas já pegas terminarem antes de despachar novas.
 
-不管写没写 `resume`，一轮要接的会话里如果还有别的轮次没结束，或者没了音信、可能还在跑，这一轮就开新会话，不让两个进程开同一个会话；回答和复查的内容照样带给它。
+Com ou sem `resume`, se a sessão que a rodada deveria retomar ainda tiver outra rodada não concluída, ou se não houver mais notícias dela e talvez ainda esteja em execução, esta rodada abre uma sessão nova, para não ter dois processos na mesma sessão; o conteúdo das respostas e das reverificações continua sendo entregue a ela.
 
-排队和等待重试的任务在领取时一起采用最新的 Agent、目录、提示词和权限；换了 Agent 就不带旧 Agent 的会话。已经领取的任务保留领取时的 Job 配置和接单程序，重复 claim、心跳、停止和重启恢复都不随规则更新换人。事件已经归属的事项不重新拆分或合并，回答和到期的复查回到提问和约定时的事项，规则后来去掉 `parallel` 也一样；回执中的事件许可和通知方式仍按提交时的规则核验。
+Tarefas na fila e aguardando nova tentativa adotam, no momento do claim, o Agent, o diretório, o prompt e as permissões mais recentes; se o Agent mudou, a sessão do Agent antigo não é levada. Tarefas já pegas mantêm a configuração de Job e o worker do momento do claim: claims repetidos, heartbeats, parada e recuperação após reinicialização não trocam de responsável a cada atualização de regra. Assuntos aos quais eventos já foram atribuídos não são redivididos nem mesclados; respostas e reverificações vencidas voltam ao assunto do momento da pergunta e do combinado, mesmo que a regra tenha removido `parallel` depois. As permissões de evento e o modo de notificação do recibo continuam sendo verificados pela regra vigente no envio.
 
-## 来源：把世界变成事件
+## Fontes: transformar o mundo em eventos
 
 ```
-POST /v1/events                    Authorization: Bearer <来源的密钥>
+POST /v1/events                    Authorization: Bearer <chave da fonte>
 { "id": "12:new", "type": "feedback.new", "subject": "#12", "summary": "…", "detail": "…", "link": "https://…" }
-→ 200 { "event": 34, "duplicate": false, "routed": ["处理意见"] }
+→ 200 { "event": 34, "duplicate": false, "routed": ["Tratar feedback"] }
 ```
 
-- `id` 和 `type` 必填。同一来源同一 `id` 只记一次，所以来源尽管重发。
-- `subject` 只能是标识符（字母、数字和 `# . _ : / @ -`），`link` 只能是纯 ASCII 网址，因为它们会进提示词。`summary`、`detail` 不进提示词。
-- 没有规则匹配的事件也留着，`agent-autoloop status` 看得到。
-- 字段上限：`id` 200 个字、`subject` 100、`summary` 200、`detail` 4000、`link` 500，`type` 64 个字符。
+- `id` e `type` são obrigatórios. A mesma fonte com o mesmo `id` é registrada uma única vez, então a fonte pode reenviar à vontade.
+- `subject` só pode ser um identificador (letras, números e `# . _ : / @ -`) e `link` só pode ser uma URL em ASCII puro, porque entram no prompt. `summary` e `detail` não entram no prompt.
+- Eventos sem nenhuma regra correspondente também são guardados e aparecem em `agent-autoloop status`.
+- Limites dos campos: `id` 200 caracteres, `subject` 100, `summary` 200, `detail` 4000, `link` 500 e `type` 64 caracteres.
 
-来源想知道发出去的事件后来怎么样了，用同一把密钥按应答里的 `event` 编号查，隔一段时间查一下还没结束的就行：
+Para saber o que aconteceu com os eventos que enviou, a fonte consulta pelo número `event` devolvido na resposta, usando a mesma chave; basta consultar de tempos em tempos os que ainda não terminaram:
 
 ```
-GET /v1/events/34                  Authorization: Bearer <来源的密钥>
-→ 200 { "event": 34, "routed": ["处理意见"], "paused": [], "runs": [
-    { "run": 41, "rule": "处理意见", "state": "done", "attempts": 0, "error": null,
+GET /v1/events/34                  Authorization: Bearer <chave da fonte>
+→ 200 { "event": 34, "routed": ["Tratar feedback"], "paused": [], "runs": [
+    { "run": 41, "rule": "Tratar feedback", "state": "done", "attempts": 0, "error": null,
       "finishedAt": "2026-11-07T08:00:00.000Z", "summary": "…", "events": [ { "id": "…", "type": "…", … } ] } ] }
 ```
 
-- 只能查自己发的事件。别的来源的事件和不存在的一样，返回 404。
-- `runs` 是这条事件现在所在的每一轮，按编号排。没跑成的一轮重试时会把同一事项后来的事件并进来，所以并过的事件会出现在更早的那一轮里。暂停时跳过的事件被本人补跑后，`paused` 不变，`runs` 里多了补跑的那一轮。
-- `attempts` 是这一轮已经没跑成几次，`error` 是最近一次没跑成的原因，做成后清空。
-- `summary` 是回执里的一句话，`events` 是回执里发出、中台新记下的事件（写法和回执一样）；和已有事件同一个 `id` 的只记一次，不算在这一轮。这一轮还合进了别的来源的事件时，两项都是 `null`：那是 Agent 读了别人的资料后写的。加这个接口之前的版本里，回执发出的事件没记在轮次上，`events` 是空的。
+- Só é possível consultar os próprios eventos. Eventos de outras fontes são tratados como inexistentes e devolvem 404.
+- `runs` são todas as rodadas em que este evento está agora, ordenadas por número. Na nova tentativa de uma rodada que FALHOU, eventos posteriores do mesmo assunto são incorporados, então um evento já incorporado aparece na rodada mais antiga. Depois que o titular reexecuta eventos pulados durante uma pausa, `paused` não muda e `runs` ganha a rodada da reexecução.
+- `attempts` é quantas vezes esta rodada já falhou; `error` é o motivo da falha mais recente, limpo depois de concluída.
+- `summary` é a frase do recibo; `events` são os eventos emitidos pelo recibo e recém-registrados pela central (escritos igual ao recibo). Os que têm o mesmo `id` de um evento já existente são registrados uma única vez e não contam nesta rodada. Quando a rodada também incorporou eventos de outras fontes, os dois campos são `null`: foram escritos depois que o Agent leu material de outros. Em versões anteriores a esta interface, os eventos emitidos pelo recibo não eram registrados na rodada e `events` vinha vazio.
 
-| `state`     | 意思                                                                                       |
-| ----------- | ------------------------------------------------------------------------------------------ |
-| `queued`    | 排队；`attempts` 大于 0 时是没跑成、等重试                                                 |
-| `claimed`   | 接单程序领走了，在跑                                                                       |
-| `unknown`   | 接单程序 5 分钟没报这一轮，不确定还在不在跑；之后交的结果照样收                            |
-| `done`      | 做成了                                                                                     |
-| `nothing`   | 看过了，没事可做                                                                           |
-| `cancelled` | 结束了，没做成：连续 10 次没跑成不再重试、规则删掉了（`summary` 写明是哪种），或本人停掉的 |
+| `state`     | Significado                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queued`    | Na fila; com `attempts` maior que 0, falhou e está aguardando nova tentativa                                                                              |
+| `claimed`   | O worker pegou; Em execução                                                                                                                              |
+| `unknown`   | O worker não reportou esta rodada por 5 minutos; Incerto se ainda está em execução. O resultado entregue depois continua sendo aceito                     |
+| `done`      | Concluída                                                                                                                                                |
+| `nothing`   | Visto, NADA A FAZER                                                                                                                                      |
+| `cancelled` | Terminou sem concluir: 10 falhas consecutivas sem nova tentativa, regra removida (`summary` diz qual dos casos) ou interrompida pelo titular               |
 
-三种别的进法，到中台都是同一种事件：
+Três outras formas de entrada, todas o mesmo tipo de evento ao chegar na central:
 
-- **定时**：规则写 `cron`。错过的（比如电脑合盖了）醒来只补最近的一次。重复的时刻（夏令时）只跑第一次，不存在的时刻跳过。
-- **别人家的 Webhook**：`POST /v1/in/<来源>`。来源配了 `adapter`，就交给 `plugins/<adapter>/source.ts` 里的函数验签、翻译成事件，它只翻译，不发请求。验签用的秘密放在 `secrets.env` 的 `AGENT_AUTOLOOP_SECRET_<来源>`（来源名转大写，`-` 换成 `_`，改完重启中台），不进 `rules.json`。
-- **轮询**：不用连公网，没新东西不花 Token。规则定时叫一段脚本（也是一个 Agent），脚本在回执的 `events` 里交回新事件。事件的 `id` 要稳定，读的范围可以重叠，中台会去重；脚本要在回执交出去之后才推进自己的游标，或者干脆不留游标。
+- **Agendamento**: a regra define `cron`. Os horários perdidos (por exemplo, com o computador tampado) são repostos apenas na ocorrência mais recente ao acordar. Horários repetidos (horário de verão) rodam só na primeira vez; horários inexistentes são pulados.
+- **Webhook de terceiros**: `POST /v1/in/<fonte>`. Se a fonte configurar `adapter`, a função em `plugins/<adapter>/source.ts` valida a assinatura e traduz em eventos; ela apenas traduz, não envia requisições. O segredo usado na validação de assinatura fica em `secrets.env` como `AGENT_AUTOLOOP_SECRET_<fonte>` (nome da fonte em maiúsculas, `-` trocado por `_`, reinicie a central depois de alterar) e não entra no `rules.json`.
+- **Polling**: não precisa de acesso à rede pública e não gasta tokens quando não há nada novo. A regra chama um script por agendamento (que também é um Agent) e o script devolve os novos eventos no `events` do recibo. O `id` dos eventos deve ser estável; as faixas de leitura podem se sobrepor, pois a central deduplica. O script só deve avançar o próprio cursor depois de entregar o recibo, ou então nem manter cursor.
 
-来源或 `elsewhere` 任务有话要直接告诉你（不用 Agent 处理）：
+Quando uma fonte ou uma tarefa `elsewhere` tem algo para dizer diretamente a você (sem passar por um Agent):
 
 ```
-POST /v1/tell    { "key": "weekly-44", "text": "…" }              Authorization: Bearer <来源的密钥>
-POST /v1/tell    { "task": "每周清理", "key": "x", "text": "…" }   Authorization: Bearer <接单程序的密钥>
+POST /v1/tell    { "key": "weekly-44", "text": "…" }                     Authorization: Bearer <chave da fonte>
+POST /v1/tell    { "task": "Limpeza semanal", "key": "x", "text": "…" }   Authorization: Bearer <chave do worker>
 → 200 { "card": 56, "duplicate": false }
 ```
 
-这样说的是仅告知的通知（`fyi`），没有按钮，同一个 `key` 只发一次。写了 `cwd` 的 `elsewhere` 任务要你拍板时，用 `ask` 代替 `key` 和 `text`，内容和回执里的 `ask` 一样：
+O que é dito assim é uma notificação apenas informativa (`fyi`), sem botões, enviada uma única vez por `key`. Quando uma tarefa `elsewhere` com `cwd` precisa que você decida, use `ask` no lugar de `key` e `text`, com o mesmo conteúdo do `ask` do recibo:
 
 ```
-POST /v1/tell    { "task": "每周清理", "ask": { "title", "text", "options": ["…", "…"], "recommend": 0, "about": "…", "key": "…" } }
-                                                                    Authorization: Bearer <接单程序的密钥>
+POST /v1/tell    { "task": "Limpeza semanal", "ask": { "title", "text", "options": ["…", "…"], "recommend": 0, "about": "…", "key": "…" } }
+                                                                         Authorization: Bearer <chave do worker>
 → 200 { "card": 57, "duplicate": false }
 ```
 
-同一个 `key`（不写就按标题和内容）的卡片还开着就不再发。你答了，中台叫醒这个任务的 Agent 在 `cwd` 接着做，回答在这一轮的 `answers` 里；做完卡片改成已执行。没写 `cwd` 的任务问你返回 400。老中台不认识 `ask`，会返回 400：中台和接单程序分开部署时先升中台。
+Se o cartão com o mesmo `key` (ou, sem ele, com o mesmo título e conteúdo) ainda estiver aberto, não é enviado de novo. Quando você responde, a central acorda o Agent dessa tarefa para continuar em `cwd`, e a resposta vem no `answers` da rodada; ao concluir, o cartão muda para executado. Perguntas de tarefas sem `cwd` devolvem 400. Centrais antigas não conhecem `ask` e devolvem 400: quando central e worker são implantados separadamente, atualize primeiro a central.
 
-## Agent：领活、干活、交回执
+## Agent: pegar trabalho, executar e entregar o recibo
 
-每台电脑上有一个接单程序，它只往外连。一台接单程序可以服务多个 Agent。
+Cada computador tem um worker, que só faz conexões para fora. Um worker pode atender vários Agents.
 
 ```
-GET /v1/work?claim=<这次领活的编号>&wait=50&running=7,8&capacity=1    Authorization: Bearer <接单程序的密钥>
+GET /v1/work?claim=<número desta chamada de trabalho>&wait=50&running=7,8&capacity=1    Authorization: Bearer <chave do worker>
 → 200 { "job": null | Job, "cancel": [7] }
 ```
 
-- 没活时最多等 `wait` 秒，新活一来立即返回。`running` 是手上在跑的，同时也是心跳。`capacity=0` 只报到、不领活。
-- 手上有活时可以每秒来问活、查取消。心跳最多一分钟记进日志一次，手上有几轮都只记一条；通道领卡片也一样。所以 `/v1/state` 的 `seenAt` 可能比最后一次来的时间早不到一分钟，“5 分钟没报”“10 分钟没连上”也可能因此提前不到一分钟判断；`online` 留了这一分钟的余量，记录后 3 分钟内都算在线。
-- 响应丢了，用同一个 `claim` 再来一次，拿回的是同一份活。
-- `cancel` 是要停掉的。Unix 接单程序先向整个进程组发停止信号，10 秒后仍有进程运行就强制结束；Windows 每轮运行在独立 Job Object 中，停止时结束整个子进程树。确认进程已停止后才交 `outcome: "cancelled"`，这个事项才放开。停止期间重启接单程序也继续这一步。要停的这一轮交回 `failed` 也算停了，不再重试。
+- Sem trabalho, espera no máximo `wait` segundos e retorna imediatamente assim que chega trabalho novo. `running` são as rodadas em andamento em mãos e serve também como heartbeat. `capacity=0` apenas se registra, sem pegar trabalho.
+- Com trabalho em mãos, pode vir a cada segundo pedir trabalho e verificar cancelamentos. O heartbeat entra no log no máximo uma vez por minuto, com um único registro independentemente de quantas rodadas estiverem em mãos; o mesmo vale para o canal ao pegar cartões. Por isso, o `seenAt` de `/v1/state` pode ser até um minuto anterior à última visita, e as condições “5 minutos sem reportar” e “10 minutos sem conectar” também podem ser avaliadas até um minuto antes; `online` mantém essa folga de um minuto, contando como Online por até 3 minutos após o registro.
+- Se a resposta se perder, repita com o mesmo `claim` e receberá o mesmo trabalho.
+- `cancel` são as rodadas a interromper. No Unix, o worker primeiro envia o sinal de parada a todo o grupo de processos e, se ainda houver processo rodando depois de 10 segundos, encerra à força; no Windows, cada rodada roda em um Job Object próprio e a parada encerra toda a árvore de subprocessos. Só depois de confirmar que o processo parou é que entrega `outcome: "cancelled"`, e só então o assunto é liberado. Reiniciar o worker durante a parada continua esta etapa. Se a rodada a ser interrompida devolver `failed`, também conta como parada e não haverá nova tentativa.
 
 ```jsonc
-// Job：一轮的全部。token 只对这一轮的这一次执行有效。
+// Job: tudo sobre uma rodada. O token vale apenas para esta execução desta rodada.
 {
   "run": 12, "token": "…", "attempt": 1,
-  "rule": { "name": "处理告警", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "按其中……处理。", "title": "alert-{id}" },  // title 原样给接单程序，没写就没有
+  "rule": { "name": "Tratar alertas", "cwd": "~/code/shop", "skill": "run-ops", "prompt": "Processe conforme a seção …… dele.", "title": "alert-{id}" },  // title é entregue ao worker como está; se não for definido, não existe
   "agent": { "id": "claude", "name": "Claude Code", "use": "claude", "model": "…", "effort": "high", "access": "edit" },
-  "session": null,       // 尽量接着的会话：重派时是上一次的，回答来了是提问那一轮的，规则写了 resume 时是这个事项上一轮的。接不上就开新的，所以它只是优化
-  "askFirst": ["删数据", "…"],
-  "context": {           // 接单程序把它写成文件交给 Agent，都是资料
+  "session": null,       // a sessão a retomar sempre que possível: na reexpedição é a anterior, quando chega resposta é a da rodada da pergunta e, com resume na regra, é a da rodada anterior deste assunto. Se não der para retomar, abre-se uma nova, então é apenas uma otimização
+  "askFirst": ["apagar dados", "…"],
+  "context": {           // o worker escreve isto em arquivos e entrega ao Agent; tudo é material de referência
     "events":  [{ "id", "source", "sourceName", "type", "subject", "summary", "detail", "link", "receivedAt" }],
-    "answers": [{ "card", "title", "options", "choice", "chosen", "text", "about", "by", "at" }],  // 这一轮要接着做的决定；choice 是从 0 起的下标，chosen 是所选那项的文字，自由文字回答时就是那句回答
-    "timers":  [{ "key", "about", "at" }],                                               // 这一轮到期的复查
-    "waiting": [{ "key", "about", "at" }],                                               // 这个事项还没到期的复查
-    "open":    [{ "card", "title", "text", "at" }],                                      // 同来源同组还没收尾的卡片
-    "decided": [{ "card", "title", "choice", "at" }]                                     // 这个事项定过的事，只对当时那件事有效；choice 已是所选那项的文字，不是下标
+    "answers": [{ "card", "title", "options", "choice", "chosen", "text", "about", "by", "at" }],  // as decisões que esta rodada deve levar adiante; choice é o índice a partir de 0, chosen é o texto da opção escolhida e, em respostas de texto livre, é a própria resposta
+    "timers":  [{ "key", "about", "at" }],                                               // as reverificações vencidas desta rodada
+    "waiting": [{ "key", "about", "at" }],                                               // as reverificações deste assunto que ainda não venceram
+    "open":    [{ "card", "title", "text", "at" }],                                      // cartões da mesma fonte e do mesmo grupo ainda não encerrados
+    "decided": [{ "card", "title", "choice", "at" }]                                     // o que já foi decidido neste assunto, válido apenas para aquela questão; choice já é o texto da opção escolhida, não o índice
   }
 }
 ```
@@ -212,361 +212,361 @@ GET /v1/work?claim=<这次领活的编号>&wait=50&running=7,8&capacity=1    Aut
 ```
 POST /v1/runs/12/started   Authorization: Bearer <token>   { "session": "…", "link": "claude://…" }
 POST /v1/runs/12/result    Authorization: Bearer <token>   Result
-→ 200 { "rejected": [{ "card": 9, "reason": "不在本轮核对范围" }] }
+→ 200 { "rejected": [{ "card": 9, "reason": "Fora do escopo de verificação desta rodada" }] }
 ```
 
 ```jsonc
 // Result
 {
   "outcome": "done" | "nothing" | "failed" | "cancelled",
-  "summary": "一句话", "error": "没跑成的原因", "session": "…",
+  "summary": "uma frase", "error": "o motivo da falha", "session": "…",
   "usage": { "input": 0, "output": 0, "cached": 0, "cost": 0 },
-  // 下面就是回执，一个事务里一次生效
-  "ask":     [{ "title", "text", "options": ["…", "…"], "recommend": 0, "about": "留给接着干的自己", "key": "这件事的固定名字" }],
+  // o que segue é o recibo, aplicado de uma vez em uma única transação
+  "ask":     [{ "title", "text", "options": ["…", "…"], "recommend": 0, "about": "recado para si mesmo na continuação", "key": "nome fixo desta questão" }],
   "notice":  [{ "title", "text", "key", "fyi": true }],
-  "resolve": [{ "card": 3, "reason": "在哪核实了已解决" }],
-  "later":   [{ "key": "…", "at": "2026-11-05T09:00:00+08:00", "about": "到时候查什么" }, { "key": "…", "cancel": true }],
+  "resolve": [{ "card": 3, "reason": "onde foi verificado que está resolvido" }],
+  "later":   [{ "key": "…", "at": "2026-11-05T09:00:00+08:00", "about": "o que verificar na hora" }, { "key": "…", "cancel": true }],
   "events":  [{ "id", "type", "subject", "summary", "detail", "link" }]
 }
 ```
 
-- 结果可以重放：响应丢了，同一个 token 再交一次同样的内容，得到同样的确认；内容不同返回 409。
-- `failed` 会重派，所以它只带 `notice`，其余的不生效；本人要停的这一轮交 `failed` 不再重派，`notice` 也不生效。
-- 需要本人恢复连接、登录或身份验证时，用 `done` 结束本轮并交 `ask`，不交 `failed`。`done` 表示本轮结束，未完成的事项由卡片继续跟进，不代表网页已经验收。同一阻塞已有 `open` 卡片时不重复提问，不用 `later` 定时重试；`waiting` 里同一阻塞已有的复查用 `cancel` 取消。保留已完成业务，`about` 写清恢复后只做哪些剩余步骤。
-- `usage` 由接单程序上报本次执行的用量，包含这次执行的回执重写；每一项都可以没有：`input`、`output`、`cached` 是 Token 数，`cost` 是美元。`input` 是全部输入，包括从缓存读的和写进缓存的；`cached` 是其中从缓存读的部分，价格通常只有一小部分，所以单独列出。中台把同一轮各次执行的已报数值相加，重复提交不重复计费；没有上报的字段保持缺省，不当成零。`agent-autoloop status` 按完成时间汇总今天和最近 7 天已结束的轮次，没上报的轮数如实写出来。
-- 有的 Agent 只给会话累计值（Codex 的 Token、Claude Code 的费用）。接单程序减去这次启动前的累计值再上报，所以这里总是本次的量；没有记录的续接不报这几项，详见[插件说明](plugins.md#agent-插件)。
-- `ask` 的 `key` 范围是这个事项：同一个 `key` 的卡片还开着就不再发。关掉之后再问是新的一次。
-- `notice` 可选填布尔字段 `fyi`：`true` 表示「仅告知」，卡片创建时就是 `closed`，仍会在创建后的 24 小时内投递，飞书显示灰卡、不带「已处理」按钮；不会进入后续轮次的 `open`，点击也不会产生回答事件。省略或填 `false` 时，通知带「已处理」按钮，也能被 `resolve` 结案。它一创建就结案了，所以同一个 `key` 下一轮再写还会再发一张；同一轮重试只发一次。规则写了 `tell: "never"` 时照样不发。老中台不认识这个字段，会拒收整份回执：中台和接单程序分开部署时先升中台。
-- `resolve` 只能结同来源、同组、这一轮领活前就有的卡片，越界的写进 `rejected`，不影响这一轮的结果。
-- `later` 的 `key` 范围是这个事项，同一个 `key` 再写一次就是改时间。
-- `events` 的来源由规则的 `emits` 决定，回执改不了。
+- O resultado pode ser reproduzido: se a resposta se perder, envie o mesmo conteúdo de novo com o mesmo token e receberá a mesma confirmação; conteúdo diferente devolve 409.
+- `failed` gera nova expedição, então só carrega `notice`; o resto não tem efeito. Na rodada que o titular quer interromper, enviar `failed` não gera nova expedição e o `notice` também não tem efeito.
+- Quando é preciso que o titular restabeleça conexão, login ou autenticação, termine a rodada com `done` e entregue um `ask`, não `failed`. `done` indica que a rodada terminou e que o assunto não concluído continua sendo acompanhado pelo cartão; não significa que a página foi aceita. Se já existe um cartão `open` para o mesmo bloqueio, não repita a pergunta nem use `later` para novas tentativas agendadas; cancele com `cancel` as reverificações do mesmo bloqueio que já estiverem em `waiting`. Preserve o trabalho já concluído e escreva em `about` exatamente quais etapas restantes devem ser feitas após a recuperação.
+- `usage` é reportado pelo worker com o consumo desta execução, incluindo a reescrita do recibo desta execução; cada item pode estar ausente: `input`, `output` e `cached` são contagens de tokens e `cost` é em dólares. `input` é toda a entrada, incluindo o que foi lido do cache e o que foi gravado nele; `cached` é a parte lida do cache, cujo preço costuma ser uma fração, por isso vem separado. A central soma os valores reportados das execuções da mesma rodada, e envios duplicados não são cobrados duas vezes; campos não reportados permanecem ausentes, sem serem tratados como zero. `agent-autoloop status` agrega pelo horário de conclusão as rodadas encerradas de hoje e dos últimos 7 dias e informa com sinceridade quantas rodadas não reportaram.
+- Alguns Agents só fornecem valores acumulados da sessão (tokens no Codex, custo no Claude Code). O worker subtrai o acumulado anterior a esta inicialização antes de reportar, então aqui vem sempre o valor desta execução; retomadas sem registro não reportam esses itens. Veja [Documentação de plugins](plugins.md#plugin-de-agent).
+- O escopo do `key` de `ask` é o assunto: se o cartão com o mesmo `key` ainda estiver aberto, não é enviado de novo. Perguntar depois de fechado conta como uma nova vez.
+- `notice` aceita o campo booleano opcional `fyi`: `true` significa “apenas informativo”, o cartão já nasce `closed`, ainda assim é entregue dentro de 24 horas após a criação, aparece no Feishu como cartão cinza, sem o botão “Resolvido”, não entra no `open` das rodadas seguintes e clicar nele não gera evento de resposta. Quando omitido ou `false`, a notificação traz o botão “Resolvido” e pode ser encerrada por `resolve`. Como já nasce encerrada, escrever o mesmo `key` na rodada seguinte envia outro cartão; em novas tentativas da mesma rodada, envia uma única vez. Com `tell: "never"` na regra, também não é enviada. Centrais antigas não conhecem este campo e rejeitam o recibo inteiro: quando central e worker são implantados separadamente, atualize primeiro a central.
+- `resolve` só pode encerrar cartões da mesma fonte e do mesmo grupo que já existiam antes desta rodada pegar o trabalho; o que estiver fora disso vai para `rejected`, sem afetar o resultado da rodada.
+- O escopo do `key` de `later` é o assunto; escrever o mesmo `key` de novo apenas altera o horário.
+- A fonte de `events` é determinada pelo `emits` da regra; o recibo não pode alterá-la.
 
-### Agent 只需要做一件事
+### O Agent só precisa fazer uma coisa
 
-接单程序把提示词交给 Agent，Agent 的最后一条消息就是回执：
+O worker entrega o prompt ao Agent, e a última mensagem do Agent é o recibo:
 
 ````
-第一行一句话结论。可自动重试的临时失败写「没跑成：原因」，需要本人恢复的阻塞写「待你处理：原因」并交 ask，没事可做写「没事可做：原因」。其余结束本轮，事项由回执继续跟进。
+Primeira linha: uma frase de conclusão. Falha temporária com nova tentativa automática: escreva “FALHOU: motivo”. Bloqueio que exige recuperação pelo titular: escreva “AGUARDANDO VOCÊ: motivo” e entregue ask. Nada havia para fazer: escreva “NADA A FAZER: motivo”. Fora isso, encerre a rodada; o assunto continua sendo acompanhado pelo recibo.
 
 ```agent-autoloop
 { "ask": [ … ], "notice": [ … ], "resolve": [ … ], "later": [ … ], "events": [ … ] }
 ```
 ````
 
-代码块可有可无。没有 `agent-autoloop` 代码块、最后一个 `json` 代码块里却只有回执字段的，算回执标错了，按下面重写；普通的 `json` 不受影响。Agent 不需要装任何东西、不需要连中台，所以沙箱里的、云端的 Agent 也能接。
+O bloco de código é opcional. Quando não há bloco `agent-autoloop` mas o último bloco `json` contém apenas campos de recibo, considera-se que o recibo foi marcado errado e ele é reescrito conforme abaixo; blocos `json` comuns não são afetados. O Agent não precisa instalar nada nem se conectar à central, então Agents em sandbox ou na nuvem também podem ser integrados.
 
-回执写错不重做业务：接单程序接着原会话，只让它把最后一条消息重写一遍，最多两次；没有会话的 Agent（比如 `command`）不重写，直接走下面这句。还是读不懂，或重写进程启动失败、报错、超时、没有输出，就保留原业务消息第一行的结局，回执作废，推一张卡片告诉你原文在哪（每一轮的输出在这一轮结束后留 14 天）；补回执失败不会把已完成的业务变成自动重试。
+Recibo escrito errado não refaz o trabalho: o worker retoma a sessão original e pede apenas que a última mensagem seja reescrita, no máximo duas vezes; Agents sem sessão (como `command`) não passam por reescrita e seguem direto para a frase seguinte. Se ainda assim não for compreensível, ou se o processo de reescrita falhar ao iniciar, der erro, estourar o tempo ou não produzir saída, mantém-se o desfecho da primeira linha da mensagem de trabalho original, o recibo é descartado e um cartão é enviado dizendo onde está o texto original (a saída de cada rodada é mantida por 14 dias após o fim da rodada). Falhar ao completar o recibo não transforma trabalho já concluído em nova tentativa automática.
 
-### 接一个新 Agent
+### Conectar um novo Agent
 
-规则里写一行，任何能打印最后一条消息的命令都行，退出码不是 0 就算没跑成：
+Uma linha na regra; serve qualquer comando capaz de imprimir uma última mensagem, e código de saída diferente de 0 conta como falha:
 
 ```json
 { "name": "Hermes", "worker": "mac-mini", "use": "command", "command": ["hermes", "chat", "-Q", "-q", "{prompt}"] }
 ```
 
-想要会话接续、打开会话的链接、用量统计，就在 `plugins/<名字>/agent.ts` 写一个文件（见 `plugins/claude/agent.ts`）：
+Para ter continuação de sessão, link para abrir a sessão e estatísticas de uso, escreva um arquivo em `plugins/<nome>/agent.ts` (veja `plugins/claude/agent.ts`):
 
 ```ts
 export default {
-  command: (run) => [...],                                         // 这一轮的命令行，run.resume 是要接着的会话
-  read: (output) => ({ text, session, usage, finished, started }), // 从输出里读出最后一条消息和会话
-  link: (session) => "…",                                          // 可选：打开这个会话的链接
+  command: (run) => [...],                                         // a linha de comando desta rodada; run.resume é a sessão a retomar
+  read: (output) => ({ text, session, usage, finished, started }), // extrai da saída a última mensagem e a sessão
+  link: (session) => "…",                                          // opcional: link para abrir esta sessão
 };
 ```
 
-`started` 表示 Agent 已经收下这一轮的提示词，无论后来跑完、出错还是进程没了都要带上。带了它，这一轮再出错就算没跑成，留在原会话由中台重派；不带，接着旧会话跑时的失败都当成接不上，开新会话把提示词再跑一遍。`finished` 表示这一轮真的结束了，过 30 秒还不退出就停掉它；后台任务还没跑完、Agent 还要回来接着干时不算。
+`started` indica que o Agent recebeu o prompt desta rodada e deve estar presente seja qual for o desfecho — conclusão, erro ou processo desaparecido. Com ele, um erro posterior nesta rodada conta como falha: permanece na sessão original para a central reexpedir. Sem ele, falhas ao retomar a sessão antiga são tratadas como incapacidade de retomar, e uma sessão nova é aberta para rodar o prompt outra vez. `finished` indica que a rodada realmente terminou; se não encerrar em 30 segundos, é interrompida. Não vale quando tarefas em segundo plano ainda não terminaram e o Agent pretende voltar para continuar.
 
-专用插件的 `access` 三档，翻译成各自 CLI 的权限：`read` 只读，`edit` 只改工作目录（默认），`full` 完整权限、不审批。只读不等于读不到密钥，要隔离密钥请用系统账号或容器。`command` 只传命令参数，不替任意程序限制权限。
+Os três níveis de `access` dos plugins dedicados são traduzidos para as permissões do CLI correspondente: `read` somente leitura, `edit` altera apenas o diretório de trabalho (padrão), `full` permissão completa, sem aprovação. Somente leitura não significa não conseguir ler chaves; para isolar chaves use contas de sistema ou contêineres. `command` apenas passa argumentos de comando e não restringe permissões de programas arbitrários.
 
-浏览器由 Agent 的运行环境提供。Codex 使用后台 `codex exec`，不能假定桌面应用的浏览器连接自动可用；使用该轮实际可用的浏览器工具，或规则、Skill 明确配置的入口。入口只处理网页步骤并接续自己的会话，业务和回执仍由主任务负责。中台不附带浏览器桥接，不安装或授权浏览器工具；接入验收见[插件说明](plugins.md#浏览器接入)。
+O navegador é fornecido pelo ambiente de execução do Agent. O Codex usa `codex exec` em segundo plano, então não se pode presumir que a conexão de navegador do aplicativo de desktop esteja automaticamente disponível; use as ferramentas de navegador de fato disponíveis naquela rodada ou a entrada configurada explicitamente pela regra ou pela Skill. A entrada trata apenas das etapas web e continua a própria sessão; o trabalho e o recibo continuam sob responsabilidade da tarefa principal. A central não traz ponte de navegador, não instala nem autoriza ferramentas de navegador; a aceitação da integração está em [Documentação de plugins](plugins.md#acesso-ao-navegador).
 
-## 通道：把卡片送到你面前
+## Canais: levar o cartão até você
 
-通道是一个往外连的小程序。
+Um canal é um programinha que se conecta para fora.
 
 ```
-GET /v1/cards/next?wait=50    Authorization: Bearer <通道的密钥>
+GET /v1/cards/next?wait=50    Authorization: Bearer <chave do canal>
 → 200 { "card": null | Card }
 
-// Card：这张卡片现在的样子。内容创建后不变，只有状态会变
+// Card: o estado atual deste cartão. O conteúdo não muda depois da criação; só o estado muda
 { "id": 56, "version": 2, "ref": null, "kind": "ask", "state": "open",
   "title": "…", "text": "…", "options": ["…", "…"], "recommend": 0,
   "choice": null, "answer": null, "by": null, "result": null, "link": null, "rule": "…" }
 ```
 
-- `rule` 是创建这张卡片的规则或别处定时任务的名字，可能没有（比如中台自己的告警，标题就写着从哪来）。卡片从很多地方来，自带的飞书、桌面、Webhook 通道、卡片网页和 `agent-autoloop status` 都写明“来源：<rule>”，标题就是这个名字时不重复；自己写的通道也照这样。
-- `ref` 是空的就发一条新的；不是空的就把那条改成现在的样子，改不了就直接报告。
-- 发完报告：`POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`。没报告的过一分钟会再给你。**支持幂等键的平台，发新消息只用卡片编号，不带版本**（飞书改不动已经结束的卡片时另发一条，这一条才带版本）。平台不支持时无法保证去重，Webhook 模板可能在报告丢失后重发。
-- 发不出去：`POST /v1/cards/56/failed { "version": 2, "error": "…" }`。第一次发送隔得越来越久地重试，一小时后放弃（卡片还开着，`agent-autoloop status` 看得到）；通道一直没来领不算在内。
-- 还没送达就已经解决的卡片不再打扰你；仅告知的 `fyi` 通知在创建后的 24 小时内仍可投递。
-- 你点了：`POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`。只有第一次算数，`by` 要在这个通道的 `answerers` 里，`ref` 要和送达的那条一致。普通通知有一个“已处理”按钮，点了就结案；也可以带 `text` 写一句处理说明，结案时存进卡片的 `answer`，卡面和 `/v1/state` 都看得到。仅告知的 `fyi` 通知没有按钮。
+- `rule` é o nome da regra ou da tarefa agendada em outro lugar que criou este cartão, e pode não existir (por exemplo, alertas da própria central, cujo título já diz de onde vem). Cartões vêm de muitos lugares; os canais embutidos de Feishu, desktop e Webhook, a página de cartões e o `agent-autoloop status` indicam “Fonte: <rule>”, sem repetir quando o título já é esse nome. Canais escritos por você devem seguir o mesmo padrão.
+- Com `ref` vazio, envie uma mensagem nova; com `ref` preenchido, altere aquela mensagem para o estado atual e, se não der para alterar, apenas reporte.
+- Depois de enviar, reporte: `POST /v1/cards/56/delivered { "version": 2, "ref": "om_xxx" }`. O que não for reportado volta para você depois de um minuto. **Em plataformas com chave de idempotência, a mensagem nova usa apenas o número do cartão, sem versão** (quando o Feishu não consegue alterar um cartão já encerrado, envia outra mensagem, e só essa leva versão). Sem suporte da plataforma não há como garantir deduplicação, e os modelos de Webhook podem reenviar depois de um relatório perdido.
+- Se não conseguir enviar: `POST /v1/cards/56/failed { "version": 2, "error": "…" }`. A primeira entrega é repetida com intervalos crescentes e desiste depois de uma hora (o cartão continua aberto e visível em `agent-autoloop status`); um canal que nunca vem buscar não conta.
+- Cartões resolvidos antes da entrega não incomodam mais você; notificações apenas informativas `fyi` ainda podem ser entregues dentro de 24 horas após a criação.
+- Quando você clica: `POST /v1/cards/56/answer { "choice": 1, "by": "ou_xxx", "ref": "om_xxx" }`. Só a primeira resposta vale; `by` precisa estar no `answerers` deste canal e `ref` precisa ser o da mensagem entregue. Notificações comuns têm um botão “Resolvido” que encerra ao ser clicado; também é possível enviar `text` com uma explicação do tratamento, guardada no `answer` do cartão no encerramento e visível tanto no cartão quanto em `/v1/state`. Notificações apenas informativas `fyi` não têm botão.
 
-最小的通道只要十几行：领卡片、发文字和 `link`、报告。`link` 只给配了 `"links": true` 的通道，其他通道这里是 `null`。它打开一个不跑脚本的普通表单页，这张卡片的文字和按钮都在上面，谁拿到链接谁就能答，从卡片创建起 7 天内有效，过期后也不再显示卡片内容，适合只会发文字的群机器人、邮件。能发按钮、能收回调的通道（比如飞书）用按钮，身份由平台核验，更安全。一台电脑上用时 `link` 是本机地址，手机打不开，要手机批请把中台放到有公网地址的机器上，并配好 `publicUrl`。
+O menor canal leva umas quinze linhas: pegar cartões, enviar texto e `link`, reportar. `link` só vem para canais configurados com `"links": true`; nos demais é `null`. Ele abre uma página de formulário comum, sem scripts, com o texto e os botões deste cartão; quem tiver o link pode responder. Vale por 7 dias a partir da criação do cartão e, expirado, também deixa de mostrar o conteúdo — serve para bots de grupo e e-mail que só enviam texto. Canais capazes de enviar botões e receber callbacks (como o Feishu) usam botões, com a identidade verificada pela plataforma, o que é mais seguro. No uso em um único computador, `link` é um endereço local e o celular não consegue abrir; para aprovar pelo celular, coloque a central em uma máquina com endereço público e configure `publicUrl`.
 
-## 本人：看全局、回答、结案、停止
+## O titular: visão geral, respostas, encerramento e parada
 
 ```
-GET  /v1/state              Authorization: Bearer <本人的密钥>
+GET  /v1/state              Authorization: Bearer <chave do titular>
 → 200 { "seq", "totals", "cards", "recentCards", "agents", "channels", "sources", "lines", "pauses", "skipped", "elsewhere", "runs", "nextBefore", "hasMore", "unrouted", "spending", "timers", "now", "timezone" }
 
-POST /v1/cards/56/answer    { "choice": 1 } 或 { "text": "别的想法" }
-POST /v1/cards/56/resolve   { "reason": "不用决定了，因为……" }
+POST /v1/cards/56/answer    { "choice": 1 } ou { "text": "outra ideia" }
+POST /v1/cards/56/resolve   { "reason": "Não precisa mais decidir, porque……" }
 POST /v1/runs/12/cancel     {}
 ```
 
-`agent-autoloop status`、`answer`、`resolve`、`stop` 就是这几个请求。
+`agent-autoloop status`, `answer`, `resolve` e `stop` são exatamente estas requisições.
 
-整份状态在同一个快照里读出，`seq` 是那时的日志序号：自己做看板的，先取状态，再从 `GET /v1/stream?after=<seq>` 接着读，不漏也不重。`cards`、`recentCards` 在这里多带两项：`lane` 是卡片所在的事项（写了 `parallel` 的规则是事件的对象，别的规则是空字符串），`about` 是提问时留给接着干的那一轮的说明。通道和卡片页拿不到这两项。旧客户端忽略这些字段即可。
+O estado inteiro é lido em um único snapshot, e `seq` é o número de sequência do log naquele instante: para montar seu próprio painel, primeiro busque o estado e depois continue lendo de `GET /v1/stream?after=<seq>`, sem perdas nem repetições. Aqui, `cards` e `recentCards` trazem dois campos a mais: `lane` é o assunto em que o cartão está (o objeto do evento nas regras com `parallel`, string vazia nas demais) e `about` é a observação deixada na pergunta para a rodada que continuaria. Canais e a página de cartões não recebem esses dois campos. Clientes antigos podem ignorá-los.
 
-`GET /healthz` 不带密钥，返回 `{ "ok": true, "commit": "<中台运行的版本>" }`；`doctor`、服务状态和一致性检查都用它判断中台是否在线。
+`GET /healthz` não exige chave e devolve `{ "ok": true, "commit": "<versão em execução na central>" }`; `doctor`, o estado do serviço e a verificação de conformidade o usam para saber se a central está Online.
 
-### 暂停、恢复、补跑、立即运行
+### Pausar, retomar, reexecutar e rodar agora
 
 ```
-POST /v1/rules/意见/pause      { "reason": "下游在修", "until": "2026-11-07T09:00:00+08:00" }   两项都可以不写
-→ 200 { "changed": true, "rule": "意见", "paused": { "by": "owner", "reason": "下游在修", "since": "…", "until": "…",
+POST /v1/rules/feedback/pause      { "reason": "o downstream está em manutenção", "until": "2026-11-07T09:00:00+08:00" }   ambos os campos são opcionais
+→ 200 { "changed": true, "rule": "feedback", "paused": { "by": "owner", "reason": "o downstream está em manutenção", "since": "…", "until": "…",
         "skipped": { "count": 0, "events": [] } } }
-POST /v1/rules/意见/resume     {}
-→ 200 { "changed": true, "rule": "意见", "paused": { "by": "owner", "reason": "下游在修", "since": "2026-11-06T08:59:12.345Z", "until": null,
+POST /v1/rules/feedback/resume     {}
+→ 200 { "changed": true, "rule": "feedback", "paused": { "by": "owner", "reason": "o downstream está em manutenção", "since": "2026-11-06T08:59:12.345Z", "until": null,
         "skipped": { "count": 2, "events": [{ "id": 412, "source": "app", "type": "feedback.new", "subject": "#99",
-                                              "summary": "…", "receivedAt": "…", "rules": ["意见"] }, …] } } }
-POST /v1/rules/意见/replay     { "since": "2026-11-06T08:59:12.345Z" }
+                                              "summary": "…", "receivedAt": "…", "rules": ["feedback"] }, …] } } }
+POST /v1/rules/feedback/replay     { "since": "2026-11-06T08:59:12.345Z" }
 → 200 { "events": [411, 412], "runs": [41, 42] }
-POST /v1/rules/巡检/run        { "subject": "#12", "reason": "看一眼" }                         两项都可以不写
+POST /v1/rules/inspecao/run        { "subject": "#12", "reason": "dar uma olhada" }                                        ambos os campos são opcionais
 → 200 { "event": 88, "run": 41 }
 ```
 
-只接受本人的密钥。规则名按 URL 编码放进路径，请求体可以为空；不认识的字段返回 400。没有这条规则返回 404 `没有这条规则：<名字>`；`elsewhere` 里的任务返回 400，因为中台不启动它。
+Aceita apenas a chave do titular. O nome da regra vai no caminho com codificação URL e o corpo pode ser vazio; campos desconhecidos devolvem 400. Regra inexistente devolve 404 `Não existe esta regra: <nome>`; tarefas em `elsewhere` devolvem 400, porque a central não as inicia.
 
-暂停、恢复和补跑是日志里的事实（种类 `pauseRule`、`resumeRule`、`replayRule`），不改 `rules.json`；重启、从日志重建投影后照样有效。`by` 是所用本人密钥的名字。重复暂停只更新原因和 `until`，`since` 保留第一次的时间；原因和 `until` 都没变时 `changed` 为 false，也不追加事实。`until` 要带时区、晚于现在；到了这个时间中台自动恢复，记一条 `tick` 事实。
+Pausar, retomar e reexecutar são fatos no log (tipos `pauseRule`, `resumeRule`, `replayRule`) e não alteram o `rules.json`; continuam valendo após reinicialização e após reconstruir a projeção a partir do log. `by` é o nome da chave de titular usada. Pausar de novo apenas atualiza o motivo e o `until`, mantendo o `since` da primeira vez; quando nem motivo nem `until` mudam, `changed` é false e nenhum fato é acrescentado. `until` deve trazer fuso horário e ser posterior ao agora; ao chegar esse horário, a central retoma automaticamente e registra um fato `tick`.
 
-规则暂停中被移出 `rules.json` 也照样能恢复。
+Uma regra removida do `rules.json` enquanto pausada ainda pode ser retomada.
 
-暂停期间：
+Durante a pausa:
 
-- **定时规则**：到点直接跳过，不记事件，不积压。`lines[].skippedAt` 是最近一次跳过的时刻。恢复（手动或到了 `until`）后不补跑暂停期间错过的时刻，从恢复的那一刻起的下一个时刻照常跑；中台在暂停期间睡着了也一样。
-- **事件规则**：事件照常记下，但这条规则不接、不派活，也不排队等恢复；恢复后不自动补接。事件的 `paused` 记着因为暂停没接它的规则，`/v1/events` 的应答多一个 `paused` 列表，`routed` 只列真正接了的规则。最近 20 条这样的事件在 `/v1/state` 的 `skipped` 里。这类事件不算“没有规则接的事件”。同一事件匹配的其他规则照常接。不自动补接是因为暂停常常是因为下游坏了或者要止损，事后一次性涌进来的活比漏掉的更难收拾；要不要补由本人看过再定，见下面的补跑。
-- **已经排队的、等重试的、暂停期间收到回答或到期复查的这一轮**：留在队列里不派出去，恢复后照常领取，不丢回答。已经在跑的这一轮不受影响，要停用 `stop`。
+- **Regras agendadas**: o horário é simplesmente pulado, sem registrar evento nem acumular. `lines[].skippedAt` é o momento do pulo mais recente. Depois de retomar (manualmente ou ao chegar o `until`), os horários perdidos durante a pausa não são repostos; o próximo horário a partir do momento da retomada roda normalmente, inclusive se a central dormiu durante a pausa.
+- **Regras de eventos**: os eventos continuam sendo registrados, mas aquela regra não os aceita, não despacha trabalho nem os enfileira esperando a retomada; depois de retomar não há reposição automática. O `paused` do evento guarda as regras que não o aceitaram por causa da pausa, a resposta de `/v1/events` ganha uma lista `paused` e `routed` lista apenas as regras que realmente o aceitaram. Os 20 eventos mais recentes nesse estado estão no `skipped` de `/v1/state`. Esses eventos não contam como “Eventos sem regra”. As outras regras que casam com o mesmo evento continuam aceitando normalmente. A reposição não é automática porque a pausa geralmente acontece quando o downstream quebrou ou é preciso estancar perdas, e uma enxurrada de trabalho chegando de uma vez depois é mais difícil de arrumar do que o que foi perdido; cabe ao titular decidir, depois de olhar, se repõe — veja a reexecução abaixo.
+- **Rodadas já na fila, aguardando nova tentativa, ou que receberam resposta ou reverificação vencida durante a pausa**: ficam na fila sem serem despachadas e são pegas normalmente após a retomada, sem perder respostas. As rodadas já em execução não são afetadas; para interrompê-las use `stop`.
 
-`paused.skipped` 是这次暂停开始（`since`）后这条规则跳过、还没补跑的事件：`count` 是总条数，`events` 是其中最近 20 条，新的在前，每条和 `/v1/state` 的 `skipped` 一样带 `id`、`source`、`type`、`subject`、`summary`、`receivedAt` 和收到时因为暂停没接它的规则 `rules`（事件收到时记下的，哪条规则补跑过也照样列着）。条数多于 20 时只列 20 条，看 `count` 就知道还有多少。定时规则暂停时不记事件，`skipped` 是 `null`。暂停的应答里是到这时为止跳过的；恢复的应答多了 `paused`，就是刚解除的那次暂停，`skipped` 在解除之后读，这次暂停跳过的都在里面，之后不会再多。
+`paused.skipped` são os eventos que esta regra pulou desde o início desta pausa (`since`) e que ainda não foram reexecutados: `count` é o total e `events` são os 20 mais recentes, do mais novo para o mais velho. Cada item traz, como no `skipped` de `/v1/state`, `id`, `source`, `type`, `subject`, `summary`, `receivedAt` e `rules`, as regras que não o aceitaram por causa da pausa no recebimento (registrado no momento do recebimento; continua listado mesmo que alguma regra já o tenha reexecutado). Com mais de 20 itens, apenas 20 são listados e `count` diz quantos faltam. Regras agendadas não registram eventos durante a pausa, então `skipped` é `null`. Na resposta de pausa vem o que foi pulado até aquele momento; a resposta de retomada traz `paused` a mais, que é a pausa recém-desfeita, com `skipped` lido depois do desfazimento — contém tudo o que esta pausa pulou e não cresce mais depois disso.
 
-补跑把这些事件原样交给这条规则，和事件当时就被接下一样：同一事项有排队的一轮就并进去，写了 `parallel` 的按事件的 `subject` 分事项，Agent 拿到的是原来的来源、类型、对象、摘要、详情和链接。`since` 必填，要带时区，补的是这条规则从这个时间起暂停时跳过、还没补跑的全部事件，恢复应答里的 `paused.since` 就是这次暂停的。事件本身不改，`paused`、`routed` 照旧记着收到时谁接了、谁因为暂停没接；补跑只是把它接到这条规则的一轮上，`GET /v1/events/<编号>` 的 `runs` 里多了这一轮，`why` 的时间线多一行“本人补跑暂停时跳过的事件”；并进的是早就排着的一轮（在等重试、同组满了、接单程序离线）时，那一轮的 `why` 里不显示这条事件和这一行。接到过这条规则某一轮的事件就不再算欠着，所以同一条只补一次，再补跑同一段返回空列表，`paused.skipped` 也不再数它；顶层 `skipped` 记的是收到时的情况，补过的照样在里面。同一事件还被别的规则的暂停跳过时，那条规则仍欠着它，恢复后可以各自补。**暂停中的规则不能补跑**，返回 409 `规则「…」暂停中，先恢复再补跑`；定时规则返回 400。写了 `until` 的暂停到点自动恢复时没人看应答：命令行在暂停时就给出补跑命令，暂停期间 `status` 也列着条数和这条命令。
+A reexecução entrega esses eventos à regra exatamente como estão, como se tivessem sido aceitos na hora: se houver uma rodada na fila para o mesmo assunto, são incorporados a ela; com `parallel` definido, os assuntos são divididos pelo `subject` do evento; e o Agent recebe a fonte, o tipo, o objeto, o resumo, os detalhes e o link originais. `since` é obrigatório e deve trazer fuso horário; são repostos todos os eventos que esta regra pulou durante a pausa a partir desse horário e que ainda não foram reexecutados — o `paused.since` da resposta de retomada é o desta pausa. O evento em si não muda: `paused` e `routed` continuam registrando quem o aceitou no recebimento e quem não aceitou por causa da pausa. A reexecução apenas o liga a uma rodada desta regra: o `runs` de `GET /v1/events/<número>` ganha essa rodada e a linha do tempo do `why` ganha uma linha “o titular reexecutou eventos pulados durante a pausa”. Quando a incorporação acontece em uma rodada que já estava na fila (aguardando nova tentativa, grupo cheio ou worker Offline), aquele `why` não mostra este evento nem essa linha. Um evento já aceito por alguma rodada desta regra não conta mais como pendente, então cada evento é reposto uma única vez: reexecutar o mesmo intervalo de novo devolve lista vazia e `paused.skipped` deixa de contá-lo. O `skipped` do nível superior registra a situação no recebimento, e os já repostos continuam lá. Quando o mesmo evento também foi pulado pela pausa de outra regra, aquela regra ainda o deve e cada uma pode repor após a retomada. **Regras pausadas não podem ser reexecutadas**: devolve 409 `A regra “…” está pausada; retome antes de reexecutar`. Regras agendadas devolvem 400. Quando uma pausa com `until` é retomada automaticamente no horário, ninguém vê a resposta: a linha de comando já fornece o comando de reexecução no momento da pausa, e durante a pausa o `status` também lista a contagem e esse comando.
 
-立即运行走正常派活：记一条 `run.manual` 事件（定时规则的来源是 `schedule`，事件规则用它的 `when.source`），`summary` 是“<密钥名> 手动运行”，`detail` 是 `reason`；`subject` 决定 `parallel` 规则的事项。同一事项已经有排队的一轮时并进那一轮，并取消它的重试等待。这一轮的 `runs[].manual` 为 true。**暂停中的规则不能立即运行**，返回 409 `规则「…」暂停中，先恢复再手动运行`：暂停的意思是这条规则一件活都不派，手动运行也不例外，这样“暂停了就不会再花钱、不会再对外动作”这一条没有例外。要试跑就先恢复再运行。
+Rodar agora segue o despacho normal: registra um evento `run.manual` (a fonte é `schedule` nas regras agendadas e o `when.source` delas nas regras de eventos), com `summary` sendo “<nome da chave> executou manualmente” e `detail` sendo o `reason`; o `subject` determina o assunto nas regras com `parallel`. Se já houver uma rodada na fila para o mesmo assunto, é incorporada a ela e a espera de nova tentativa é cancelada. O `runs[].manual` dessa rodada é true. **Regras pausadas não podem ser executadas agora**: devolve 409 `A regra “…” está pausada; retome antes de executar manualmente`. Pausada significa que aquela regra não despacha nenhum trabalho, e a execução manual não é exceção — assim, a promessa “pausou, não gasta mais dinheiro nem age para fora” não tem exceção. Para uma execução de teste, retome primeiro e então execute.
 
-`/v1/state` 里每条规则（`lines[]`）多了 `paused`（生效中的暂停：`by`、`reason`、`since`、`until`、`skipped`，没暂停是 `null`）和 `skippedAt`；顶层多了 `pauses`（所有生效中的暂停，每项带规则名 `name`）和 `skipped`。旧客户端忽略这些字段即可。
+Em `/v1/state`, cada regra (`lines[]`) ganha `paused` (a pausa em vigor: `by`, `reason`, `since`, `until`, `skipped`; `null` quando não há pausa) e `skippedAt`; o nível superior ganha `pauses` (todas as pausas em vigor, cada uma com o nome da regra em `name`) e `skipped`. Clientes antigos podem ignorar esses campos.
 
-命令行：`agent-autoloop pause <规则> [--reason 原因] [--until 时间]`、`resume <规则>`、`replay <规则> --since <时间>`、`run <规则> [--subject 对象] [--reason 说明]`。`pause` 说明暂停期间的事件不排队、恢复时会列出；`resume` 列出这次暂停跳过的事件（最多 20 条，多了写明共几条），并给出补跑这一段的 `replay` 命令；`status` 列出暂停中的规则、从什么时候起、跳过了几条和最近 5 条。已经恢复的规则以前跳过的事件不再出现在 `status` 里。
+Linha de comando: `agent-autoloop pause <regra> [--reason motivo] [--until horário]`, `resume <regra>`, `replay <regra> --since <horário>`, `run <regra> [--subject objeto] [--reason observação]`. `pause` explica que eventos durante a pausa não são enfileirados e serão listados na retomada; `resume` lista os eventos pulados por esta pausa (no máximo 20, informando o total quando houver mais) e fornece o comando `replay` para repor esse intervalo; `status` lista as regras Pausadas, desde quando, quantos eventos pularam e os 5 mais recentes. Eventos pulados anteriormente por regras já retomadas não aparecem mais no `status`.
 
-`agent-autoloop check [文件]` 只读文件、校验规则，不打开中台数据库，也不把文件载入中台；不写文件名就查 `rules.json`。可以先校验一份草稿再换上去。`/v1/state` 一次给最近 60 轮，`?before=<nextBefore>` 翻更早的。`agent-autoloop runs [规则] [--before <第几轮>]` 就这样往前翻，一次列 20 轮做完的；只看一条规则时在命令行这边筛，协议不变。
+`agent-autoloop check [arquivo]` apenas lê o arquivo e valida as regras, sem abrir o banco de dados da central e sem carregar o arquivo nela; sem nome de arquivo, verifica o `rules.json`. Dá para validar um rascunho antes de trocá-lo. `/v1/state` entrega as 60 rodadas mais recentes por vez e `?before=<nextBefore>` pagina para as anteriores. `agent-autoloop runs [regra] [--before <nº da rodada>]` pagina assim para trás, listando 20 rodadas concluídas por vez; ao olhar uma única regra, a filtragem acontece no lado da linha de comando e o protocolo não muda.
 
-`/v1/state` 的 `spending.today`、`spending.week` 独立于分页，按规则时区的今天和过去 7 × 24 小时的完成时间汇总。每项含 `rounds`、`tokens`、`cached`、`cost`、`missingTokens`、`missingCost`，`tokens` 是输入加输出，`cached` 是其中从缓存读的，后两项是没报对应用量的轮数；从未开始就取消的轮次不计入。
+`spending.today` e `spending.week` de `/v1/state` independem da paginação e agregam pelo horário de conclusão, considerando o dia de hoje no fuso da regra e as 7 × 24 horas anteriores. Cada item contém `rounds`, `tokens`, `cached`, `cost`, `missingTokens` e `missingCost`: `tokens` é entrada mais saída, `cached` é a parte lida do cache e os dois últimos são quantas rodadas não reportaram o consumo correspondente. Rodadas canceladas antes de começar não contam.
 
-首页还会返回尚未到期的 `timers`，每项包含 `rule`、`lane`、`key`、`about` 和 `at`；翻历史页时该字段为空。本人客户端可据此区分正常等待复查与已经没有后续动作的事项。
+A primeira página também devolve os `timers` que ainda não venceram, cada um com `rule`, `lane`, `key`, `about` e `at`; em páginas de histórico esse campo vem vazio. Clientes do titular podem usar isso para distinguir assuntos em espera normal de reverificação daqueles que já não têm próxima ação.
 
-安装与卸载不改变 HTTP 协议。`agent-autoloop --version` 显示版本与提交；`agent-autoloop uninstall` 确认后移除自身程序、链接和服务，始终保留规则、密钥和记录；`--yes` 只跳过确认。
+Instalar e desinstalar não altera o protocolo HTTP. `agent-autoloop --version` mostra a versão e o commit; `agent-autoloop uninstall`, após confirmação, remove os próprios programas, links e serviços, sempre preservando regras, chaves e registros; `--yes` apenas pula a confirmação.
 
-## 失败时会怎样
+## O que acontece em caso de falha
 
-| 出了什么事                               | 会怎样                                                                                                                                                                                                                              |
-| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 来源把同一条事件发了两遍                 | 只记一次                                                                                                                                                                                                                            |
-| 领活的响应丢了                           | 同一个 `claim` 拿回同一份活                                                                                                                                                                                                         |
-| 交结果的响应丢了                         | 重放得到同样的确认                                                                                                                                                                                                                  |
-| Agent 没跑成                             | 5 分钟后重派，每次翻倍，最长 1 小时；期间来的同一事项的事件并进这一轮；连续第 3 次告诉你；连续第 10 次不再重试，这一轮记为 `cancelled` 并发一张通知卡片，正在跑时新来的事件另算一轮；这一轮结束或被停掉时，说它会再试的卡片一起关掉 |
-| 需要本人恢复浏览器连接、登录或验证       | 本轮结束，保留已完成业务和待验收项，用问题卡片等回答，不自动重派                                                                                                                                                                    |
-| 原会话接不上                             | 开新会话，靠资料文件接着干                                                                                                                                                                                                          |
-| 接上了原会话，干到一半断了               | 算没跑成，留在原会话按上面的节奏重派，不开新会话把业务重做一遍                                                                                                                                                                      |
-| 回执写错                                 | 只重写回执，不重做业务；没有会话的 Agent 回执作废，推一张卡片                                                                                                                                                                       |
-| Agent 插件读不懂自己的输出               | 还在跑的接着跑；结束或进程没了后算没跑成，留在原会话重派                                                                                                                                                                            |
-| 接单程序或通道停了，或插件有没接住的错误 | 记日志，停了的 30 秒后重启；中台和其他部分照常                                                                                                                                                                                      |
-| 别的进程占着数据库太久                   | 这次到期先不做，5 秒后再试，中台不退出；这期间写坏的规则文件也会告诉你                                                                                                                                                              |
-| 日志写不出去（输出管道断了、磁盘满）     | 进程退出，由系统服务拉起                                                                                                                                                                                                            |
-| 接单程序重启                             | 在跑的 Agent 不受影响，回来接着盯                                                                                                                                                                                                   |
-| 接单程序在线，但 5 分钟没报手上的某一轮  | 标成“不确定”，放开这一组，告诉你；它后来交的结果照样收                                                                                                                                                                              |
-| 接单程序整台不见了                       | 活留着不放开，10 分钟后告诉你一次；你关掉卡片后这些活不再提醒，有新的活才再说。回来后卡片自动收尾，下次再不见再告诉你                                                                                                               |
-| 中台重启                                 | 全在 SQLite 里，大家自动重连                                                                                                                                                                                                        |
-| 定时错过了                               | 醒来只补最近一次                                                                                                                                                                                                                    |
-| 你点了两次，或者两边同时点               | 只算第一次                                                                                                                                                                                                                          |
-| 提问之后问题自己好了                     | 后面的 Agent 核实后在 `resolve` 里结掉，卡片自动改成“不用决定了”                                                                                                                                                                    |
-| 规则写错了                               | 旧规则继续跑，告诉你错在哪                                                                                                                                                                                                          |
-| 规则删掉或改名了                         | 还没领走的和之后没跑成的这一轮记为 `cancelled`，不再派发，发一张通知卡片；已经在跑的跑完照常收结果                                                                                                                                  |
-| 规则暂停了                               | 到点跳过、事件不接，都不积压；排队的留着；恢复后不自动补跑，定时的从下一个时刻照常跑；恢复时列出跳过的事件，用 `replay` 补跑，每条只补一次                                                                                          |
-| 暂停写了 `until`，中台到点时没开着       | 醒来就恢复，暂停期间的时刻不补                                                                                                                                                                                                      |
-| 规则文件被删、移走或读不到               | 旧规则继续跑，告诉你一次；放回去就接着用。从没载入过规则的新中台读不到就不启动                                                                                                                                                      |
+| O que aconteceu                                              | O que acontece                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A fonte enviou o mesmo evento duas vezes                     | É registrado uma única vez                                                                                                                                                                                                                                                                                                                  |
+| A resposta do pedido de trabalho se perdeu                   | O mesmo `claim` recupera o mesmo trabalho                                                                                                                                                                                                                                                                                                   |
+| A resposta da entrega de resultado se perdeu                 | A reprodução devolve a mesma confirmação                                                                                                                                                                                                                                                                                                    |
+| O Agent falhou                                               | Nova expedição depois de 5 minutos, dobrando a cada vez, até no máximo 1 hora; eventos do mesmo assunto que chegam nesse intervalo são incorporados à rodada; você é avisado na 3ª vez consecutiva; na 10ª vez consecutiva não há mais nova tentativa, a rodada é marcada como `cancelled` e um cartão de notificação é enviado — eventos novos que chegam enquanto está em execução contam como outra rodada; quando a rodada termina ou é interrompida, os cartões que diziam que haveria nova tentativa são fechados junto |
+| É preciso que o titular restabeleça conexão do navegador, login ou verificação | A rodada termina, o trabalho concluído e os itens pendentes de aceitação são preservados, um cartão de pergunta aguarda a resposta e não há nova expedição automática                                                                                                                                                                        |
+| Não deu para retomar a sessão original                       | Abre-se uma sessão nova e continua-se pelos arquivos de material de referência                                                                                                                                                                                                                                                              |
+| Retomou a sessão original e caiu no meio                     | Conta como falha, permanece na sessão original e é reexpedida no ritmo acima, sem abrir sessão nova para refazer o trabalho                                                                                                                                                                                                                  |
+| Recibo escrito errado                                        | Só o recibo é reescrito, o trabalho não é refeito; Agents sem sessão têm o recibo descartado e um cartão é enviado                                                                                                                                                                                                                          |
+| O plugin de Agent não entende a própria saída                | Se ainda estiver rodando, continua; depois de encerrar ou de o processo sumir, conta como falha e permanece na sessão original para nova expedição                                                                                                                                                                                          |
+| O worker ou o canal parou, ou um plugin teve erro não tratado | Registrado em log; o que parou é reiniciado depois de 30 segundos; a central e o resto seguem normais                                                                                                                                                                                                                                       |
+| Outro processo segurou o banco de dados tempo demais         | Este vencimento não é atendido agora, tenta de novo em 5 segundos e a central não sai; se um arquivo de regra for corrompido por escrita nesse período, você também é avisado                                                                                                                                                               |
+| Não foi possível gravar o log (pipe de saída rompido, disco cheio) | O processo encerra e o serviço do sistema o reinicia                                                                                                                                                                                                                                                                                   |
+| O worker reiniciou                                           | Os Agents em execução não são afetados; ele volta a acompanhar                                                                                                                                                                                                                                                                              |
+| O worker está Online, mas não reportou uma das rodadas em mãos por 5 minutos | Marcada como “Incerto”, o grupo é liberado e você é avisado; o resultado entregue depois continua sendo aceito                                                                                                                                                                                                                              |
+| O worker inteiro desapareceu                                 | O trabalho fica guardado sem ser liberado e você é avisado uma vez depois de 10 minutos; após fechar o cartão, esses trabalhos não geram mais lembretes — só fala de novo quando houver trabalho novo. Ao voltar, os cartões são encerrados automaticamente; se sumir de novo, você é avisado de novo                                        |
+| A central reiniciou                                          | Está tudo no SQLite; todos se reconectam automaticamente                                                                                                                                                                                                                                                                                    |
+| Um agendamento foi perdido                                   | Ao acordar, repõe apenas a ocorrência mais recente                                                                                                                                                                                                                                                                                          |
+| Você clicou duas vezes, ou os dois lados clicaram ao mesmo tempo | Só a primeira vez conta                                                                                                                                                                                                                                                                                                                 |
+| Depois da pergunta, o problema se resolveu sozinho           | O Agent seguinte verifica e encerra em `resolve`; o cartão muda automaticamente para “não precisa mais decidir”                                                                                                                                                                                                                           |
+| A regra foi escrita errado                                   | As regras antigas continuam rodando e você é avisado sobre onde está o erro                                                                                                                                                                                                                                                                 |
+| A regra foi removida ou renomeada                            | As rodadas ainda não pegas e as que falharem depois são marcadas como `cancelled`, não são mais despachadas e um cartão de notificação é enviado; as que já estavam em execução terminam e o resultado é aceito normalmente                                                                                                                  |
+| A regra foi pausada                                          | Horários são pulados e eventos não são aceitos, sem acumular; o que está na fila fica guardado; após a retomada não há reexecução automática, e as agendadas rodam normalmente a partir do próximo horário; na retomada os eventos pulados são listados e `replay` os repõe, cada um uma única vez                                            |
+| A pausa tinha `until` e a central não estava ligada naquele horário | Retoma ao acordar; os horários durante a pausa não são repostos                                                                                                                                                                                                                                                                       |
+| O arquivo de regras foi apagado, movido ou não pode ser lido | As regras antigas continuam rodando e você é avisado uma vez; ao colocá-lo de volta, volta a ser usado. Uma central nova que nunca carregou regras não inicia se não conseguir ler                                                                                                                                                          |
 
-这是“至少一次”的系统：Agent 可能被叫两次，所以 Skill 里有副作用的动作要先核实当前状态。
+É um sistema “pelo menos uma vez”: o Agent pode ser chamado duas vezes, então ações com efeitos colaterais na Skill devem primeiro verificar o estado atual.
 
-## 谁能做什么
+## Quem pode fazer o quê
 
-| 凭据             | 能做                                                        | 不能做                                 |
-| ---------------- | ----------------------------------------------------------- | -------------------------------------- |
-| 来源的密钥       | 以自己的名义发事件、发消息，查自己发的事件后来怎么样了      | 冒充别的来源，看别的来源的事件，领活   |
-| 接单程序的密钥   | 领交给它的活；以交给它的 `elsewhere` 任务的名义发消息、提问 | 碰别人的活，发事件                     |
-| 一轮的 token     | 报告这一轮的这一次执行                                      | 碰别的轮次                             |
-| 通道的密钥       | 领卡片、报告、转达 `answerers` 的回答                       | 其他一切                               |
-| 带权限的卡片链接 | 回答这一张卡片                                              | 其他一切                               |
-| 本人的密钥       | 看全部、回答、结案、停止，暂停、恢复、补跑、立即运行规则    | 发事件，领活，改规则（规则只在文件里） |
+| Credencial                 | Pode                                                                        | Não pode                                              |
+| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Chave de fonte             | Enviar eventos e mensagens em nome próprio e consultar o que aconteceu com os eventos que enviou | Se passar por outra fonte, ver eventos de outras fontes, pegar trabalho |
+| Chave de worker            | Pegar o trabalho atribuído a ele; enviar mensagens e perguntas em nome das tarefas `elsewhere` que lhe foram atribuídas | Mexer no trabalho dos outros, emitir eventos |
+| Token de uma rodada        | Reportar esta execução desta rodada                                          | Mexer em outras rodadas                                 |
+| Chave de canal             | Pegar cartões, reportar e transmitir as respostas dos `answerers`            | Todo o resto                                            |
+| Link de cartão com permissão | Responder àquele cartão                                                    | Todo o resto                                            |
+| Chave do titular           | Ver tudo, responder, encerrar, parar, pausar, retomar, reexecutar e executar regras agora | Emitir eventos, pegar trabalho, alterar regras (regras só existem em arquivo) |
 
-普通访问密钥只保存 SHA-256；本机主密钥另存 `master.key`。接单程序不把中台密钥放进 Agent 的提示词或资料文件，文件系统的访问范围由 Agent 权限决定。
+Chaves de acesso comuns guardam apenas o SHA-256; a chave mestra local fica em `master.key`, separada. O worker não coloca chaves da central no prompt nem nos arquivos de material de referência do Agent; o alcance do acesso ao sistema de arquivos é determinado pelas permissões do Agent.
 
-## 日志与确定性
+## Log e determinismo
 
-每次被接受的输入产生一批事实，什么都没改变的（重复的事件、距上次不到一分钟的心跳）不产生；`commit` 在 SQLite WAL + FULL 的同一个事务里完成判断、追加日志并让 `evolve` 更新视图，提交完成才应答。规则版本、密钥哈希、领活、回执和回答都在日志里；日志从不存轮次 token、卡片链接 token 或中台主密钥。主密钥由外壳保存在本机文件，轮次 token 和卡片链接用 HMAC 分别推导。重复 claim 重新签发 token，上一份立即失效。
+Cada entrada aceita produz um lote de fatos; entradas que não mudaram nada (eventos duplicados, heartbeat a menos de um minuto do anterior) não produzem. O `commit` realiza a decisão, acrescenta ao log e faz o `evolve` atualizar as views, tudo na mesma transação SQLite WAL + FULL, e só responde depois que o commit termina. Versões de regra, hashes de chave, chamadas de trabalho, recibos e respostas estão no log; o log nunca guarda tokens de rodada, tokens de link de cartão nem a chave mestra da central. A chave mestra é mantida pelo host em um arquivo local, e o token da rodada e o link do cartão são derivados separadamente por HMAC. Um claim repetido emite um token novo e invalida o anterior imediatamente.
 
-`decide(view, input, now, environment)` 不改传入视图和输入。`evolve(view, facts)` 是唯一的持久投影写入者；时钟、规则文件、随机材料、网络和单一定时器由外壳提供。事实包含版本、序号、时间、种类和规范化记录变更，重放不重新运行规则。视图通过 SQLite 索引按需读取；一次判断只保留本次改动，不复制整表，不在 JavaScript 中常驻全部历史。规则这一行最大、每轮排队都要问，所以一个视图只解析一次；有了新事实就是新视图，不会读到旧规则。日志、投影、日志游标、编号高水位及派生索引一起提交；删掉记录也不复用其编号。正常启动直接打开投影。外壳按决定存储内容的文件（`kernel/evolve.ts`、`kernel/credentials.ts`）和主密钥算格式指纹，别的文件改动不算，查询视图每次启动重新建；旧版没有游标或指纹不匹配时，在同一事务内逐条读取日志、重建投影和索引，不能覆盖期间的新提交，不一次把日志读进内存。首次升级可能需要等待重建；不改旧事实，不需要数据迁移。模拟使用同一套投影和判断实现，数据库放在内存中。
+`decide(view, input, now, environment)` não altera a view nem a entrada recebidas. `evolve(view, facts)` é o único escritor da projeção persistente; relógio, arquivo de regras, material aleatório, rede e o temporizador único são fornecidos pelo host. Os fatos contêm versão, número de sequência, horário, tipo e as mudanças de registro normalizadas; reproduzir não reexecuta as regras. As views são lidas sob demanda por índices SQLite; uma decisão mantém apenas as mudanças daquela vez, sem copiar tabelas inteiras nem manter todo o histórico residente em JavaScript. A linha das regras é a maior e toda rodada na fila precisa consultá-la, então cada view só a analisa uma vez; com fatos novos há uma view nova, sem risco de ler regras antigas. Log, projeção, cursor do log, marca d'água alta dos números e índices derivados são commitados juntos; registros apagados não têm seus números reutilizados. A inicialização normal abre direto a projeção. O host calcula uma impressão digital de formato a partir dos arquivos que determinam o conteúdo armazenado (`kernel/evolve.ts`, `kernel/credentials.ts`) e da chave mestra; mudanças em outros arquivos não contam, e as views de consulta são reconstruídas a cada inicialização. Quando uma versão antiga não tem cursor ou a impressão não confere, o log é lido registro a registro na mesma transação para reconstruir projeção e índices, sem poder sobrescrever commits novos feitos nesse intervalo e sem carregar o log inteiro na memória de uma vez. A primeira atualização pode exigir espera pela reconstrução; fatos antigos não são alterados e não há migração de dados. As simulações usam o mesmo conjunto de projeção e decisão, com o banco em memória.
 
-Node 请求转换层只把 Node 的请求变成 Request；文件、SQLite 连接、监听和定时器也由外壳提供。
+A camada de conversão de requisições do Node apenas transforma a requisição do Node em Request; arquivos, conexões SQLite, escuta e temporizadores também são fornecidos pelo host.
 
-`GET /v1/stream?after=42` 仅接受本人的密钥，返回 SSE：`id` 是日志序号，`event: fact`，`data` 是事实 JSON。断线用 `Last-Event-ID` 或 `after` 从下一条继续；从 0 读全量，按订阅者读取速度逐条发送，不预先缓存全部日志。不给订阅者发送密钥哈希或能力凭据。
+`GET /v1/stream?after=42` aceita apenas a chave do titular e devolve SSE: `id` é o número de sequência do log, `event: fact` e `data` é o JSON do fato. Após queda, continua do seguinte com `Last-Event-ID` ou `after`; ler tudo a partir do 0 envia registro a registro na velocidade de leitura do assinante, sem armazenar em cache todo o log antecipadamente. Hashes de chave e credenciais de capacidade nunca são enviados ao assinante.
 
-`GET /v1/runs/42/why` 仅接受本人的密钥，返回与本轮事件、每次执行的规则版本、领取、回执、卡片回答有关的事实。命令行 `agent-autoloop why 42` 使用同一接口，时间按本机时区显示为 `MM-DD HH:mm:ss`，默认显示事件、规则版本、领取者、起止时间、会话、回执、回答和接续轮次的时间线，不打印规则正文；`agent-autoloop why 42 --json` 输出原始事实。内部回答和定时事件遇到已存在的编号时按序加后缀，保持来源与编号唯一，不覆盖来源的事件。
+`GET /v1/runs/42/why` aceita apenas a chave do titular e devolve os fatos relacionados aos eventos da rodada, à versão da regra em cada execução, à chamada de trabalho, ao recibo e às respostas de cartão. A linha de comando `agent-autoloop why 42` usa a mesma interface, com horários exibidos no fuso local como `MM-DD HH:mm:ss`, e por padrão mostra a linha do tempo de eventos, versões de regra, quem pegou, horários de início e fim, sessão, recibo, respostas e rodadas seguintes, sem imprimir o corpo da regra; `agent-autoloop why 42 --json` devolve os fatos brutos. Respostas internas e eventos agendados que encontram um número já existente recebem um sufixo sequencial, mantendo fonte e número únicos e sem sobrescrever os eventos da fonte.
 
-## 一致性和复现
+## Conformidade e reprodução
 
-插件入口统一为 `plugins/<名字>/agent.ts`、`channel.ts` 或 `source.ts`，先找安装目录，再找引擎内置目录。`agent-autoloop add <git 地址>` 将插件仓库克隆到安装目录的 `plugins/<仓库名>`，仓库根目录直接放入口文件，不自动更新，不执行安装脚本。目录名就是插件名：仓库名转成小写，只能用小写字母、数字和 `-`，不符合的会被拒绝。插件是本人安装的可信代码，事件不能指定插件路径。
+As entradas de plugin são unificadas em `plugins/<nome>/agent.ts`, `channel.ts` ou `source.ts`, procuradas primeiro no diretório de instalação e depois no diretório embutido do motor. `agent-autoloop add <endereço git>` clona o repositório do plugin para `plugins/<nome do repositório>` no diretório de instalação, com o arquivo de entrada direto na raiz do repositório; não há atualização automática nem execução de scripts de instalação. O nome do diretório é o nome do plugin: o nome do repositório é convertido para minúsculas e só pode usar letras minúsculas, números e `-`; o que não atender será rejeitado. Plugins são código confiável instalado pelo titular, e eventos não podem especificar caminho de plugin.
 
-事件接受可选的 `hops`，非负安全整数，缺省为 0。回执事件强制使用本轮所有事件最大 hops 加 1；提问的回答和 later 定时延续原深度。超过 8 的事件仍记录但不派发，并产生通知；重复提交不重复通知。这是中台内处理链的限制，外部来源直接发出的新事件可以从 0 开始。旧日志没有 hops 时按 0 读取。
+Eventos aceitam `hops` opcional, inteiro seguro não negativo, com padrão 0. Eventos de recibo usam obrigatoriamente o maior hops de todos os eventos da rodada mais 1; respostas a perguntas e agendamentos `later` continuam a profundidade original. Eventos acima de 8 continuam sendo registrados, mas não são despachados e geram notificação; envios duplicados não geram notificação duplicada. É um limite das cadeias de processamento dentro da central: eventos novos emitidos diretamente por fontes externas podem começar em 0. Logs antigos sem hops são lidos como 0.
 
-`DELETE /v1/keys/<source|worker|channel|owner>/<名字>` 只接受本人密钥；名字按 URL 编码传入，返回 `{ok:true, changed}`：要删的密钥本来就不存在时 `changed` 为 false，也不追加事实。`agent-autoloop key remove <种类> <名字>` 调用正在运行的中台，删除立即唤醒并拒绝该密钥的长轮询，关闭日志订阅。已领取的一轮继续用独立的轮次 token 交结果。
+`DELETE /v1/keys/<source|worker|channel|owner>/<nome>` aceita apenas a chave do titular; o nome é passado com codificação URL e a resposta é `{ok:true, changed}`: quando a chave a remover já não existe, `changed` é false e nenhum fato é acrescentado. `agent-autoloop key remove <tipo> <nome>` chama a central em execução; a remoção acorda e rejeita imediatamente os long pollings daquela chave e fecha as assinaturas do log. Rodadas já pegas continuam entregando resultados com o token de rodada próprio.
 
-`protocol/schema.json` 使用 JSON Schema 2020-12，定义事件、回执、任务、卡片和日志的格式。`agent-autoloop conformance <测试地址> --config <文件>` 走真实 HTTP；文件包含 `keys`（source、worker、channel、owner 四把测试密钥）、能匹配测试规则的 `eventType` 和通道允许的 `answerer`。规则要能把该来源和类型交给该接单程序，`parallel` 至少为 2，通道要限制回答人。检查会写入事件和卡片，只在专用测试中台运行；同一个测试中台可以连续检查。各来源的签名格式由对应插件的测试检查。
+`protocol/schema.json` usa JSON Schema 2020-12 e define os formatos de eventos, recibos, tarefas, cartões e log. `agent-autoloop conformance <endereço de teste> --config <arquivo>` usa HTTP de verdade; o arquivo contém `keys` (as quatro chaves de teste source, worker, channel e owner), um `eventType` que case com a regra de teste e um `answerer` permitido pelo canal. A regra deve entregar aquela fonte e tipo àquele worker, `parallel` deve ser no mínimo 2 e o canal deve restringir quem pode responder. A verificação grava eventos e cartões, então rode apenas em uma central de teste dedicada; a mesma central de teste pode ser verificada repetidamente. O formato de assinatura de cada fonte é verificado pelos testes do plugin correspondente.
 
-文字上限按 Unicode 码点计算：卡片回答的 `text` 最多 4000 字、`by` 最多 500 字、`ref` 最多 500 字，通道回报的消息编号最多 500 字。`usage` 必须是数值非负且有限的对象，不能是数组；`later.at` 必须是真实日期的 ISO 日期时间，带 `Z` 或时区偏移。回执先核验整体，再执行。
+Os limites de texto são contados em code points Unicode: o `text` da resposta de cartão aceita no máximo 4000 caracteres, `by` no máximo 500 e `ref` no máximo 500, e o número de mensagem reportado pelo canal aceita no máximo 500 caracteres. `usage` deve ser um objeto com valores numéricos não negativos e finitos, nunca um array; `later.at` deve ser um ISO datetime de uma data real, com `Z` ou deslocamento de fuso. O recibo é validado por inteiro antes de ser executado.
 
-`npm test` 包含种子 24301 的 200000 步模拟，以及两台接单程序、两条来源事件、一张问题卡片的全部 8! 种动作顺序。模拟每 128 步换一个独立场景，每个场景结束前停止故障并把工作处理完；每次状态转换都检查不变量和完整日志重放。定时事件由真实到期表触发，恢复后检查到期任务没有遗留。它证明这些有限场景，不代表任意大小状态空间已被穷尽。单独复现：`node sim/random.ts 24301 200000`、`node sim/enumerate.ts`。
+`npm test` inclui uma simulação de 200000 passos com semente 24301, além de todas as 8! ordens de ações com dois workers, dois eventos de fonte e um cartão de pergunta. A simulação troca de cenário independente a cada 128 passos e, antes de terminar cada cenário, interrompe as falhas e conclui o trabalho; cada transição de estado verifica invariantes e a reprodução completa do log. Eventos agendados são disparados pela tabela de vencimentos real, e após a recuperação verifica-se que não sobraram tarefas vencidas. Isso prova esses cenários finitos e não significa que um espaço de estados de tamanho arbitrário tenha sido esgotado. Reprodução isolada: `node sim/random.ts 24301 200000`, `node sim/enumerate.ts`.
 
-`npm run test:nightly` 做 1000 次真进程 SIGKILL、`sim/mutate.ts` 里全部的内核变异和性能实测。崩溃用真 SQLite WAL + FULL，核对已确认序号、完整性、视图、重放和重复提交；它测进程退出，不模拟整机断电。漏过任何一处变异都算失败，名字直接输出，不能用语法错误算检出。CI 每天定时跑一次强杀和变异，性能实测的数字跟机器有关，只在本地跑。`node sim/crash.ts 1000 12648430` 和 `node sim/mutate.ts` 可分别复现。
+`npm run test:nightly` executa 1000 SIGKILL em processos reais, todas as mutações de kernel em `sim/mutate.ts` e as medições de desempenho. Os testes de crash usam SQLite WAL + FULL de verdade e conferem números de sequência confirmados, integridade, views, reprodução e commits duplicados; testam a saída do processo, não simulam queda de energia da máquina inteira. Deixar passar qualquer mutação conta como falha, com o nome impresso diretamente; erro de sintaxe não vale como detecção. O CI roda kill forçado e mutações uma vez por dia, por agendamento; os números de desempenho dependem da máquina e só rodam localmente. `node sim/crash.ts 1000 12648430` e `node sim/mutate.ts` reproduzem cada um separadamente.
 
-模拟的正确性检查必须通过；模拟速度只是开发效率的观察指标。性能实测使用逐条 HTTP 写入，事务落盘后才应答。空闲 RSS 和千连接负载 RSS 分开测，实测数字见 README。大历史量（结果见[历史增长实测](#历史增长实测)）用 `node scripts/history.ts 1000 10000 100000` 验证真实业务、HTTP 响应、慢速日志订阅、强杀重试和完整重建；每个场景含两轮任务、提问、投递、回答和定时复查，逐笔 WAL + FULL 提交。请求走真实 HTTP，每类操作和状态汇总都测 30 次取中位数；持续写入、空闲及请求负载内存分别报告，不手动触发 GC。
+As verificações de correção da simulação devem passar; a velocidade da simulação é apenas um indicador observacional de eficiência de desenvolvimento. As medições de desempenho usam gravação HTTP registro a registro, respondendo só depois que a transação chega ao disco. RSS em ocioso e RSS sob carga de mil conexões são medidos separadamente; os números medidos estão no README. Grandes volumes de histórico (resultados em [Crescimento do histórico na prática](#crescimento-do-histórico-na-prática)) são verificados com `node scripts/history.ts 1000 10000 100000`, cobrindo trabalho real, respostas HTTP, assinatura lenta do log, novas tentativas após kill forçado e reconstrução completa; cada cenário contém duas rodadas de trabalho, pergunta, entrega, resposta e reverificação agendada, com commits WAL + FULL individuais. As requisições usam HTTP de verdade, cada tipo de operação e o resumo de estado são medidos 30 vezes e a mediana é usada; memória sob gravação contínua, em ocioso e sob carga de requisições são reportadas separadamente, sem disparar GC manualmente.
 
-排队很深时的开销用 `BENCH_QUEUE=5000 node scripts/benchmark.ts --busy` 单独量：规则约 4.4 KB，1000 个长轮询等着，排队 5000 轮（`BENCH_QUEUE` 可改），报告被挡下的心跳 p50 和 p99、每次心跳的 CPU、这段时间写了多少事实，以及收事件、领活、交结果和领不到活的中位数。`npm run benchmark` 也带这一项。
+O custo com fila profunda é medido separadamente com `BENCH_QUEUE=5000 node scripts/benchmark.ts --busy`: cerca de 4,4 KB de regras, 1000 long pollings esperando, 5000 rodadas na fila (`BENCH_QUEUE` pode ser alterado), reportando p50 e p99 dos heartbeats bloqueados, CPU por heartbeat, quantos fatos foram gravados nesse período e as medianas de recebimento de eventos, chamada de trabalho, entrega de resultado e chamada sem trabalho. `npm run benchmark` também inclui este item.
 
-### ACP 和 MCP
+### ACP e MCP
 
-`use: "acp"` 配合 `command: ["某个 ACP 程序", "启动参数"]` 使用 stdio ACP v1，ACP Agent 必须写 `command`，没写时这一轮算没跑成，原因里写着缺什么。桥接先初始化，再新建或接着旧会话：Agent 声明了 `loadSession` 就用 `session/load`，只声明 `sessionCapabilities.resume` 就用 `session/resume`。加载时重放的历史不算这一轮的回复，思考和工具输出不进回执。提示词发出去就算这一轮开始了，之后再断就留在原会话重派。接着旧会话时上一次可能已经干了一半，只有 Agent 明确拒绝这个会话（回了错误，或两种恢复都不支持）才开新会话；程序起不来、初始化出错、加载中途断了都留在原会话重派。会话正被别的程序打开（错误的 `data.reason` 是 `thread_active_writer`）也不算拒绝：这一轮算没跑成，原因是 Agent 自己的话，留在原会话过一会儿重派，连续第 3 次的卡片会带上这句话，告诉你要关掉什么。其他错误都算拒绝，不看错误码：官方 Codex 适配器对真不存在的会话回的是 -32603。只有 `end_turn` 且有最后一条文字消息才算完成：有 `messageId` 就按它分消息，没有时思考、工具调用和做完或失败的工具更新都算分界。一轮没完成时桥接马上交代原因，Agent 过 30 秒还不走就连同进程组一起停掉。消息只按换行分帧，读不懂的行算这一轮没跑成。会话编号交给中台保存。没有声明文件读写、终端或交互登录能力，Agent 用自己的工具；需要登录时先用它自己的命令行登录。
+`use: "acp"` com `command: ["algum programa ACP", "argumentos de inicialização"]` usa ACP v1 por stdio. Um Agent ACP deve definir `command`; sem ele a rodada conta como falha, com o motivo dizendo o que falta. A ponte primeiro inicializa e depois cria uma sessão nova ou retoma a antiga: se o Agent declarar `loadSession`, usa-se `session/load`; se declarar apenas `sessionCapabilities.resume`, usa-se `session/resume`. O histórico reproduzido no carregamento não conta como resposta desta rodada, e raciocínio e saída de ferramentas não entram no recibo. Enviar o prompt já conta como início da rodada; quedas depois disso permanecem na sessão original para nova expedição. Ao retomar a sessão antiga, a vez anterior pode ter ficado pela metade, então só se abre sessão nova quando o Agent rejeita explicitamente aquela sessão (devolveu erro ou não suporta nenhuma das duas formas de retomada); programa que não sobe, erro de inicialização e queda no meio do carregamento permanecem na sessão original para nova expedição. Sessão já aberta por outro programa (o `data.reason` do erro é `thread_active_writer`) também não conta como rejeição: a rodada conta como falha, o motivo é a própria mensagem do Agent, permanece na sessão original para nova expedição depois de um tempo, e o cartão da 3ª vez consecutiva traz essa mensagem dizendo o que você precisa fechar. Todos os outros erros contam como rejeição, sem olhar o código de erro: o adaptador oficial do Codex devolve -32603 para sessões realmente inexistentes. Só conta como concluída a rodada com `end_turn` e uma última mensagem de texto: havendo `messageId`, as mensagens são separadas por ele; sem ele, raciocínio, chamadas de ferramenta e atualizações de ferramenta concluída ou falha contam como divisória. Quando a rodada não conclui, a ponte informa o motivo imediatamente e, se o Agent não sair em 30 segundos, é interrompido junto com o grupo de processos. As mensagens são enquadradas apenas por quebra de linha, e linhas incompreensíveis contam como falha da rodada. O número da sessão é entregue à central para guardar. Sem capacidades declaradas de leitura e escrita de arquivos, terminal ou login interativo, o Agent usa as próprias ferramentas; quando é preciso fazer login, use primeiro a linha de comando dele.
 
-权限只选一次性的选项：`read` 允许结构化的读和搜索，`edit` 再允许工作目录内的编辑（核对符号链接，经过找不到目标的链接算在目录外），`full` 允许其他操作。权限请求只带工具调用编号时，按这次调用之前说过的种类和路径判断，请求自己带的字段优先。未提供相应选项就取消。权限依赖 Agent 遵守 ACP，不提供额外的系统隔离；规范允许 Agent 不询问就执行，这种操作 `access` 拦不住，要用 Agent 自己的模式限制。官方 Codex 适配器给的拒绝选项（`reject_once`）只有 `cancel`，选了它整轮以 `stopReason: cancelled` 结束，算没跑成，由中台重派；`read`、`edit` 档下要跑命令的请求就是这样回来的，所以 Agent 非跑命令不可时，给 `full` 或用它自己的模式。`model`、`effort`、`tier` 不生效。核对依据：[初始化](https://agentclientprotocol.com/protocol/v1/initialization)、[会话](https://agentclientprotocol.com/protocol/v1/session-setup)、[工具权限](https://agentclientprotocol.com/protocol/v1/tool-calls)。
+Para permissões só se escolhe a opção de uso único: `read` permite leitura e busca estruturadas, `edit` permite também edição dentro do diretório de trabalho (links simbólicos são conferidos; passar por um link cujo alvo não existe conta como fora do diretório) e `full` permite as demais operações. Quando a requisição de permissão traz apenas o número da chamada de ferramenta, decide-se pelo tipo e caminho informados antes daquela chamada, prevalecendo os campos que a própria requisição trouxer. Não havendo a opção correspondente, cancela-se. As permissões dependem de o Agent cumprir o ACP e não fornecem isolamento adicional de sistema; a especificação permite que o Agent execute sem perguntar, e essas operações o `access` não consegue bloquear — use o modo do próprio Agent para restringir. A única opção de rejeição que o adaptador oficial do Codex oferece é `cancel` (`reject_once`); ao escolhê-la a rodada inteira termina com `stopReason: cancelled`, conta como falha e é reexpedida pela central. É assim que voltam os pedidos de execução de comando nos níveis `read` e `edit`, então, quando o Agent precisa mesmo executar comandos, dê `full` ou use o modo dele. `model`, `effort` e `tier` não têm efeito. Base de conferência: [Inicialização](https://agentclientprotocol.com/protocol/v1/initialization), [Sessão](https://agentclientprotocol.com/protocol/v1/session-setup), [Permissões de ferramentas](https://agentclientprotocol.com/protocol/v1/tool-calls).
 
-`agent-autoloop mcp` 提供 stdio MCP，固定支持 [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) 版，不支持 2026-07-28 的无握手协议。工具为 `status`、`why`、`answer`、`resolve`、`stop`、`emit`、`tell`、`pause`、`resume`、`replay`、`run`；`status` 可带 `before` 往前翻轮次；按本机已有的本人或来源密钥展示工具，`pause`、`resume`、`replay`、`run` 和命令行同名命令一样要本人密钥。它调用同样的 HTTP 接口，不直接改数据库；密钥留在本机 `config.json`。MCP 客户端把程序设为 `node`，参数设为引擎的绝对路径 `bin/agent-autoloop.ts` 和 `mcp`，环境里指定 `AGENT_AUTOLOOP_HOME`。标准输出只写 JSON-RPC。消息只按换行分帧；每个工具调用各自回复，慢调用不挡 `ping`。它不区分调用方，都按本人记录（`answer` 记成本人，`emit` 不带层数），不要配进接单程序启动的 CLI 的用户级配置，否则一轮能自己回答自己的卡片。
+`agent-autoloop mcp` fornece MCP por stdio, com suporte fixo à versão [2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle) e sem suporte ao protocolo sem handshake de 2026-07-28. As ferramentas são `status`, `why`, `answer`, `resolve`, `stop`, `emit`, `tell`, `pause`, `resume`, `replay` e `run`; `status` aceita `before` para paginar rodadas para trás. As ferramentas exibidas dependem das chaves de titular ou de fonte já existentes no computador, e `pause`, `resume`, `replay` e `run` exigem chave de titular, como os comandos de mesmo nome na linha de comando. Ele chama as mesmas interfaces HTTP e não altera o banco diretamente; as chaves ficam no `config.json` local. No cliente MCP, defina o programa como `node` e os argumentos como o caminho absoluto do motor `bin/agent-autoloop.ts` e `mcp`, especificando `AGENT_AUTOLOOP_HOME` no ambiente. A saída padrão escreve apenas JSON-RPC. As mensagens são enquadradas apenas por quebra de linha; cada chamada de ferramenta responde por si e chamadas lentas não bloqueiam `ping`. Ele não distingue quem chama e registra tudo como titular (`answer` é registrado como titular e `emit` não traz número de camadas), então não o configure no perfil de usuário de um CLI iniciado pelo worker, caso contrário uma rodada poderia responder aos próprios cartões.
 
-### 通道模板与命令行示例
+### Modelos de canal e exemplos de linha de comando
 
-Webhook 通道的 `config.json` 配置使用 `use: "webhook"`、`url` 和 `platform`，后者可选 `dingtalk`、`wecom`、`slack`、`discord`。不写 platform 时可用 `body` 自定义模板，字符串里的 `{text}` 替换为卡片内容。四个模板对照官方文档：[钉钉](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type)、[企微](https://developer.work.weixin.qq.com/document/path/91770)、[Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/)、[Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook)。企微把普通网址显示为“打开链接”，把无选项通知的结案地址显示为“点击处理”，不再另列“1. 已处理”；卡片里写的链接标记和尖括号换成全角照字显示，不会被画成链接、标签或提及。钉钉和企微检查响应的 `errcode`，Slack 检查 `ok`；Discord 禁止文字触发提及。超过企微 2048 字节或 Discord 2000 字的卡片会报告失败，不截断问题或回答链接。Webhook 本身没有幂等保证，消息发送成功但报告丢失时可能重发。
+A configuração em `config.json` de um canal Webhook usa `use: "webhook"`, `url` e `platform`, sendo a última opcional entre `dingtalk`, `wecom`, `slack` e `discord`. Sem `platform`, dá para usar um modelo próprio em `body`, onde `{text}` na string é substituído pelo conteúdo do cartão. Os quatro modelos seguem a documentação oficial: [DingTalk](https://open.dingtalk.com/document/orgapp/custom-bot-send-message-type), [WeCom](https://developer.work.weixin.qq.com/document/path/91770), [Slack](https://docs.slack.dev/messaging/sending-messages-using-incoming-webhooks/) e [Discord](https://discord.com/developers/docs/resources/webhook#execute-webhook). O WeCom exibe URLs comuns como “Abrir link” e o endereço de encerramento das notificações sem opções como “Clique para tratar”, sem listar à parte “1. Resolvido”; marcadores de link e os sinais de `<` e `>` escritos no cartão são trocados por equivalentes de largura total e exibidos literalmente, para não virarem link, marcação ou menção. DingTalk e WeCom conferem o `errcode` da resposta, o Slack confere `ok`, e o Discord proíbe que texto dispare menções. Cartões que passem de 2048 bytes no WeCom ou 2000 caracteres no Discord são reportados como falha, sem truncar a pergunta nem o link de resposta. O Webhook em si não tem garantia de idempotência, então pode haver reenvio quando a mensagem é enviada com sucesso mas o relatório se perde.
 
-桌面通知 `desktop` 是新安装默认打开的通道：macOS 用 `osascript`，Linux 用 `notify-send`，Windows 用 PowerShell 的系统托盘通知。通知标题是“Agent 问你一个问题”，正文是卡片标题、“来源：<规则名>”（卡片带规则且标题不是规则名时）和“运行 agent-autoloop status 查看”；Unix 的文字通过 `--` 后的参数传入；Windows 把 JSON 数据编码后交给固定脚本解码，不把文字当 PowerShell 执行。没有图形会话时不调用通知程序，报告 `skipped-<卡片编号>`，不反复打扰；卡片仍可通过命令行查看和回答。有图形会话但通知命令不存在或失败时报告 `failed`，由中台安排重试。卡片更新只报告，不重复弹出。
+A notificação de desktop `desktop` é o canal ativado por padrão em instalações novas: `osascript` no macOS, `notify-send` no Linux e notificação da bandeja do sistema via PowerShell no Windows. O título da notificação é “O Agent fez uma pergunta a você”; o corpo é o título do cartão, “Fonte: <nome da regra>” (quando o cartão traz regra e o título não é o nome da regra) e “Execute agent-autoloop status para ver”. No Unix, o texto é passado como argumento depois de `--`; no Windows, os dados JSON são codificados e decodificados por um script fixo, sem executar o texto como PowerShell. Sem sessão gráfica, o programa de notificação não é chamado e reporta-se `skipped-<número do cartão>`, sem incomodar repetidamente; o cartão continua podendo ser visto e respondido pela linha de comando. Havendo sessão gráfica mas o comando de notificação não existindo ou falhando, reporta-se `failed` e a central agenda a nova tentativa. Atualizações de cartão apenas reportam, sem repetir o pop-up.
 
-`examples/worker.sh` 和 `examples/channel.sh` 只用 shell 内置命令、curl、jq。设置 `AGENT_AUTOLOOP_URL`、`AGENT_AUTOLOOP_KEY` 后运行；`AGENT_AUTOLOOP_ONCE=1` 只领一次。接单示例交回 `AGENT_AUTOLOOP_RECEIPT` 中的 JSON，默认交回完成；通道示例把卡片输出到终端，再报告送达。它们是短任务示例，不适合长任务；长任务使用 `worker/` 的心跳、停止和恢复。`tests/examples.test.ts` 在通过协议一致性检查的临时中台上实际运行两个脚本，覆盖提问、送达、回答、继续和错误密钥。
+`examples/worker.sh` e `examples/channel.sh` usam apenas comandos embutidos do shell, curl e jq. Defina `AGENT_AUTOLOOP_URL` e `AGENT_AUTOLOOP_KEY` antes de executar; `AGENT_AUTOLOOP_ONCE=1` pega trabalho uma única vez. O exemplo de worker devolve o JSON em `AGENT_AUTOLOOP_RECEIPT`, por padrão devolvendo concluído; o exemplo de canal imprime o cartão no terminal e depois reporta a entrega. São exemplos de tarefas curtas e não servem para tarefas longas; para tarefas longas use o heartbeat, a parada e a recuperação de `worker/`. `tests/examples.test.ts` executa de verdade os dois scripts em uma central temporária que passa na verificação de conformidade do protocolo, cobrindo pergunta, entrega, resposta, continuação e chave errada.
 
-## 业务场景模板
+## Receitas de negócio
 
-可直接启用的场景及配置说明见 [README](../README.md#拿来即用的场景模板)。
+As receitas que podem ser ativadas diretamente e as instruções de configuração estão no [README](../README.md#receitas-prontas-para-usar).
 
-反馈来源只负责唤醒同一事项，当前业务状态和授权从可信接口重新读取。网站检查以本规则未关闭的异常通知卡片作为故障记录：首次失败发通知及排查事件，持续失败安静，恢复结案并发恢复事件；手动关闭未恢复卡片后仍失败会重新报告。飞书采集完整读取后写私有快照并发事件，摘要核对快照编号，旧事件不使用新资料；采集与摘要同组串行。只有本人身份可读的数据参与汇总，不把不可见当成未提交。
+A fonte de feedback apenas acorda o mesmo assunto; o estado de negócio atual e a autorização são relidos de interfaces confiáveis. A verificação do site usa os cartões de notificação de anomalia não encerrados desta regra como registro de falha: na primeira falha envia notificação e evento de investigação, em falhas contínuas fica em silêncio e, na recuperação, encerra e envia evento de recuperação; se o cartão não recuperado for fechado manualmente e a falha continuar, volta a reportar. A coleta do Feishu escreve um snapshot privado após a leitura completa e emite evento, o resumo confere o número do snapshot e eventos antigos não usam material novo; coleta e resumo ficam em série no mesmo grupo. Só dados legíveis pela identidade do titular entram no resumo, e o que está invisível não é tratado como não enviado.
 
-浏览器交接模板是主任务对已安装入口的参数调用，不带浏览器驱动。可信配置固定命令、目标与允许操作，续办使用入口实际返回的 Codex 会话编号；网页内容和外部事件不能改这些范围。连接、登录或验证受阻时由主任务 `ask` 并结束本轮，回答后只继续剩余网页步骤，浏览器助手不再次委派或独立结案。
+A receita de transferência de navegador é uma chamada com parâmetros da tarefa principal a uma entrada já instalada, sem driver de navegador. A configuração confiável fixa comando, alvo e operações permitidas, e a continuação usa o número de sessão do Codex realmente devolvido pela entrada; conteúdo de página e eventos externos não podem alterar esses limites. Quando conexão, login ou verificação ficam bloqueados, a tarefa principal faz `ask` e encerra a rodada; depois da resposta só continua as etapas web restantes, sem que o assistente de navegador delegue de novo ou encerre por conta própria.
 
-巡检和飞书摘要的脚本使用本地假 HTTP 和假飞书 CLI 验证，不调用真实业务数据、不发真消息。公开样例不含内部地址、账号或业务记录；用户替换后的资料不应提交到仓库。
+Os scripts de inspeção e de resumo do Feishu são verificados com HTTP falso local e CLI falso do Feishu, sem chamar dados de negócio reais nem enviar mensagens de verdade. Os exemplos públicos não contêm endereços internos, contas ou registros de negócio; o material substituído pelo usuário não deve ser commitado no repositório.
 
-## 结构与实测
+## Estrutura e medições
 
-主机外壳支持 Windows、macOS、Linux，内核不区分操作系统。Windows 安装用 `install.ps1`，常驻用当前用户登录后的计划任务，由 wscript 隐藏启动，退出 10 秒后重启；每轮由独立 Node 监督进程保存输出和退出码，PowerShell 建立 Job Object 管住后代，接单程序重启后读原有记录继续核对。Windows 数据目录用 ACL；Unix 保留权限模式、登录 shell、进程组和 launchd/systemd。
+O host suporta Windows, macOS e Linux; o kernel não distingue sistema operacional. A instalação no Windows usa `install.ps1`, e a permanência usa uma tarefa agendada após o login do usuário atual, iniciada de forma oculta por wscript e reiniciada 10 segundos depois de sair; cada rodada tem um processo supervisor Node próprio que guarda saída e código de saída, o PowerShell cria um Job Object para controlar os descendentes e, após reiniciar, o worker lê os registros existentes para continuar conferindo. O diretório de dados no Windows usa ACL; no Unix permanecem modo de permissões, shell de login, grupo de processos e launchd/systemd.
 
-一条只追加的事实日志是业务状态的来源；视图可重建，重放不重新执行规则。cron、later、重试、租约和离线判断共用到期表，外壳只安排下一次到期的定时器。只有改了东西的输入和到期叫醒的那一次才重算它：什么都没改变的输入（比如被挡下的心跳）不读排队，也不写事实；只随时间变化的部分都有自己的到期时间，定时器到了自然重算。接口是 HTTP + JSON；专用 CLI、MCP、来源、接单程序和通道都使用同一组接口。
+Um registro de fatos somente de acréscimo é a origem do estado de negócio; as views podem ser reconstruídas e reproduzir não reexecuta as regras. cron, later, novas tentativas, leases e a verificação de offline compartilham a tabela de vencimentos, e o host só agenda o temporizador do próximo vencimento. Só a entrada que mudou algo e o despertar de um vencimento o recalculam: entradas que não mudaram nada (como um heartbeat bloqueado) não leem a fila nem gravam fatos; as partes que mudam apenas com o tempo têm o próprio horário de vencimento e são recalculadas naturalmente quando o temporizador dispara. A interface é HTTP + JSON; CLI dedicado, MCP, fontes, workers e canais usam o mesmo conjunto de interfaces.
 
-| 目录                                                     | 职责                                                                    |
-| -------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `kernel/`                                                | 确定性决策、演进、日志、到期、规则匹配、请求处理、卡片表单              |
-| `host/`                                                  | Node HTTP、文件与 SQLite 连接、时钟、配置、状态汇总、后台服务和插件加载 |
-| `protocol/`                                              | 类型、JSON Schema、输入校验、HTTP 客户端与一致性检查                    |
-| `worker/`                                                | 接单、Agent 进程、心跳与停止、回执读取和提交                            |
-| `cli/`、`bin/`                                           | 用户命令、MCP 与命令行启动入口                                          |
-| `plugins/`                                               | Agent、事件、通道和交付插件，统一发现入口                               |
-| `examples/recipes/`                                      | 完整场景的规则、任务 Skill 与启用说明                                   |
-| `examples/plugins/`、`examples/skills/`、`examples/*.sh` | 最小插件、独立任务手册和 curl/jq 示例                                   |
-| `skills/agent-autoloop/`                                 | 中台的正式配置与操作手册，供用户和 Agent 使用                           |
-| `docs/`                                                  | 通信协议、插件开发说明与架构图                                          |
-| `tests/`                                                 | 日常行为测试及测试辅助代码                                              |
-| `sim/`                                                   | 固定种子模拟、有界穷举、强杀与变异                                      |
-| `scripts/`、`.github/workflows/`                         | 性能与真机验证、安装冒烟和跨平台 CI                                     |
+| Diretório                                                  | Responsabilidade                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `kernel/`                                                  | Decisão determinística, evolução, log, vencimentos, casamento de regras, tratamento de requisições e formulários de cartão |
+| `host/`                                                    | HTTP do Node, arquivos e conexão SQLite, relógio, configuração, resumo de estado, serviços em segundo plano e carregamento de plugins |
+| `protocol/`                                                | Tipos, JSON Schema, validação de entrada, cliente HTTP e verificação de conformidade |
+| `worker/`                                                  | Chamada de trabalho, processos de Agent, heartbeat e parada, leitura e envio do recibo |
+| `cli/`, `bin/`                                             | Comandos do usuário, MCP e ponto de partida da linha de comando                  |
+| `plugins/`                                                 | Plugins de Agent, de eventos, de canal e de entrega, com descoberta unificada de entradas |
+| `examples/recipes/`                                        | Regras de receitas completas, Skills de tarefa e instruções de ativação          |
+| `examples/plugins/`, `examples/skills/`, `examples/*.sh`   | Plugins mínimos, manuais de tarefa independentes e exemplos com curl/jq          |
+| `skills/agent-autoloop/`                                   | Configuração oficial e manual de operação da central, para usuários e Agents     |
+| `docs/`                                                    | Protocolo de comunicação, documentação de desenvolvimento de plugins e diagramas de arquitetura |
+| `tests/`                                                   | Testes de comportamento do dia a dia e código auxiliar de teste                  |
+| `sim/`                                                     | Simulação com semente fixa, enumeração limitada, kill forçado e mutação          |
+| `scripts/`, `.github/workflows/`                           | Desempenho e verificação em máquina real, smoke test de instalação e CI multiplataforma |
 
-现成场景与内置插件的入口见 [README](../README.md#拿来即用的场景模板)，开发模板见[写插件](plugins.md)。插件文件名仍使用协议中的 `source.ts`，对应面向用户的“事件插件”。
+As receitas prontas e as entradas dos plugins embutidos estão no [README](../README.md#receitas-prontas-para-usar), e os modelos de desenvolvimento em [Escrever plugins](plugins.md). Os nomes de arquivo de plugin continuam usando o `source.ts` do protocolo, que corresponde ao “plugin de eventos” voltado ao usuário.
 
-`npm run benchmark` 打印冷启动、空闲和千连接内存、逐条落盘写入、派活 p99、排队很深时被挡下的心跳 p99 和模拟吞吐，不设达标线。数字在 README，是 Apple M5 Pro 上的本地实测，不代表服务器容量；不通过改变采样时间或主动触发 GC 降低读数。日志只追加，不压缩，磁盘占用仍随历史增长。常驻内存不保存全部历史，待处理工作及返回结果仍会占用内存；统计总量仍需遍历数据库索引。没有总览页、工作流画布、Agent 记忆、模型路由、多租户或插件市场。
+`npm run benchmark` imprime inicialização a frio, memória em ocioso e com mil conexões, gravação em disco registro a registro, p99 do despacho, p99 dos heartbeats bloqueados com fila profunda e vazão da simulação, sem linha de corte a atingir. Os números estão no README, medidos localmente em um Apple M5 Pro, e não representam capacidade de servidor; não se reduz a leitura mudando o tempo de amostragem nem disparando GC ativamente. O log só acrescenta e não compacta, então o uso de disco continua crescendo com o histórico. A memória residente não guarda todo o histórico, mas trabalho pendente e resultados devolvidos ainda ocupam memória; somar totais ainda exige percorrer os índices do banco. Não há página de visão geral, canvas de workflow, memória de Agent, roteamento de modelo, multilocação nem mercado de plugins.
 
-### 历史增长实测
+### Crescimento do histórico na prática
 
-Apple M5 Pro、24 GB、Node 24.21.0，用 `node scripts/history.ts 1000 10000 100000` 复现：
+Apple M5 Pro, 24 GB, Node 24.21.0, reproduzido com `node scripts/history.ts 1000 10000 100000`:
 
-| 已完成任务轮数（约） | 事实条数（约） | 正常启动 | 空闲 RSS | 领活 HTTP 中位数 | 状态汇总 |
-| -------------------- | -------------: | -------: | -------: | ---------------: | -------: |
-| 2,000                |         11,000 |  84.7 ms |  59.1 MB |          0.89 ms |  11.2 ms |
-| 20,000               |        110,000 |  83.2 ms |  58.9 MB |          0.84 ms |  83.6 ms |
-| 200,000              |      1,100,000 |  99.8 ms |  59.1 MB |          0.82 ms | 927.1 ms |
+| Rodadas de tarefas concluídas (aprox.) | Fatos (aprox.) | Inicialização normal | RSS ocioso | Mediana HTTP de chamada de trabalho | Resumo de estado |
+| -------------------------------------- | -------------: | -------------------: | ---------: | ----------------------------------: | ---------------: |
+| 2.000                                  |         11.000 |              84,7 ms |    59,1 MB |                             0,89 ms |          11,2 ms |
+| 20.000                                 |        110.000 |              83,2 ms |    58,9 MB |                             0,84 ms |          83,6 ms |
+| 200.000                                |      1.100.000 |              99,8 ms |    59,1 MB |                             0,82 ms |         927,1 ms |
 
-- 110 万条事实时，收事件、去重、交结果、心跳、空闲通道轮询和 `why` 的请求中位数为 0.39–0.69 ms；进程被强杀后正常恢复约 101 ms。
-- 内存：持续写入历史时最高约 282 MB；业务请求加一个慢速日志订阅约 75 MB。
-- 会随历史变大的：状态汇总耗时，以及日志和索引占的磁盘。
-- 格式变化后首次启动要从日志全量重建：110 万条用时 43.1 秒，峰值约 141 MB，重建前后数据一致。平时重启不重放。
-- 20 万步模拟（观察项）：93.8 秒，2131 步/秒。
+- Com 1,1 milhão de fatos, a mediana das requisições de recebimento de eventos, deduplicação, entrega de resultado, heartbeat, polling de canal ocioso e `why` é de 0,39–0,69 ms; a recuperação normal após kill forçado do processo leva cerca de 101 ms.
+- Memória: pico de cerca de 282 MB durante gravação contínua de histórico; cerca de 75 MB com requisições de negócio mais uma assinatura lenta do log.
+- O que cresce com o histórico: o tempo do resumo de estado e o disco ocupado por log e índices.
+- A primeira inicialização após mudança de formato reconstrói tudo a partir do log: 1,1 milhão de registros levou 43,1 s, com pico de cerca de 141 MB e dados idênticos antes e depois. Reinicializações comuns não reproduzem.
+- Simulação de 200 mil passos (item observacional): 93,8 s, 2131 passos/s.
 
-## 交付插件
+## Plugin de entrega
 
-交付是 `plugins/delivery` 的普通 Agent 进程，内核不认识它。项目仍用 `ops/delivery.json`，标签仍是 `deliver`、`deliver-attended`、`deliver-review`、`ask-owner`，提交状态仍为 `delivery`。审查状态默认 `agent-review`，由 `review.status` 或接单命令的 `--review-status` 指定。审查可以按项目设置，也可用 `--review-policy owner/name:路径` 从同一个仓库的 main 读取全局策略。设置格式、规则与 Ship 示例见[配置手册](../skills/agent-autoloop/SKILL.md#交付流水线)。
+A entrega é um processo de Agent comum em `plugins/delivery`; o kernel não a conhece. Os projetos continuam usando `ops/delivery.json`, os rótulos continuam sendo `deliver`, `deliver-attended`, `deliver-review` e `ask-owner`, e o status de commit continua `delivery`. O status de revisão é por padrão `agent-review`, especificado por `review.status` ou pelo `--review-status` do comando de chamada de trabalho. A revisão pode ser configurada por projeto ou, com `--review-policy owner/name:caminho`, ler uma política global da main do mesmo repositório. Formato da configuração, regras e exemplo de Ship estão no [Manual de configuração](../skills/agent-autoloop/SKILL.md#pipeline-de-entrega).
 
-来源只给事件，仓库与执行命令由中台规则固定。内置 `poll.ts` 读取待处理标签，以“仓库、事项、标签记录、当前提交”生成稳定事件编号，不另存游标；某个事项读不到标签记录时这一段记 0，不影响其他事项。无标签（已合并的也一样）、关闭且未合并、fork 或非 main 目标不启动交付。每个 PR 一个事项，并发由规则组的 `parallel`、每条规则或 Agent 的 `maxActive` 和接单程序容量共同控制。
+A fonte só fornece eventos; repositório e comandos de execução são fixados pelas regras da central. O `poll.ts` embutido lê os rótulos pendentes e gera números de evento estáveis a partir de “repositório, assunto, registro de rótulo e commit atual”, sem guardar cursor separado; quando não consegue ler o registro de rótulo de um assunto, aquele trecho é registrado como 0, sem afetar os outros. Sem rótulo (inclusive já mesclado), fechado sem merge, fork ou alvo diferente de main, a entrega não é iniciada. Um assunto por PR, com concorrência controlada em conjunto pelo `parallel` do grupo de regras, pelo `maxActive` de cada regra ou Agent e pela capacidade do worker.
 
-| 步骤               | 必须满足                                                                                                                                                                                                                                              |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 读取设置           | 用这一轮审查所对的 main 的固定提交读项目设置和审查要点，不读 PR 里的版本；main 前进后重来一轮就重新读                                                                                                                                                 |
-| 同步               | PR 已包含 main；缺少时请求 GitHub 同步，在本轮内等到同步后的提交出现再继续，15 分钟内没出现才结束这一轮，由中台重试                                                                                                                                   |
-| 审查               | 裸 Git 对象转文字差异；只审分支自己的提交，排除干净合入 main 的变化，保留冲突解决；普通内部文档可略过模型；分支里有三个及以上父提交的章鱼合并时，审查看不到它带来的改动，直接报问题，要求改成普通合并                                                 |
-| 审查进程           | 不检出 PR，不执行其中的代码、测试、设置或 hooks；默认 Codex 忽略用户配置和记忆，只读独立快照                                                                                                                                                          |
-| 审查器             | 默认是内置 Codex 或 `review.command`；`review.agents` 列出的 Agent 写的改动改用给它指定的：内置 Codex 的模型和深度、一条命令，或免审                                                                                                                  |
-| 完整检查           | 草稿先转 ready，转之前记下最新一次检查，只接受比它新的（工作流触发类型要带 `ready_for_review`）；只接受当前提交最新一次 pull_request 工作流和指定 job 都完成且成功，草稿或 skipped job 不算；矩阵 job（名字像 `check (ubuntu-latest)`）每一项都要成功 |
-| 合并               | 再读 PR head、目标分支、main 和标签；head 变化或目标分支不再是 main 就结束这一轮，由中台重试；main 前进就在本轮回到同步，最多 3 轮；检查通过后才写可配置的审查状态，按已审查 SHA 合并                                                                 |
-| 自动合并与响应丢失 | 先关闭已有自动合并并读回确认；合并响应丢失先看是否已经合并，不盲目再提交；清标签失败也读回确认是否已移除；已合并的 PR 最后去掉 `deliver`，没合并的最后去掉 `deliver-review`，只去掉一部分时重试能接着做完，也不会把只审查的 PR 合并                   |
-| 发布               | 等一个覆盖合并提交的 Ship 成功，再核对健康版本；健康 HTTP 200 不能覆盖 Ship 失败或尚未完成                                                                                                                                                            |
-| 后续发布           | 新版覆盖且确实上线可以完成旧交付；已经完成的交付不因后来的失败发布倒退                                                                                                                                                                                |
+| Etapa                       | Deve satisfazer                                                                                                                                                                                                                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Leitura da configuração     | Lê a configuração do projeto e os pontos de revisão no commit fixo da main correspondente à revisão desta rodada, não a versão do PR; se a main avançar, uma nova rodada lê de novo                                                                                                                                  |
+| Sincronização               | O PR já contém a main; quando falta, pede sincronização ao GitHub e espera dentro da rodada até o commit sincronizado aparecer para continuar, só encerrando a rodada se não aparecer em 15 minutos, para a central tentar de novo                                                                                      |
+| Revisão                     | Objetos Git puros viram diff em texto; revisa apenas os commits do próprio branch, excluindo mudanças que entraram limpas na main e mantendo resoluções de conflito; documentação interna comum pode pular o modelo; quando o branch tem um merge octopus com três ou mais commits pai, a revisão não enxerga as mudanças que ele trouxe e reporta o problema diretamente, pedindo para trocar por um merge comum |
+| Processo de revisão         | Não faz checkout do PR e não executa o código, os testes, a configuração nem os hooks dele; por padrão o Codex ignora configuração e memória do usuário e lê apenas um snapshot independente                                                                                                                         |
+| Revisor                     | Por padrão é o Codex embutido ou `review.command`; mudanças escritas por Agents listados em `review.agents` passam a usar o revisor designado para eles: modelo e profundidade do Codex embutido, um comando, ou dispensa de revisão                                                                                   |
+| Verificação completa        | Rascunho vira ready primeiro, registrando antes a verificação mais recente e aceitando apenas as mais novas que ela (o tipo de disparo do workflow deve incluir `ready_for_review`); aceita apenas quando o workflow pull_request mais recente do commit atual e os jobs especificados terminaram todos com sucesso — rascunho ou job skipped não conta; em jobs de matriz (com nome como `check (ubuntu-latest)`) cada item precisa ter sucesso |
+| Merge                       | Lê de novo o head do PR, o branch de destino, a main e os rótulos; se o head mudou ou o branch de destino não é mais main, encerra a rodada para a central tentar de novo; se a main avançou, volta à sincronização dentro da rodada, no máximo 3 rodadas; só depois que as verificações passam escreve o status de revisão configurável e faz o merge pelo SHA revisado |
+| Auto-merge e respostas perdidas | Primeiro desativa o auto-merge existente e lê de volta para confirmar; se a resposta do merge se perder, verifica primeiro se o merge já aconteceu, sem reenviar às cegas; falha ao limpar rótulos também é confirmada por leitura de volta para saber se já foram removidas; em PRs já mesclados remove por último a `deliver` e, nos não mesclados, remove por último a `deliver-review`; quando só uma parte foi removida, a nova tentativa consegue terminar e não faz merge de PRs que são só revisão |
+| Publicação                  | Espera um Ship bem-sucedido que cubra o commit do merge e então confere a versão saudável; HTTP 200 do health não compensa Ship falho ou ainda não concluído                                                                                                                                                          |
+| Publicações seguintes       | Uma versão nova que cubra e que de fato tenha ido para produção pode concluir a entrega antiga; entregas já concluídas não regridem por publicações que falharem depois                                                                                                                                                |
 
-等待完整检查时，当前提交最新的 `pull_request` 运行必须比转正式前记录的检查编号更新。该运行处于 `queued`、`waiting` 或 `pending`，完整 jobs 列表为空，且从 `created_at` 起超过 10 分钟，判为 GitHub 收下检查后没有开始执行。插件把 PR 转草稿再转正式，自救一次。转正式前重新记录最新的 `pull_request` 运行编号，排除转草稿触发的检查，只接受之后的新运行。自救记录与提交绑定，执行期间存在 `DeliveryIO.checkRecovery`，需要复查时把检查编号作为 `checkAfter` 写进已有 `delivery-retry` 的 `about` JSON，与 `head` 和错误次数一起保存，下一轮继续使用，提交变化后重新计。新运行也按同样条件卡住时，立即通过交付退回和通知流程说明 GitHub 一直没有开始检查，不计入五次执行错误。已有任何 job 的运行继续等待，其余情况仍受原有 30 分钟等待和错误重试规则约束。`workflow_dispatch` 运行不作为完整检查依据。
+Enquanto espera a verificação completa, a execução `pull_request` mais recente do commit atual precisa ser mais nova que o número de verificação registrado antes de virar ready. Se essa execução está em `queued`, `waiting` ou `pending`, a lista completa de jobs está vazia e já se passaram mais de 10 minutos desde `created_at`, considera-se que o GitHub recebeu a verificação e não começou a executar. O plugin passa o PR para rascunho e de volta para ready, uma única autorrecuperação. Antes de voltar a ready, registra de novo o número da execução `pull_request` mais recente, excluindo as verificações disparadas pela ida a rascunho e aceitando apenas execuções novas posteriores. O registro da autorrecuperação é vinculado ao commit e existe em `DeliveryIO.checkRecovery` durante a execução; quando é preciso reverificar, o número da verificação é gravado como `checkAfter` no JSON `about` de um `delivery-retry` já existente, junto com `head` e a contagem de erros, para a rodada seguinte continuar usando, reiniciando a contagem quando o commit muda. Se a execução nova travar nas mesmas condições, informa imediatamente, pelo fluxo de devolução e notificação da entrega, que o GitHub não começou a verificar, sem contar para os cinco erros de execução. Execuções que já tenham qualquer job continuam em espera; os demais casos permanecem sob as regras originais de espera de 30 minutos e nova tentativa por erro. Execuções `workflow_dispatch` não servem de base para verificação completa.
 
-`deliver-review` 审查通过就结束并移除交付标签。在等待检查期间加上它，合并前也会停在只审查。等待检查时撤回 `deliver` 会结束本轮，并报告 `withdrawn`，表示没有合并或发布。关闭未合并的 PR 先写 `delivery` 失败再清交付标签，不让等待者卡在 pending。默认用中台的失败重试和提问卡片。接入已有交付工具时，`--notify-command` 把 `ask-owner` 转告给通知程序，成功后移除标签。退回写 `delivery` 失败并移除交付标签。已有 `deliver-attended` 的退回等待三分钟，仍未清除才转告。临时错误用中台的一分钟复查重试，GitHub 的 5xx 等平台错误最多 60 次，其他执行错误最多 5 次。
+`deliver-review` encerra e remove os rótulos de entrega assim que a revisão passa. Se for acrescentada enquanto espera as verificações, também para em somente revisão antes do merge. Retirar `deliver` enquanto espera as verificações encerra a rodada e reporta `withdrawn`, indicando que não houve merge nem publicação. Fechar um PR não mesclado primeiro grava falha em `delivery` e depois limpa as etiquetas de entrega, para não deixar quem espera preso em pending. Por padrão usam-se a nova tentativa por falha e os cartões de pergunta da central. Ao integrar uma ferramenta de entrega já existente, `--notify-command` repassa `ask-owner` ao programa de notificação e remove o rótulo depois do sucesso. A devolução grava falha em `delivery` e remove os rótulos de entrega. Devoluções em PRs que já têm `deliver-attended` esperam três minutos e só repassam se ainda não tiver sido removida. Erros temporários usam a reverificação de um minuto da central para novas tentativas; erros de plataforma, como 5xx do GitHub, no máximo 60 vezes, e outros erros de execução no máximo 5 vezes.
 
-改动来源只认提交状态 `delivery-agent/<PR 编号>`。它由项目的 `review.trusted` 或共用策略的 `trusted_submitters` 指定的 GitHub 账号写入。干净同步 main 沿用声明，新提交或手工解决冲突要重新声明。共用策略指定审查器列表，同名可重复，空列表免审。深审路径或只审查请求覆盖免审。普通内部文档按项目策略免审。
+A origem das mudanças reconhece apenas o status de commit `delivery-agent/<número do PR>`. Ele é escrito por contas do GitHub especificadas no `review.trusted` do projeto ou no `trusted_submitters` da política compartilhada. Sincronizar limpo com a main mantém a declaração; commits novos ou conflitos resolvidos à mão exigem declarar de novo. A política compartilhada especifica a lista de revisores, nomes podem se repetir, e lista vazia dispensa revisão. Caminhos de revisão profunda ou pedidos de somente revisão prevalecem sobre a dispensa. Documentação interna comum é dispensada de revisão pela política do projeto.
 
-审查最多自动三轮。审查器名单、模型或深度不变时，从已经审过的提交之后开始审。每轮全部审查器结束后写入 PR 正文的「Codex 审查」，用可信 GitHub 账号写入的状态验证轮次；可以在每项「处理：」后说明做法。无可信记录的旧轮次不能授权合并。
+A revisão faz no máximo três rodadas automáticas. Quando a lista de revisores, o modelo ou a profundidade não mudam, começa a revisar depois dos commits já revisados. Ao fim de todos os revisores em cada rodada, escreve na seção “Revisão do Codex” do corpo do PR, validando a rodada por um status escrito com conta GitHub confiável; é possível explicar o procedimento depois de cada item “Tratamento:”. Rodadas antigas sem registro confiável não podem autorizar o merge.
 
-带 `deliver` 标签的已合并 PR 直接继续跟踪 Ship 和健康检查，标签已去掉的不再跟踪、不写状态；审查期间被别人合并的也接着跟踪。默认最多跟踪 30 分钟，超时交给中台重试；没有健康设置的项目明确报告只完成合并。发布范围对比**健康版本到目标提交的整个差异**：只有普通内部文档变化可跳过，可执行位、符号链接、重命名到外部路径、未知历史都要求发布；后来只有文档变化不能让尚未完成的代码发布被跳过。健康接口报短提交号时先向 GitHub 换成完整号，换不到就算要发布。
+PRs já mesclados com o rótulo `deliver` continuam diretamente sendo acompanhados por Ship e verificação de saúde; com o rótulo já removido, não são mais acompanhados nem recebem status. Os que foram mesclados por outros durante a revisão também continuam acompanhados. Por padrão acompanha no máximo 30 minutos e, ao estourar o tempo, entrega à central para nova tentativa; projetos sem configuração de saúde reportam explicitamente que apenas o merge foi concluído. O escopo da publicação compara **todo o diff entre a versão saudável e o commit alvo**: apenas mudanças de documentação interna comum podem ser puladas; bit executável, links simbólicos, renomeações para caminhos externos e histórico desconhecido exigem publicação; mudanças posteriores só de documentação não podem fazer pular uma publicação de código ainda não concluída. Quando a interface de saúde informa um commit curto, primeiro troca pelo completo no GitHub; não conseguindo trocar, considera que precisa publicar.
 
-Ship 使用本引擎仓库的 `plugins/delivery/action.yml`，项目固定到发布后的完整提交。Action 只输出 `release` 和 `superseded`，项目已有发布步骤根据输出运行。它与交付进程共用 `project.ts` 的范围与健康判断，不在项目里长期复制工具。
+O Ship usa o `plugins/delivery/action.yml` deste repositório do motor, com os projetos fixados no commit completo posterior à publicação. A Action só produz `release` e `superseded`, e os passos de publicação já existentes no projeto rodam conforme essa saída. Ela compartilha com o processo de entrega o escopo e a avaliação de saúde em `project.ts`, sem copiar ferramentas no projeto de forma permanente.
 
-普通健康 URL 只允许 HTTPS。测试时必须显式传 `--test-local-health`，Action 同样要 `test-local-health: 'true'`，才接受 `http://127.0.0.1`；不接受其他 HTTP 地址。GitHub 合并规则由项目维护者设置。
+URLs de saúde comuns só aceitam HTTPS. Em testes é preciso passar explicitamente `--test-local-health`, e na Action também `test-local-health: 'true'`, para aceitar `http://127.0.0.1`; outros endereços HTTP não são aceitos. As regras de merge do GitHub são definidas pelos mantenedores do projeto.
 
-## 版本与兼容
+## Versão e compatibilidade
 
-版本号只写在 tag 上（`v1.2.3`），不进任何文件。`agent-autoloop --version` 读当前提交上的 tag，不在发布的提交上就显示“未发布”。
+O número de versão vive apenas nas tags (`v1.2.3`) e não entra em nenhum arquivo. `agent-autoloop --version` lê a tag do commit atual e mostra “não publicado” quando não está em um commit publicado.
 
-| 这一版                                 | 版本号怎么变              |
-| -------------------------------------- | ------------------------- |
-| 老用法不改就跑不了                     | 第一位加一：1.8.3 → 2.0.0 |
-| 这一周的第一版（北京时间周一零点起算） | 第二位加一：1.8.3 → 1.9.0 |
-| 同一周里之后的每一版，急修也算         | 第三位加一：1.8.3 → 1.8.4 |
+| Nesta versão                                        | Como o número muda                     |
+| --------------------------------------------------- | -------------------------------------- |
+| O uso antigo não roda sem mudar                      | Primeiro dígito sobe: 1.8.3 → 2.0.0     |
+| A primeira versão da semana (contada a partir da meia-noite de segunda no horário de Pequim) | Segundo dígito sobe: 1.8.3 → 1.9.0 |
+| Cada versão seguinte na mesma semana, incluindo correções urgentes | Terceiro dígito sobe: 1.8.3 → 1.8.4 |
 
-从上往下看，先对上哪条就按哪条加。第二位、第三位只说明这是哪一周的第几版，新能力和修复都可能在里面；能不能放心升只看第一位：第一位没变，老用法就照样能跑。周一零点刚过发的急修，也算这一周的第一版。
+Leia de cima para baixo e aplique a primeira linha que se encaixar. O segundo e o terceiro dígitos dizem apenas qual é a versão daquela semana; capacidades novas e correções podem estar em qualquer um deles. Para saber se pode atualizar sem medo, olhe só o primeiro dígito: se ele não mudou, o uso antigo continua funcionando. Uma correção urgente publicada logo depois da meia-noite de segunda também conta como a primeira versão da semana.
 
-老用法指这些：
+Uso antigo é isto:
 
-- `/v1` 接口的路径、字段含义和鉴权；
-- 插件约定（`plugins/<名字>/{agent,channel,source}.ts`）；
-- `rules.json`；
-- 文档写了的命令和参数；
-- 交付约定（`ops/delivery.json`、四个标签、`delivery` 状态）；
-- 旧版本留下的数据，新版本能接着用。
+- Caminhos, significado dos campos e autenticação das interfaces `/v1`;
+- As convenções de plugin (`plugins/<nome>/{agent,channel,source}.ts`);
+- `rules.json`;
+- Os comandos e argumentos escritos na documentação;
+- As convenções de entrega (`ops/delivery.json`, os quatro rótulos, o status `delivery`);
+- Os dados deixados por versões antigas continuam utilizáveis nas novas.
 
-内部代码、文档没写的字段和提示文字不算。新增字段不算破坏，所以插件和客户端要忽略不认识的字段。要去掉一个东西，先在一版里标成废弃、写进发布说明，到下一个第一位版本才真删。
+Código interno, campos não documentados e textos de prompt não contam. Campos novos não contam como quebra, então plugins e clientes devem ignorar campos que não conhecem. Para remover algo, primeiro marque como obsoleto em uma versão e registre nas notas de lançamento; a remoção de verdade só acontece na próxima versão do primeiro dígito.
 
-`/v1` 单独算：只有 HTTP 接口不兼容时才变，软件到 2.0 不等于协议到 `/v2`。发出去的版本不再改，有问题就发下一个号。
+`/v1` conta à parte: só muda quando as interfaces HTTP ficam incompatíveis, e o software chegar a 2.0 não significa que o protocolo chega a `/v2`. Versões publicadas não são alteradas depois; havendo problema, publique o número seguinte.
 
-常规改动一天最多发一版；崩溃、丢数据、安全问题、装不上的修复随时发。只改文档、测试、CI 的不发。大改动可以先发试用版（`v1.2.0-rc.1`），安装和 `update` 不会装到它。
+Mudanças comuns publicam no máximo uma versão por dia; correções de crash, perda de dados, problemas de segurança e falha de instalação saem a qualquer momento. O que só altera documentação, testes ou CI não é publicado. Mudanças grandes podem sair primeiro como versão de teste (`v1.2.0-rc.1`), que a instalação e o `update` não pegam.

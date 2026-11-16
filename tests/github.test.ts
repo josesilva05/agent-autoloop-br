@@ -1,4 +1,5 @@
-// GitHub comments longer than the summary are lost when the event detail carries the old issue body instead of the comment.
+// Comentários do GitHub maiores que o summary se perdem quando o detail do evento traz o corpo antigo da issue em vez
+// do comentário.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
@@ -6,15 +7,15 @@ import github from "../plugins/github/source.ts";
 
 const secret = "test-secret";
 
-test("github: an issue comment carries its full words and the issue as its subject", () => {
-  const comment = `${"A".repeat(200)}keep the rest of this comment`;
+test("github: um comentário de issue carrega o texto inteiro e a issue como subject", () => {
+  const comment = `${"A".repeat(200)}guarde o resto deste comentário`;
   const body = JSON.stringify({
     action: "created",
     repository: { full_name: "example/widgets" },
     issue: {
       number: 42,
-      title: "Original issue",
-      body: "The old issue body",
+      title: "Issue original",
+      body: "O corpo antigo da issue",
       html_url: "https://github.com/example/widgets/issues/42",
     },
     comment: {

@@ -1,6 +1,6 @@
-// Failure modes: shell examples cross credential boundaries, drop a receipt or forget the delivered version; answering a
-// card does not resume its matter; the example exits successfully after an HTTP error; unrelated scheduled work takes the
-// example's claim. Only curl, jq and shell builtins run.
+// Modos de falha: os exemplos de shell atravessam fronteiras de credencial, perdem um recibo ou esquecem a versão
+// entregue; responder a um cartão não retoma o assunto dele; o exemplo sai com sucesso depois de um erro de HTTP; trabalho
+// agendado sem relação pega a reivindicação do exemplo. Só curl, jq e builtins do shell rodam.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -41,7 +41,7 @@ const shell = (file: string, key: string, extra: Record<string, string> = {}) =>
     child.stderr.on("data", (b) => (err += b));
     child.on("close", (code) => resolve({ code, out, err }));
   });
-test("curl and jq examples run against a conforming hub and complete the answer loop", async () => {
+test("os exemplos de curl e jq rodam contra uma central conforme e completam o ciclo de resposta", async () => {
   hub.fixtureClear("schedules");
   hub.tick(Date.now() - 5 * 60_000);
   hub.tick();
@@ -50,7 +50,11 @@ test("curl and jq examples run against a conforming hub and complete the answer 
   for (const table of ["events", "runs", "run_events", "cards", "deliveries", "timers", "seen"] as const)
     hub.fixtureClear(table);
   hub.ingest("app", { id: "shell", type: "feedback.new", subject: "shell" });
-  const receipt = { outcome: "done", summary: "问了", ask: [{ title: "选一个", text: "测试", options: ["甲", "乙"] }] };
+  const receipt = {
+    outcome: "done",
+    summary: "perguntou",
+    ask: [{ title: "escolha uma", text: "teste", options: ["alfa", "beta"] }],
+  };
   const worker = await shell("worker", keys.worker, {
     AGENT_AUTOLOOP_RECEIPT: JSON.stringify(receipt),
     AGENT_AUTOLOOP_CLAIM: "shell-1",
@@ -59,7 +63,7 @@ test("curl and jq examples run against a conforming hub and complete the answer 
   const channel = await shell("channel", keys.channel);
   assert.equal(channel.code, 0, channel.err);
   const card = JSON.parse(channel.out);
-  assert.equal(card.title, "选一个");
+  assert.equal(card.title, "escolha uma");
   const answer = await fetch(`${url}/v1/cards/${card.id}/answer`, {
     method: "POST",
     headers: { authorization: `Bearer ${keys.channel}`, "content-type": "application/json" },
@@ -67,6 +71,6 @@ test("curl and jq examples run against a conforming hub and complete the answer 
   });
   assert.equal(answer.status, 200);
   assert.equal((await shell("worker", keys.worker, { AGENT_AUTOLOOP_CLAIM: "shell-2" })).code, 0);
-  assert.notEqual((await shell("worker", keys.channel)).code, 0);
   assert.notEqual((await shell("channel", keys.worker)).code, 0);
+  assert.notEqual((await shell("worker", keys.channel)).code, 0);
 });

@@ -1,4 +1,4 @@
-// A machine that already runs a hub or worker must not lose its config when someone mistakenly calls join.
+// Uma máquina que já executa uma central ou um worker não pode perder a configuração quando alguém chama join por engano.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -18,7 +18,7 @@ const join = (home: string) =>
     },
   );
 
-test("join creates a worker configuration on a fresh machine", (t) => {
+test("join cria uma configuração de worker numa máquina nova", (t) => {
   const home = mkdtempSync(path.join(tmpdir(), "agent-autoloop-join-new-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const result = join(home);
@@ -33,7 +33,7 @@ for (const [name, config] of [
   ["hub", { url: "http://127.0.0.1:3350", hub: { listen: "127.0.0.1:3350" }, owner: "owner-key" }],
   ["worker", { url: "https://old-hub.example", worker: { name: "existing", key: "old-key" } }],
 ] as const) {
-  test(`join refuses to overwrite an existing ${name} configuration`, (t) => {
+  test(`join se recusa a sobrescrever uma configuração de ${name} já existente`, (t) => {
     const home = mkdtempSync(path.join(tmpdir(), "agent-autoloop-join-existing-"));
     t.after(() => rmSync(home, { recursive: true, force: true }));
     const file = path.join(home, "config.json");
@@ -41,7 +41,7 @@ for (const [name, config] of [
     writeFileSync(file, original);
     const result = join(home);
     assert.equal(result.status, 1, result.stderr);
-    assert.match(result.stderr, /已经配置过了/);
+    assert.match(result.stderr, /Já está configurado/);
     assert.equal(readFileSync(file, "utf8"), original);
     assert.ok(existsSync(file));
   });

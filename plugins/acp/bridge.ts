@@ -1,5 +1,5 @@
-// A turn run over the Agent Client Protocol: a process of its own that talks to the ACP agent on stdio and prints what
-// the worker's adapter reads, one JSON object per line.
+// Uma rodada executada pelo Agent Client Protocol: um processo só dela, que conversa com o Agent ACP por stdio e
+// imprime aquilo que o adapter do worker lê, um objeto JSON por linha.
 import { spawn } from "node:child_process";
 import { existsSync, lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -8,7 +8,7 @@ import { eachLine } from "../../host/lines.ts";
 import { versionName } from "../../host/version.ts";
 import type { Turn } from "../../worker/agents.ts";
 
-/** The agent said no, as opposed to going away, saying nothing, or having what was asked for in use. */
+/** O Agent disse não — em vez de sumir, de não dizer nada ou de estar com o que foi pedido em uso. */
 class Refused extends Error {}
 
 const isLink = (file: string) => {
@@ -20,8 +20,8 @@ const isLink = (file: string) => {
 };
 
 /**
- * Where a path really is, though it may not be there yet; null if it goes through a link with nothing at the end of it.
- * Writing through one creates what it points at, so it can't count as a new file where the link is.
+ * Onde um caminho realmente está, ainda que possa não existir por enquanto; null se passa por um link sem nada na ponta.
+ * Escrever através de um cria aquilo para o qual ele aponta, então não pode contar como arquivo novo onde o link está.
  */
 function resolved(file: string): string | null {
   if (existsSync(file)) return realpathSync(file);
@@ -48,9 +48,9 @@ export function permission(turn: Pick<Turn, "access" | "cwd">, params: any) {
 }
 
 export async function bridge(turn: Turn) {
-  if (!turn.command?.length) throw new Error("ACP 要在 command 写启动命令");
-  // The last go may have done its work in this session, so whatever breaks now says nothing about whether a new session
-  // would do it again. Only the agent's own no takes this back; see goOn.
+  if (!turn.command?.length) throw new Error("O ACP precisa do comando de inicialização em command");
+  // A tentativa anterior pode ter feito o trabalho nesta sessão, então o que quer que quebre agora não diz nada sobre
+  // se uma sessão nova o refaria. Só o não do próprio Agent desfaz isto; veja goOn.
   if (turn.resume) console.log(JSON.stringify({ session: turn.resume, started: true }));
   const [program, args] = commandLine(turn.command);
   const child = spawn(program, args, { cwd: turn.cwd, stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
@@ -67,11 +67,11 @@ export async function bridge(turn: Turn) {
     pending.clear();
   };
   child.on("error", fail);
-  child.on("exit", (code) => fail(new Error(`ACP 在交回结果前退出：${code}`)));
+  child.on("exit", (code) => fail(new Error(`O ACP saiu antes de devolver o resultado: ${code}`)));
   child.stdin.on("error", fail);
 
   const toolCalls = new Map<string, object>();
-  /** All that's been said of a tool call. A message may give only its id; a field left out or null changes nothing. */
+  /** Tudo o que já foi dito da chamada de ferramenta. Uma mensagem pode dar só o id; campo omitido ou null não muda. */
   const toolCall = (said: any) => {
     const fields = Object.entries(said ?? {}).filter(([, value]) => value !== null && value !== undefined);
     const known = { ...toolCalls.get(said?.toolCallId), ...Object.fromEntries(fields) };
@@ -82,7 +82,7 @@ export async function bridge(turn: Turn) {
   const onUpdate = (update: any) => {
     if (["tool_call", "tool_call_update"].includes(update.sessionUpdate)) toolCall(update);
     if (update.sessionUpdate === "agent_message_chunk" && update.content?.type === "text") {
-      // An id says which message this is. Only with none does what came in between have to tell.
+      // Um id diz que mensagem é esta. Só na falta dele é que o que veio no meio tem que dizer.
       if (update.messageId ? update.messageId !== message : boundary) text = "";
       message = update.messageId;
       boundary = false;
@@ -102,13 +102,13 @@ export async function bridge(turn: Turn) {
       const { id, method, params } = incoming;
       if (method === "session/request_permission" && params?.sessionId === session) {
         send({ id, result: { outcome: permission(turn, { ...params, toolCall: toolCall(params.toolCall) }) } });
-      } else send({ id, error: { code: -32601, message: "不支持这个方法" } });
+      } else send({ id, error: { code: -32601, message: "este método não é suportado" } });
     } else if (pending.has(incoming.id)) {
       const request = pending.get(incoming.id)!;
       pending.delete(incoming.id);
       if (incoming.error) {
-        // Open somewhere else just now isn't a no to the session: a new one would do its work again. The reason and not
-        // the code, which is generic: another agent's no under it has to stay a no, or it would never get a new session.
+        // Uma sessão aberta em outro lugar agora não é uma recusa: uma nova refaria o trabalho. Vale o motivo, e não o
+        // código, que é genérico: o não de outro Agent sob ele tem que seguir sendo não, ou nunca teria sessão nova.
         const inUse = incoming.error.data?.reason === "thread_active_writer";
         request.reject(new (inUse ? Error : Refused)(incoming.error.message));
       } else request.resolve(incoming.result);
@@ -125,8 +125,8 @@ export async function bridge(turn: Turn) {
         fail(error as Error);
       }
     },
-    // An agent that dies ends its output first, and its exit says more. One still there after this has hung up on us.
-    () => setTimeout(() => fail(new Error("ACP 在交回结果前关掉了输出")), 1000).unref(),
+    // Um Agent que morre encerra a saída primeiro, e a saída dele diz mais. Um que segue vivo depois disto desligou.
+    () => setTimeout(() => fail(new Error("O ACP fechou a saída antes de devolver o resultado")), 1000).unref(),
   );
 
   const rpc = (method: string, params: object) =>
@@ -138,7 +138,7 @@ export async function bridge(turn: Turn) {
   const goOn = async (can: any) => {
     const method = can?.loadSession ? "session/load" : can?.sessionCapabilities?.resume ? "session/resume" : null;
     try {
-      if (!method) throw new Refused("这个 ACP Agent 不支持恢复会话");
+      if (!method) throw new Refused("este Agent ACP não permite retomar a sessão");
       await rpc(method, { sessionId: session, cwd: turn.cwd, mcpServers: [] });
     } catch (error) {
       if (error instanceof Refused) console.log(JSON.stringify({ started: false }));
@@ -150,28 +150,28 @@ export async function bridge(turn: Turn) {
   try {
     const clientInfo = { name: "agent-autoloop", version: versionName() };
     const init = await rpc("initialize", { protocolVersion: 1, clientCapabilities: {}, clientInfo });
-    if (init.protocolVersion !== 1) throw new Error(`不支持 ACP 版本 ${init.protocolVersion}`);
+    if (init.protocolVersion !== 1) throw new Error(`não há suporte para a versão ${init.protocolVersion} do ACP`);
     if (turn.resume) {
       session = turn.resume;
       await goOn(init.agentCapabilities);
     } else {
       const { sessionId } = await rpc("session/new", { cwd: turn.cwd, mcpServers: [] });
-      if (typeof sessionId !== "string" || !sessionId) throw new Error("ACP 没有返回会话编号");
+      if (typeof sessionId !== "string" || !sessionId) throw new Error("o ACP não devolveu um identificador de sessão");
       session = sessionId;
     }
-    // Before the prompt goes: the agent can start on it at once, and this has to be there if the bridge is killed then.
+    // Antes de enviar o prompt: o Agent pode começar na hora, e isto precisa estar aqui se o bridge for morto então.
     console.log(JSON.stringify({ session, started: true }));
     collecting = true;
     const prompt = [{ type: "text", text: turn.prompt }];
     const result = await rpc("session/prompt", { sessionId: session, prompt });
-    if (result.stopReason !== "end_turn") throw new Error(`ACP 没有完成这一轮：${result.stopReason}`);
-    // end_turn with nothing said is not a turn that stopped early: an agent whose model refused answers this way, and the
-    // old reason quoted "end_turn" back as if it had failed, leaving no cause to look for.
-    if (!text.trim()) throw new Error("ACP 说这一轮结束了，但没有回文字");
+    if (result.stopReason !== "end_turn") throw new Error(`O ACP não concluiu esta rodada: ${result.stopReason}`);
+    // end_turn sem nada dito não é uma rodada interrompida antes da hora: um Agent cujo modelo recusou responde assim, e
+    // o motivo de antes citava "end_turn" de volta como se tivesse falhado, sem deixar causa alguma para procurar.
+    if (!text.trim()) throw new Error("O ACP disse que a rodada terminou, mas não devolveu texto");
     console.log(JSON.stringify({ session, text, finished: true }));
   } catch (error) {
-    // Now and not on the way out: the agent, or what it left holding its output, can keep this process here for good,
-    // and this is what lets the worker end it.
+    // Agora, e não na saída: o Agent, ou o que ele deixou segurando a saída dele, pode prender este processo aqui para
+    // sempre, e é isto que deixa o worker encerrá-lo.
     console.log(JSON.stringify({ session: session || undefined, finished: true, error: (error as Error).message }));
     throw error;
   } finally {

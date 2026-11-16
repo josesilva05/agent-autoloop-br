@@ -1,5 +1,6 @@
-// The hub on this machine: its database, the view kept from the log, the rules file, and one way to apply an input.
-// Importing this opens them all, which is why the checks that must survive a bad rules file import it late.
+// A central nesta máquina: seu banco de dados, a visão mantida a partir do log, o arquivo de regras e um único modo de
+// aplicar uma entrada. Importar isto abre todos eles, e é por isso que as verificações que precisam sobreviver a um
+// arquivo de regras inválido o importam tardiamente.
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -21,12 +22,12 @@ if (!existsSync(masterKeyFile)) {
   writeFileSync(masterKeyFile, randomBytes(32).toString("base64url"), { mode: 0o600, flag: "wx" });
 }
 const masterKey = readFileSync(masterKeyFile, "utf8").trim();
-// An empty or cut-short key would still sign links, and card links derive from what channels see. Replacing it would
-// void every link and token, so that is left to the owner.
+// Uma chave vazia ou cortada ainda assim assinaria links, e os links dos cartões derivam do que os canais veem.
+// Substituí-la invalidaria todo link e token, então isso fica a cargo do titular.
 if (!/^[A-Za-z0-9_-]{43}$/.test(masterKey)) {
   throw new Error(
-    `${masterKeyFile} 坏了（应该是 43 个字符），中台不启动。从备份恢复这个文件；没有备份就删掉它，` +
-      "重启会生成新的，但已经发出的卡片链接和正在跑的轮次会失效。",
+    `${masterKeyFile} está corrompido (deveria ter 43 caracteres); a central não inicia. Restaure este arquivo a partir de um backup; sem backup, apague-o: ` +
+      "ao reiniciar um novo será gerado, mas os links de cartões já enviados e as rodadas em execução deixarão de valer.",
   );
 }
 export const environment = {
@@ -39,15 +40,15 @@ db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5
 db.function("card_hash", { deterministic: true }, (id, at) => cardHash(environment, id, at));
 initialize(db);
 
-// Other processes must see either the old views or the new ones, never the gap between DROP and CREATE.
+// Outros processos precisam ver ou as views antigas ou as novas, nunca o intervalo entre o DROP e o CREATE.
 db.exec(`BEGIN IMMEDIATE; ${viewStatements.join(";")}; COMMIT`);
 
 const CARD_HASH_INDEX =
   "CREATE INDEX IF NOT EXISTS projection_card_hash ON projections(card_hash(json_extract(data,'$.id'),json_extract(data,'$.created_at'))) WHERE collection='cards'";
 
-// The persisted projection is expendable; the log alone rebuilds it, which an upgrade has to wait for. So only the files that
-// decide what's stored count here, whole, since what they do is spread across helpers and constants. The views above are
-// made anew at every start and need no rebuild.
+// A projeção persistida é descartável; só o log a reconstrói, e uma atualização tem que esperar por isso. Então contam
+// aqui apenas os arquivos que determinam o que é armazenado, inteiros, já que o que eles fazem está espalhado por
+// helpers e constantes. As views acima são recriadas a cada inicialização e não precisam de reconstrução.
 const format = digest(
   ["../kernel/evolve.ts", "../kernel/credentials.ts"]
     .map((file) => readFileSync(new URL(file, import.meta.url), "utf8"))
@@ -118,19 +119,21 @@ export function reloadRules(file = RULES_FILE): { problem?: string } {
 }
 
 function unreadable(file: string, error: NodeJS.ErrnoException) {
-  if (error.code === "ENOENT") return `找不到 ${file}，被删掉或移走了？放回去就会接着用`;
-  if (error.code === "EACCES" || error.code === "EPERM") return `没有权限读 ${file}，改回能读的权限就会接着用`;
-  return `读不到 ${file}：${error.code ?? error.message}`;
+  if (error.code === "ENOENT")
+    return `não encontrei ${file}: foi apagado ou movido? Coloque-o de volta e ele volta a ser usado`;
+  if (error.code === "EACCES" || error.code === "EPERM")
+    return `sem permissão para ler ${file}: restabeleça a permissão de leitura e ele volta a ser usado`;
+  return `não foi possível ler ${file}: ${error.code ?? error.message}`;
 }
 
 const initial = reloadRules();
-if (!rules) throw new Error(initial.problem ?? "缺少规则");
+if (!rules) throw new Error(initial.problem ?? "faltam regras");
 
 let toldOf: string | undefined;
 
 export function tick(now = Date.now()) {
   const { problem } = reloadRules();
-  // A file still gone or still wrong is a problem at every tick, and an owner who closed the card has heard.
+  // Um arquivo que continua sumido ou continua errado é um problema a cada tick, e um titular que fechou o cartão já ficou sabendo.
   if (problem && problem !== toldOf) execute("rulesError", [problem], now);
   toldOf = problem;
   execute("tick", [], now);
@@ -148,7 +151,7 @@ export const view = (card: Row, ref: string | null = null, links = false) =>
   query.cardView(card, environment, ref, links);
 export const unrouted = (limit = 20) => query.unrouted(getView(), limit);
 export const skipped = (rule: string, since: string, everything = false) => skippedOf(all, rule, since, everything);
-/** Read in one snapshot: its seq is where the log stood for all of it, for a client to go on in /v1/stream from. */
+/** Lido num único instantâneo: seu seq é onde o log estava para tudo aquilo, para um cliente continuar dali em /v1/stream. */
 export function stateOf(now = Date.now(), before?: number) {
   db.exec("BEGIN");
   try {
@@ -178,10 +181,10 @@ export const logAfter = (after = 0, limit = -1) =>
     .all(after, limit)
     .map((row) => query.safeFact(JSON.parse(String(row.fact))));
 
-/** The part of the log that explains one run: its events, cards and receipts, and the rules it ran under. */
+/** A parte do log que explica uma rodada: seus eventos, cartões e recibos, e as regras sob as quais ela correu. */
 export function why(id: number) {
   const latest = getView();
-  if (!latest.get("runs", id)) throw new NotFound("没有这一轮");
+  if (!latest.get("runs", id)) throw new NotFound("não existe essa rodada");
   const events = query.eventsOf(latest, id).map((event) => event.id);
   const cards = [...rows(latest, "cards", { run_id: id }), ...rows(latest, "cards", { answer_event: events })];
   const sequences = new Set<number>();

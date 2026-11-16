@@ -1,4 +1,4 @@
-// Run tokens and card links derive from the master key, so they're never stored. Access keys are kept only as hashes.
+// Tokens de rodada e links de cartão derivam da chave mestra, então nunca são guardados. Chaves de acesso ficam só como hashes.
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { rows, type View } from "./evolve.ts";
 
@@ -11,7 +11,7 @@ export const credential = (env: Environment, purpose: string, ...parts: unknown[
     .update(JSON.stringify([purpose, ...parts]))
     .digest("base64url");
 
-/** What a card is found by from its link, which isn't stored. */
+/** Por onde um cartão é encontrado a partir do seu link, que não é guardado. */
 export const cardHash = (env: Environment, id: unknown, at: unknown) => digest(credential(env, "card", id, at));
 
 export function whose(view: View, kind: string, key: string): string | null {

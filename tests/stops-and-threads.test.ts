@@ -1,7 +1,8 @@
-// What the owner stopped stays stopped, and what comes back to a thread comes back to that thread. Failure cases: a run told
-// to stop hands in a failure and is queued again, so it starts again minutes later; the card saying it will try again stays
-// open once it's stopped, and needs clearing by hand; after a rule stops running in parallel, an answer or a due check starts a
-// run on another thread, whose context has neither the answer nor the check, so the question is never really answered.
+// O que o titular interrompeu fica interrompido, e o que volta para um assunto volta para aquele assunto. Casos de falha:
+// uma rodada com ordem de parada entrega uma falha e volta para a fila, então recomeça minutos depois; o cartão dizendo que
+// vai tentar de novo continua aberto depois da parada e precisa ser limpo à mão; depois que uma regra para de rodar em
+// paralelo, uma resposta ou uma reverificação vencida inicia uma rodada em outro assunto, cujo contexto não tem nem a
+// resposta nem a reverificação, então a pergunta nunca é realmente respondida.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -41,7 +42,7 @@ const notParallel = () => {
   return next;
 };
 
-/** Fails a run three times, so it's told the owner it will try again, and leaves it queued for the fourth. */
+/** Faz uma rodada falhar três vezes, para que ela diga ao titular que vai tentar de novo, e a deixa na fila para a quarta. */
 function failedThreeTimes(it: ReturnType<typeof hub>) {
   it.act("ingest", "app", feedback);
   let id = 0;
@@ -55,7 +56,7 @@ function failedThreeTimes(it: ReturnType<typeof hub>) {
 }
 const failing = (it: ReturnType<typeof hub>, id: number) => it.cards().find((card) => card.key === `run:${id}:failing`);
 
-test("a run told to stop that hands in a failure stays stopped, and doesn't start again", () => {
+test("uma rodada com ordem de parada que entrega uma falha fica interrompida e não recomeça", () => {
   const it = hub();
   it.act("ingest", "app", feedback);
   const job = it.act("claimNext", "w1", "c1");
@@ -68,7 +69,7 @@ test("a run told to stop that hands in a failure stays stopped, and doesn't star
   it.check();
 });
 
-test("a failure handed in with no stop asked for still tries again", () => {
+test("uma falha entregue sem nenhuma parada pedida ainda tenta de novo", () => {
   const it = hub();
   it.act("ingest", "app", feedback);
   const job = it.act("claimNext", "w1", "c1");
@@ -77,7 +78,7 @@ test("a failure handed in with no stop asked for still tries again", () => {
   it.check();
 });
 
-test("stopping a run waiting to try again closes the card that says it will", () => {
+test("interromper uma rodada que esperava para tentar de novo fecha o cartão que dizia isso", () => {
   const it = hub();
   const id = failedThreeTimes(it);
   assert.equal(failing(it, id)?.state, "open");
@@ -87,20 +88,20 @@ test("stopping a run waiting to try again closes the card that says it will", ()
   it.check();
 });
 
-test("a run with that card, stopped while it's going, closes the card when it has stopped", () => {
+test("uma rodada com esse cartão, interrompida enquanto está em curso, fecha o cartão quando parar", () => {
   const it = hub();
   const id = failedThreeTimes(it);
   it.pass(61);
   const job = it.act("claimNext", "w1", "last");
   assert.equal(job.run, id);
   it.act("cancel", id);
-  assert.equal(failing(it, id)?.state, "open", "not stopped yet");
-  it.act("finish", job.run, job.token, { outcome: "cancelled", summary: "已停止" });
+  assert.equal(failing(it, id)?.state, "open", "ainda não interrompida");
+  it.act("finish", job.run, job.token, { outcome: "cancelled", summary: "Interrompida" });
   assert.equal(failing(it, id)?.state, "closed");
   it.check();
 });
 
-test("a run told to stop whose worker stopped mentioning it closes the card that says it may still be going", () => {
+test("uma rodada com ordem de parada cujo worker parou de mencioná-la fecha o cartão que diz que ela talvez siga em curso", () => {
   const it = hub();
   it.act("ingest", "app", feedback);
   const job = it.act("claimNext", "w1", "c1");
@@ -117,14 +118,14 @@ test("a run told to stop whose worker stopped mentioning it closes the card that
   it.check();
 });
 
-test("an answer comes back to the thread that asked, after the rule stopped running in parallel", () => {
+test("uma resposta volta ao assunto que perguntou, depois que a regra parou de rodar em paralelo", () => {
   const it = hub();
   it.act("ingest", "app", feedback);
   const job = it.act("claimNext", "w1", "c1");
-  const question = { title: "选哪个", text: "选一个", options: ["甲", "乙"], about: "接着做" };
-  it.act("finish", job.run, job.token, { outcome: "done", summary: "问了", session: "S", ask: [question] });
+  const question = { title: "qual escolher", text: "escolha uma", options: ["alfa", "beta"], about: "continuar" };
+  it.act("finish", job.run, job.token, { outcome: "done", summary: "perguntei", session: "S", ask: [question] });
   const [card] = it.cards().filter((card) => card.kind === "ask");
-  assert.equal(card.lane, "#1", "the fixture's rule runs in parallel");
+  assert.equal(card.lane, "#1", "a regra do fixture roda em paralelo");
   it.act("rules", notParallel());
   it.act("answer", card.id, { choice: 1 });
   const next = it.act("claimNext", "w1", "c2");
@@ -134,16 +135,16 @@ test("an answer comes back to the thread that asked, after the rule stopped runn
     next.context.answers.map((answer: any) => answer.choice),
     [1],
   );
-  it.act("finish", next.run, next.token, { outcome: "done", summary: "做完了" });
+  it.act("finish", next.run, next.token, { outcome: "done", summary: "Concluído" });
   it.check();
 });
 
-test("a due check comes back to its thread, after the rule stopped running in parallel", () => {
+test("uma reverificação vencida volta ao seu assunto, depois que a regra parou de rodar em paralelo", () => {
   const it = hub();
   it.act("ingest", "app", feedback);
   const job = it.act("claimNext", "w1", "c1");
-  const later = { key: "看看", at: "2026-11-05T01:00:00Z", about: "到时候查" };
-  it.act("finish", job.run, job.token, { outcome: "done", summary: "约了", session: "S", later: [later] });
+  const later = { key: "olhar", at: "2026-11-05T01:00:00Z", about: "verificar na hora" };
+  it.act("finish", job.run, job.token, { outcome: "done", summary: "combinado", session: "S", later: [later] });
   it.act("rules", notParallel());
   it.pass(61);
   it.act("tick");
@@ -151,8 +152,8 @@ test("a due check comes back to its thread, after the rule stopped running in pa
   assert.equal(it.run(next.run).lane, "#1");
   assert.deepEqual(
     next.context.timers.map((timer: any) => timer.key),
-    ["看看"],
+    ["olhar"],
   );
-  it.act("finish", next.run, next.token, { outcome: "done", summary: "查过了" });
+  it.act("finish", next.run, next.token, { outcome: "done", summary: "verificado" });
   it.check();
 });

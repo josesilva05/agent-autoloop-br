@@ -1,7 +1,7 @@
-// When a start has to rebuild the projection from the log. Failure cases: a change to code outside the files that decide
-// what's stored makes the next upgrade wait for a rebuild; a change that does decide it (how facts are stored, what's indexed,
-// through a helper or a constant too, how card links are derived, the master key) leaves the old projection in use; a change
-// to the read-only views doesn't show until something else brings a rebuild.
+// Quando uma inicialização precisa reconstruir a projeção a partir do registro. Casos de falha: uma mudança em código fora dos
+// arquivos que decidem o que é gravado faz o próximo upgrade esperar por uma reconstrução; uma mudança que decide isso (como os
+// fatos são gravados, o que é indexado, também por um auxiliar ou uma constante, como os links de cartão são derivados, a chave
+// mestra) deixa a projeção antiga em uso; uma mudança nas visões somente de leitura não aparece até que outra coisa traga uma reconstrução.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ for (const name of ["kernel", "host", "protocol", "package.json"])
   cpSync(join(root, name), join(code, name), { recursive: true });
 const home = join(dir, "home");
 
-/** Starts this copy of the code as a new process does, and says which format it stored. */
+/** Inicia esta cópia do código como um processo novo faz, e diz qual formato ela gravou. */
 function start() {
   const started = spawnSync(
     process.execPath,
@@ -45,11 +45,11 @@ function start() {
   return format;
 }
 
-/** The format with this edit in place, which is then taken out again. */
+/** O formato com esta edição aplicada, que depois é retirada de novo. */
 function formatWith(file: string, before: string, after: string) {
   const path = join(code, file);
   const original = readFileSync(path, "utf8");
-  assert.ok(original.includes(before), `${file} 里找不到：${before}`);
+  assert.ok(original.includes(before), `não encontrado em ${file}: ${before}`);
   writeFileSync(path, original.replace(before, after));
   try {
     return start();
@@ -58,11 +58,11 @@ function formatWith(file: string, before: string, after: string) {
   }
 }
 
-test("a start with nothing changed keeps the format it stored", () => {
+test("uma inicialização sem nada alterado mantém o formato que gravou", () => {
   assert.equal(start(), start());
 });
 
-test("what doesn't decide what's stored can change without a rebuild", () => {
+test("o que não decide o que é gravado pode mudar sem reconstrução", () => {
   const usual = start();
   for (const [file, before, after] of [
     ["host/runtime.ts", "export const listKeys", "// a comment\nexport const listKeys"],
@@ -74,7 +74,7 @@ test("what doesn't decide what's stored can change without a rebuild", () => {
   }
 });
 
-test("what decides what's stored brings a rebuild", () => {
+test("o que decide o que é gravado traz uma reconstrução", () => {
   const usual = start();
   for (const [file, before, after] of [
     ["kernel/evolve.ts", "let seq = view.seq;", 'let seq = view.seq;\n  void "stored differently";'],
@@ -104,13 +104,13 @@ test("what decides what's stored brings a rebuild", () => {
   const original = readFileSync(key, "utf8");
   writeFileSync(key, "A".repeat(43));
   try {
-    assert.notEqual(start(), usual, "another master key derives other card links");
+    assert.notEqual(start(), usual, "outra chave mestra deriva outros links de cartão");
   } finally {
     writeFileSync(key, original);
   }
 });
 
-test("a change to the read-only views shows at the next start, with no rebuild", () => {
+test("uma mudança nas visões somente de leitura aparece na próxima inicialização, sem reconstrução", () => {
   const usual = start();
   const path = join(code, "host", "state.ts");
   const original = readFileSync(path, "utf8");

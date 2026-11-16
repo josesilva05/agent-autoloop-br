@@ -1,10 +1,11 @@
-// The channel a new install starts with. Nothing real is shown here: the notify commands are stand-ins on PATH, and the one
-// run of the real osascript swaps the notification for a line that only prints. Failure cases: what an Agent wrote in a card's
-// title runs as AppleScript, or a title starting with a dash is read as an option (osascript runs what follows -e as script);
-// an update to a card notifies again; a computer with no way to notify, a notifier that fails or a title that can't be passed
-// to a program stops the channel, or isn't reported; a slow notifier freezes the hub, which shares its process; init doesn't
-// set the channel up in both files, or changes a rules file already there; doctor says there's no channel when there is one,
-// or that one reaches you when none does, or says nothing of a channel where anyone can answer.
+// O canal com que uma instalação nova começa. Nada real é exibido aqui: os comandos de notificação são substitutos no
+// PATH, e a única execução do osascript de verdade troca a notificação por uma linha que só imprime. Modos de falha: o
+// que um Agent escreveu no título de um cartão é executado como AppleScript, ou um título que começa com traço é lido
+// como opção (o osascript executa como script o que vem depois de -e); uma atualização de cartão notifica de novo; um
+// computador sem como notificar, um notificador que falha ou um título que não pode ser passado a um programa para o
+// canal, ou não é reportado; um notificador lento congela a central, que compartilha o processo dele; o init não
+// configura o canal nos dois arquivos, ou altera um rules.json já existente; o doctor diz que não há canal quando há,
+// ou que um chega até você quando nenhum chega, ou não diz nada de um canal em que qualquer um pode responder.
 import assert from "node:assert/strict";
 import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -18,12 +19,12 @@ import type { Card } from "../host/channels.ts";
 const dir = mkdtempSync(join(tmpdir(), "agent-autoloop-desktop-"));
 const rulesFile = join(dir, "rules.json");
 const rulesWith = (channels: object) => ({
-  sources: { local: { name: "本机" } },
+  sources: { local: { name: "máquina local" } },
   agents: { agent: { name: "Agent", worker: "this-one", use: "command", command: ["true"] } },
   channels,
   rules: [],
 });
-writeFileSync(rulesFile, JSON.stringify(rulesWith({ desktop: { name: "桌面通知" } })));
+writeFileSync(rulesFile, JSON.stringify(rulesWith({ desktop: { name: "notificação de desktop" } })));
 const home = setup("desktop", rulesFile);
 const realPath = process.env.PATH;
 const realDisplay = process.env.DISPLAY;
@@ -37,8 +38,8 @@ after(() => {
 const { loadPlugin } = await import("../host/plugins.ts");
 const { default: desktop, notifyCommand } = await import("../plugins/desktop/channel.ts");
 
-const TITLE = "Agent 问你一个问题";
-const WORDS = "运行 agent-autoloop status 查看";
+const TITLE = "O Agent fez uma pergunta a você";
+const WORDS = "Execute agent-autoloop status para ver";
 const body = (title: string) => `${title}\n${WORDS}`;
 const base: Card = {
   id: 5,
@@ -46,9 +47,9 @@ const base: Card = {
   ref: null,
   kind: "ask",
   state: "open",
-  title: "要不要删",
-  text: "占了 10 GB",
-  options: ["删", "留着"],
+  title: "Apagar ou não",
+  text: "Ocupa 10 GB",
+  options: ["Apagar", "Manter"],
   recommend: null,
   choice: null,
   answer: null,
@@ -57,7 +58,7 @@ const base: Card = {
 };
 
 let fakes = 0;
-/** A folder that's all of PATH, with both notify commands doing `body` after writing down the arguments they got. */
+/** Uma pasta que é todo o PATH, com os dois comandos de notificação executando `body` depois de anotar os argumentos. */
 function standIns(body = "") {
   const bin = join(dir, `bin-${++fakes}`);
   mkdirSync(bin);
@@ -108,20 +109,20 @@ async function deliver(cards: Card[]) {
   return { reports, logged };
 }
 
-test("it ships as a channel, and is told apart by platform", async () => {
+test("ele vem como canal, e é distinguido por plataforma", async () => {
   assert.equal(await loadPlugin("desktop", "channel"), desktop);
-  assert.deepEqual(notifyCommand("标题", "linux"), ["notify-send", ["--", TITLE, body("标题")]]);
-  const [program, args] = notifyCommand("标题", "darwin");
+  assert.deepEqual(notifyCommand("título", "linux"), ["notify-send", ["--", TITLE, body("título")]]);
+  const [program, args] = notifyCommand("título", "darwin");
   assert.equal(program, "osascript");
-  assert.deepEqual(args.slice(args.indexOf("--")), ["--", TITLE, body("标题")]);
+  assert.deepEqual(args.slice(args.indexOf("--")), ["--", TITLE, body("título")]);
   assert.ok(args.includes("on run argv"));
 });
 
-test("a new card notifies once with its title; an update only reports", async () => {
+test("um cartão novo notifica uma vez com o seu título; uma atualização só reporta", async () => {
   const fake = standIns();
   const { reports } = await deliver([base, { ...base, version: 2, ref: "shown-5", state: "decided", choice: 1 }]);
   assert.equal(fake.calls().length, 1);
-  assert.deepEqual(fake.calls()[0].slice(-2), [TITLE, body("要不要删")]);
+  assert.deepEqual(fake.calls()[0].slice(-2), [TITLE, body("Apagar ou não")]);
   assert.deepEqual(reports, [
     ["delivered", 5, 1, "shown-5"],
     ["delivered", 5, 2, "shown-5"],
@@ -142,7 +143,7 @@ const hostile = [
   "--help",
 ];
 
-test("what an Agent wrote goes in as one argument after the options, and never into the script", async () => {
+test("o que um Agent escreveu entra como um único argumento depois das opções, e nunca dentro do script", async () => {
   const fake = standIns();
   const { reports } = await deliver(hostile.map((title, index) => ({ ...base, id: index + 1, title })));
   assert.ok(reports.every(([what]) => what === "delivered"));
@@ -151,14 +152,14 @@ test("what an Agent wrote goes in as one argument after the options, and never i
   const scriptOf = (call: string[]) => call.slice(0, call.indexOf("--"));
   calls.forEach((call, index) => {
     assert.deepEqual(call.slice(call.indexOf("--")), ["--", TITLE, body(hostile[index])]);
-    assert.deepEqual(scriptOf(call), scriptOf(calls[0]), "the script is the same whatever the card says");
+    assert.deepEqual(scriptOf(call), scriptOf(calls[0]), "o script é o mesmo seja o que for que o cartão diga");
   });
   assert.ok(!scriptOf(calls[0]).join("\n").includes("touch"));
   assert.ok(!existsSync(marker));
 });
 
 test(
-  "the real osascript reads them as words and runs none of them",
+  "o osascript de verdade os lê como texto e não executa nenhum deles",
   { skip: process.platform !== "darwin" },
   async () => {
     for (const title of hostile) {
@@ -171,7 +172,7 @@ test(
   },
 );
 
-test("without a graphical session it quietly skips notification and keeps consuming cards", async () => {
+test("sem sessão gráfica ele pula a notificação em silêncio e continua consumindo cartões", async () => {
   mkdirSync(join(dir, "nothing-here"));
   process.env.PATH = join(dir, "nothing-here");
   delete process.env.DISPLAY;
@@ -184,12 +185,12 @@ test("without a graphical session it quietly skips notification and keeps consum
   assert.deepEqual(logged, []);
 });
 
-test("a notifier that fails is reported as not sent", async () => {
+test("um notificador que falha é reportado como não enviado", async () => {
   standIns("exit 1");
   assert.deepEqual((await deliver([base])).reports, [["failed", 5, 1]]);
 });
 
-test("a title no program can be given is reported, and takes nothing down", async () => {
+test("um título que não pode ser dado a programa algum é reportado, e não derruba nada", async () => {
   const fake = standIns();
   const { reports } = await deliver([
     { ...base, title: "a\0b" },
@@ -202,13 +203,13 @@ test("a title no program can be given is reported, and takes nothing down", asyn
   assert.equal(fake.calls().length, 1);
 });
 
-test("a slow notifier doesn't freeze the process the hub runs in", async () => {
+test("um notificador lento não congela o processo em que a central roda", async () => {
   standIns("/bin/sleep 0.3");
   let ticks = 0;
   const ticker = setInterval(() => ticks++, 10);
   await deliver([base]);
   clearInterval(ticker);
-  assert.ok(ticks >= 5, `only ${ticks} ticks while it was showing`);
+  assert.ok(ticks >= 5, `apenas ${ticks} ticks enquanto exibia`);
 });
 
 const bin = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
@@ -225,21 +226,21 @@ const installEnv = (place: string) => {
   return env;
 };
 
-test("init turns it on in both files, with a key of its own", () => {
+test("o init o ativa nos dois arquivos, com uma chave própria", () => {
   const place = join(dir, "new");
   const env = installEnv(place);
   const done = program(env, "init", "--no-service", "--command", "true", "--port", "3999");
   assert.equal(done.status, 0, done.stderr);
   const rules = JSON.parse(readFileSync(join(place, "rules.json"), "utf8"));
   const config = JSON.parse(readFileSync(join(place, "config.json"), "utf8"));
-  assert.deepEqual(rules.channels, { desktop: { name: "桌面通知" } });
+  assert.deepEqual(rules.channels, { desktop: { name: "notificação de desktop" } });
   assert.deepEqual(Object.keys(config.channels), ["desktop"]);
   assert.ok(config.channels.desktop.key.length > 20);
   assert.match(program(env, "key", "list").stdout, /^channel desktop /m);
-  assert.match(done.stdout, /桌面通知/);
+  assert.match(done.stdout, /notificação de desktop/);
 });
 
-test("a rules file already there stays as it was, and no channel is added beside it", () => {
+test("um rules.json já existente fica como estava, e nenhum canal é acrescentado ao lado dele", () => {
   const place = join(dir, "theirs");
   mkdirSync(place);
   const theirs = JSON.stringify(rulesWith({}));
@@ -251,7 +252,7 @@ test("a rules file already there stays as it was, and no channel is added beside
   assert.doesNotMatch(program(installEnv(place), "key", "list").stdout, /^channel /m);
 });
 
-test("doctor says what reaches you: only this computer, or nothing yet, or no word of either", async () => {
+test("o doctor diz o que chega até você: só este computador, ou nada ainda, ou nada sobre os dois", async () => {
   const { serve } = await import("../host/http.ts");
   const hub = await import("./hub.ts");
   const server = serve(0);
@@ -274,22 +275,22 @@ test("doctor says what reaches you: only this computer, or nothing yet, or no wo
         execFile(process.execPath, args, { env, encoding: "utf8" }, (_error, stdout) => resolve(stdout));
       });
     };
-    const alone = await hint({ desktop: { name: "桌面通知" } });
-    assert.match(alone, /只接了桌面通知/);
-    assert.doesNotMatch(alone, /还没接通道/);
+    const alone = await hint({ desktop: { name: "notificação de desktop" } });
+    assert.match(alone, /Só a notificação de desktop está conectada/);
+    assert.doesNotMatch(alone, /Nenhum canal conectado/);
     const none = await hint({});
-    assert.match(none, /还没接通道/);
-    assert.doesNotMatch(none, /只接了桌面通知/);
-    const more = await hint({ desktop: { name: "桌面通知" }, feishu: { name: "飞书" } });
-    assert.doesNotMatch(more, /只接了桌面通知|还没接通道/);
-    assert.match(more, /飞书没写 answerers：这个通道里谁都能回答卡片/);
-    assert.doesNotMatch(more, /桌面通知没写 answerers/, "nobody answers from a notification");
+    assert.match(none, /Nenhum canal conectado/);
+    assert.doesNotMatch(none, /Só a notificação de desktop está conectada/);
+    const more = await hint({ desktop: { name: "notificação de desktop" }, feishu: { name: "Feishu" } });
+    assert.doesNotMatch(more, /Só a notificação de desktop está conectada|Nenhum canal conectado/);
+    assert.match(more, /Feishu sem answerers: qualquer pessoa neste canal pode responder aos cartões/);
+    assert.doesNotMatch(more, /notificação de desktop sem answerers/, "ninguém responde de uma notificação");
     const limited = await hint({
-      desktop: { name: "桌面通知" },
-      feishu: { name: "飞书", answerers: ["ou_me"] },
-      webhook: { name: "钉钉", links: true },
+      desktop: { name: "notificação de desktop" },
+      feishu: { name: "Feishu", answerers: ["ou_me"] },
+      webhook: { name: "DingTalk", links: true },
     });
-    assert.doesNotMatch(limited, /没写 answerers/, "someone named, or a link only its holder has");
+    assert.doesNotMatch(limited, /sem answerers/, "alguém nomeado, ou um link que só o portador tem");
   } finally {
     server.closeAllConnections();
     server.close();

@@ -1,6 +1,6 @@
-// Failure modes: a different hub accepts the wrong key, drops idempotent receipts, loses answers or emits an invalid wire
-// object; the address-based conformance runner succeeds against a server that grants every caller access, or an unrelated
-// scheduled run takes the work claim intended to verify an answer.
+// Modos de falha: outra central aceita a chave errada, descarta recibos idempotentes, perde respostas ou emite um
+// objeto de protocolo inválido; o verificador de conformidade por endereço passa contra um servidor que dá acesso a
+// qualquer chamador, ou uma rodada agendada sem relação pega a reivindicação destinada a verificar uma resposta.
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -32,7 +32,7 @@ beforeEach(() => {
 });
 const base = `http://127.0.0.1:${(server.address() as any).port}`;
 const config = { keys, eventType: "feedback.new", answerer: "me" };
-test("address-based conformance checks all protocol doors", async () => {
+test("a conformidade por endereço testa todas as portas do protocolo", async () => {
   hub.fixtureClear("schedules");
   hub.tick(Date.now() - 5 * 60_000);
   hub.tick();
@@ -44,20 +44,20 @@ test("address-based conformance checks all protocol doors", async () => {
   assert.ok(result.checks > 0);
   console.log(JSON.stringify(result));
 });
-test("conformance rejects an implementation that opens the wrong door", async () => {
+test("a conformidade rejeita uma implementação que abre a porta errada", async () => {
   await assert.rejects(
     () =>
       conformance("http://wrong", { keys, eventType: "feedback.new", answerer: "me" }, async () =>
         Response.json({ ok: true }),
       ),
-    /状态码/,
+    /código de status/,
   );
 });
-test("the same isolated hub can be checked twice", async () => {
+test("a mesma central isolada pode ser verificada duas vezes", async () => {
   await conformance(base, config);
   await conformance(base, config);
 });
-test("conformance checks another actual run rather than a missing id", async () => {
+test("a conformidade confere outra rodada de verdade, e não um id inexistente", async () => {
   const jobs = new Map<number, string>();
   const wrong: typeof fetch = async (input, init) => {
     const path = new URL(String(input)).pathname;
@@ -76,10 +76,10 @@ test("conformance checks another actual run rather than a missing id", async () 
     }
     return res;
   };
-  await assert.rejects(() => conformance(base, config, wrong), /状态码/);
+  await assert.rejects(() => conformance(base, config, wrong), /código de status/);
 });
 for (const mode of ["empty", "keys"] as const)
-  test(`conformance rejects ${mode} in the fact stream`, async () => {
+  test(`a conformidade rejeita ${mode} no fluxo de fatos`, async () => {
     const wrong: typeof fetch = async (input, init) => {
       if (String(input).includes("/v1/stream?after=0"))
         return new Response(

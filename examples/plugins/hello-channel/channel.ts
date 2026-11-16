@@ -1,7 +1,7 @@
-// The smallest channel: every card becomes a few lines in a file. Someone answers with `agent-autoloop answer`, because a file
-// has no buttons.
-//   rules.json:  "channels": { "cards": { "name": "文件" } }
-//   config.json: "channels": { "cards": { "use": "hello-channel", "key": "…", "file": "/绝对路径/cards.txt" } }
+// O menor canal: cada cartão vira algumas linhas num arquivo. Alguém responde com `agent-autoloop answer`, porque um
+// arquivo não tem botões.
+//   rules.json:  "channels": { "cards": { "name": "Arquivo" } }
+//   config.json: "channels": { "cards": { "use": "hello-channel", "key": "…", "file": "/caminho/absoluto/cards.txt" } }
 import { appendFileSync } from "node:fs";
 
 type Card = {
@@ -24,11 +24,11 @@ type Context = {
   signal: AbortSignal;
 };
 
-// Cards come from many rules: say which one, unless the title is already its name.
+// Os cartões vêm de muitas regras: diga de qual, a menos que o título já seja o nome dela.
 const words = ({ id, title, text, options, rule }: Card) =>
   [
     `#${id} ${title}`,
-    ...(rule && rule !== title ? [`来源：${rule}`] : []),
+    ...(rule && rule !== title ? [`Fonte: ${rule}`] : []),
     text,
     ...options.map((option, index) => `  ${index + 1}. ${option}`),
     "",
@@ -38,7 +38,7 @@ export default async function helloChannel({ hub, options, log, signal }: Contex
   while (!signal.aborted) {
     const { card } = await hub.nextCard(50);
     if (!card) continue;
-    // A card with a ref has changed since it went out. A file can't change what it said, so there's only the report.
+    // Um cartão com ref mudou depois de ter sido enviado. Um arquivo não pode mudar o que disse, então resta o relatório.
     if (card.ref) {
       await hub.delivered(card.id, card.version, card.ref);
       continue;
@@ -47,7 +47,7 @@ export default async function helloChannel({ hub, options, log, signal }: Contex
       appendFileSync(options.file as string, words(card));
       await hub.delivered(card.id, card.version, `file-${card.id}`);
     } catch (error) {
-      log(`card ${card.id} not written: ${error}`);
+      log(`o cartão ${card.id} não foi escrito: ${error}`);
       await hub.failed(card.id, card.version, String(error));
     }
   }

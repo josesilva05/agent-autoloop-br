@@ -1,17 +1,17 @@
-# 每日早报
+# Briefing matinal diário
 
-## 解决什么
-每天早上整理当前目录的笔记和提交，写到 `briefs/YYYY-MM-DD.md`，不用联网。
+## Que problema resolve
+Toda manhã organiza as notas e os commits do diretório atual e os escreve em `briefs/YYYY-MM-DD.md`, sem precisar de internet.
 
-## 怎么启用
-把本目录的 `SKILL.md` 复制到 `~/.codex/skills/morning-brief/`；Claude Code 用 `~/.claude/skills/morning-brief/`。
-把 `rules.json` 的 `agents`、`rules` 并进 `~/.agent-autoloop/rules.json`，然后检查：
+## Como ativar
+Copie o `SKILL.md` deste diretório para `~/.codex/skills/morning-brief/`; no Claude Code, use `~/.claude/skills/morning-brief/`.
+Mescle os `agents` e as `rules` do `rules.json` em `~/.agent-autoloop/rules.json` e então verifique:
 ```bash
 agent-autoloop check
 ```
-规则几秒内生效；把 cron 临时设成 `* * * * *` 可在一分钟内试跑。
+As regras passam a valer em segundos; definir o cron temporariamente como `* * * * *` permite uma execução de teste em menos de um minuto.
 
-## 要改哪几处
-- `worker` 换成 `agent-autoloop status` 显示的接单电脑；`use` 选 `codex` 或 `claude`。
-- `cwd` 换成已有的笔记目录；`cron` 是当地时间，默认每天八点。
-- 权限：`edit`。两种插件都能读本地资料、写早报；不需要联网或任意 shell 命令，见[权限说明](../../../docs/plugins.md#access-实际能做什么)。
+## O que alterar
+- Troque `worker` pelo computador do worker que aparece em `agent-autoloop status`; em `use`, escolha `codex` ou `claude`.
+- Troque `cwd` por um diretório de notas já existente; `cron` é a hora local, por padrão às oito da manhã todos os dias.
+- Permissão: `edit`. Os dois plugins conseguem ler os dados locais e escrever o briefing; não é preciso internet nem comandos shell arbitrários. Veja a [explicação de permissões](../../../docs/plugins.md#o-que-o-access-realmente-permite).

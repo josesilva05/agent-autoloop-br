@@ -1,10 +1,12 @@
-// Failure modes: an HTTP 200 error page or redirect is called healthy; a continuing outage wakes the model or notifies
-// again; recovery closes an unrelated card; Feishu is read as the bot, pages or selected fields are lost, an unrelated
-// report is included, credentials fail but an old snapshot is summarized, or report text leaks into notifications. Mail
-// is read as the bot, a sender the user asked to skip still has its body read, a long body is kept whole or cut short of
-// what the reader is told, an empty inbox wakes the model, or a mailbox that returned only some bodies is saved as read.
-// A page of senders the user asked to skip fills the cap and hides the mail behind it, so a mailbox with mail reads as
-// having nothing to read; or pages are left unscanned, by the cap or the ceiling, and the brief still says it read them all.
+// Modos de falha: uma página de erro ou um redirecionamento com HTTP 200 é chamado de saudável; uma indisponibilidade que
+// continua acorda o modelo ou notifica de novo; a recuperação encerra um cartão sem relação; o Feishu é lido como o bot,
+// páginas ou campos selecionados se perdem, um relatório sem relação é incluído, as credenciais falham mas um snapshot
+// antigo é resumido, ou texto de relatório vaza para as notificações. O e-mail é lido como o bot, o corpo de um remetente
+// que o usuário pediu para ignorar ainda é lido, um corpo longo é mantido inteiro ou é cortado aquém do que o leitor
+// recebe, uma caixa vazia acorda o modelo, ou uma caixa que devolveu apenas alguns corpos é salva como lida.
+// Uma página de remetentes que o usuário pediu para ignorar preenche o limite e esconde o e-mail atrás dela, de modo que
+// uma caixa com e-mail é lida como se não houvesse nada a ler; ou páginas ficam sem varredura, pelo limite ou pelo teto, e
+// o briefing ainda diz que leu todas.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -16,10 +18,10 @@ import { readMessage, resultFrom } from "../worker/contract.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-business-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
-const target = { id: "site", name: "示例网站", url: "https://example.com/health", contains: '"ok":true' };
+const target = { id: "site", name: "Site de exemplo", url: "https://example.com/health", contains: '"ok":true' };
 const empty = { events: [{ id: "tick-1" }], open: [] };
 
-test("website checks status and body without following redirects, and records transport failures", async () => {
+test("a verificação do site olha status e corpo sem seguir redirecionamentos, e registra falhas de transporte", async () => {
   const response = (status: number, body: string) =>
     (async (_url, options) => {
       assert.equal(options?.redirect, "manual");
@@ -27,9 +29,9 @@ test("website checks status and body without following redirects, and records tr
     }) as typeof fetch;
   assert.equal((await probe(target, response(200, '{"ok":true}'))).ok, true);
   for (const [status, body] of [
-    [200, "登录后继续"],
+    [200, "faça login para continuar"],
     [503, '{"ok":true}'],
-    [302, "跳转"],
+    [302, "redirecionamento"],
   ] as const) {
     assert.equal((await probe(target, response(status, body))).ok, false);
   }
@@ -43,34 +45,38 @@ test("website checks status and body without following redirects, and records tr
   );
 });
 
-test("website outage wakes once while its card is open, recovery closes only that site's card", () => {
-  const first = receipt(target, { ok: false, reason: "返回 503" }, empty);
+test("a indisponibilidade do site acorda uma vez enquanto o cartão está aberto, e a recuperação encerra só o cartão daquele site", () => {
+  const first = receipt(target, { ok: false, reason: "respondeu 503" }, empty);
   assert.equal(first.events?.[0].type, "site.down");
   assert.equal(first.notice?.length, 1);
   const pending = {
     ...empty,
-    // The unrelated card comes first: a receipt that resolves whatever card is first, instead of the one whose
-    // title names this site, closes the wrong one.
+    // O cartão sem relação vem primeiro: um recibo que resolve qualquer cartão que esteja primeiro, em vez daquele cujo
+    // título nomeia este site, encerra o cartão errado.
     open: [
-      { card: 8, title: "另一网站异常" },
+      { card: 8, title: "Falha em outro site" },
       { card: 7, title: first.notice![0].title },
     ],
   };
-  assert.deepEqual(receipt(target, { ok: false, reason: "返回 503" }, pending), {});
-  const recovered = receipt(target, { ok: true, reason: "已核实状态和关键内容" }, pending);
+  assert.deepEqual(receipt(target, { ok: false, reason: "respondeu 503" }, pending), {});
+  const recovered = receipt(target, { ok: true, reason: "status e conteúdo essencial verificados" }, pending);
   assert.deepEqual(
     recovered.resolve?.map((r) => r.card),
     [7],
   );
   assert.equal(recovered.events?.[0].type, "site.recovered");
-  assert.deepEqual(receipt(target, { ok: true, reason: "正常" }, empty), {});
+  assert.deepEqual(receipt(target, { ok: true, reason: "normal" }, empty), {});
 });
 
-test("a Chinese health URL remains a valid event link in the worker receipt", () => {
-  const result = receipt({ ...target, url: "https://例子.测试/健康" }, { ok: false, reason: "连接失败" }, empty);
-  const parsed = resultFrom(readMessage(`已检查\n\`\`\`agent-autoloop\n${JSON.stringify(result)}\n\`\`\``), {});
+test("uma URL de saúde com caracteres não ASCII continua sendo um link de evento válido no recibo do worker", () => {
+  const result = receipt(
+    { ...target, url: "https://exemplosaúde.teste/status" },
+    { ok: false, reason: "falha de conexão" },
+    empty,
+  );
+  const parsed = resultFrom(readMessage(`Verifiquei\n\`\`\`agent-autoloop\n${JSON.stringify(result)}\n\`\`\``), {});
   assert.equal(parsed.problem, undefined);
-  assert.equal(parsed.result.events![0].link, new URL("https://例子.测试/健康").href);
+  assert.equal(parsed.result.events![0].link, new URL("https://exemplosaúde.teste/status").href);
 });
 
 function collect(mode = "ok") {
@@ -88,12 +94,12 @@ if (${JSON.stringify(mode)} === 'auth') {
 let data;
 if (args[0] === 'api') {
  const body = JSON.parse(args[args.indexOf('--data')+1]);
- const task = {task_id:'report-1',rule_name:'工作周报',from_user_id:'ou_demo',commit_time:body.commit_start_time+60,form_contents:[{field_name:'本周进展',field_value:'敏感原文'}]};
- data = {items:[task,{...task,task_id:'outside',from_user_id:'ou_other'},{...task,task_id:'wrong-rule',rule_name:'自由汇报'}],has_more:false};
+ const task = {task_id:'report-1',rule_name:'Relatório semanal de trabalho',from_user_id:'ou_demo',commit_time:body.commit_start_time+60,form_contents:[{field_name:'Progresso da semana',field_value:'texto confidencial'}]};
+ data = {items:[task,{...task,task_id:'outside',from_user_id:'ou_other'},{...task,task_id:'wrong-rule',rule_name:'Relatório livre'}],has_more:false};
 } else {
  const offset = Number(args[args.indexOf('--offset')+1]);
  const file = args[args.indexOf('--output')+1];
- fs.writeFileSync(file, JSON.stringify({record_id:'record-'+offset,项目:'演示项目',状态:'进行中'})+'\\n');
+ fs.writeFileSync(file, JSON.stringify({record_id:'record-'+offset,Projeto:'projeto de demonstração',Status:'em andamento'})+'\\n');
  data = {records_count:1,has_more:offset===0,next_offset:offset+1,rev:'1'};
  fs.writeFileSync(file.replace(/\\.ndjson$/, '.manifest.json'), JSON.stringify(data));
 }
@@ -104,14 +110,14 @@ console.log(JSON.stringify({ok:true,identity:'user',data}));
   writeFileSync(
     join(dir, "sources.json"),
     JSON.stringify({
-      reportRule: "工作周报",
+      reportRule: "Relatório semanal de trabalho",
       reportUsers: ["ou_demo"],
       tables: [
         {
-          name: "项目表",
+          name: "Tabela de projetos",
           baseToken: "demo",
           tableId: "tbl_demo",
-          fields: ["项目", "状态"],
+          fields: ["Projeto", "Status"],
           url: "https://example.com/projects",
         },
       ],
@@ -131,12 +137,12 @@ console.log(JSON.stringify({ok:true,identity:'user',data}));
   return { dir, run, parsed: resultFrom(readMessage(run.stdout), {}) };
 }
 
-test("Feishu collection uses the reader, filters reports and fields, and consumes all table pages", () => {
+test("a coleta do Feishu usa o leitor, filtra relatórios e campos, e consome todas as páginas da tabela", () => {
   const { dir, run, parsed } = collect();
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.problem, undefined);
   assert.equal(parsed.result.events?.[0].type, "brief.ready");
-  assert.doesNotMatch(run.stdout, /敏感原文|演示项目/);
+  assert.doesNotMatch(run.stdout, /texto confidencial|projeto de demonstração/);
   const snapshot = JSON.parse(readFileSync(join(dir, "weekly-input.json"), "utf8"));
   assert.deepEqual(
     snapshot.reports.map((r: { task_id: string }) => r.task_id),
@@ -150,11 +156,11 @@ test("Feishu collection uses the reader, filters reports and fields, and consume
   assert.ok(calls.every((args) => args[args.indexOf("--as") + 1] === "user"));
   const baseCalls = calls.filter((args) => args[0] === "base");
   assert.equal(baseCalls.length, 2);
-  assert.ok(baseCalls.every((args) => args.includes("--field-id") && args.includes("状态")));
+  assert.ok(baseCalls.every((args) => args.includes("--field-id") && args.includes("Status")));
   assert.equal(snapshot.id, parsed.result.events![0].id);
 });
 
-test("Feishu authorization failure asks once and never publishes the old snapshot or CLI details", () => {
+test("uma falha de autorização no Feishu pergunta uma vez e nunca publica o snapshot antigo nem detalhes do CLI", () => {
   const { dir, run, parsed } = collect("auth");
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.problem, undefined);
@@ -172,33 +178,33 @@ function triage(mode = "ok") {
     {
       message_id: "m-budget",
       thread_id: "t-budget",
-      subject: "季度预算确认",
-      head_from: { name: "王莉", mail_address: "wang@example.com" },
+      subject: "Confirmação do orçamento trimestral",
+      head_from: { name: "Fulana de Tal", mail_address: "fulana@example.com" },
       folder_id: "INBOX",
       label_ids: ["UNREAD"],
       date_formatted: "2026-11-07 09:12",
-      body_preview: "预算表见附件，请确认",
+      body_preview: "A planilha do orçamento está no anexo, por favor confirme",
     },
     {
       message_id: "m-bulk",
       thread_id: "t-bulk",
-      subject: "本周产品动态",
-      head_from: { name: "通知机器人", mail_address: "noreply@example.com" },
+      subject: "Novidades do produto desta semana",
+      head_from: { name: "Robô de notificações", mail_address: "noreply@example.com" },
       folder_id: "INBOX",
       date_formatted: "2026-11-07 08:00",
-      body_preview: "无需回复",
+      body_preview: "Não é preciso responder",
     },
     {
       message_id: "m-long",
       thread_id: "t-long",
-      subject: "一份很长的说明",
-      head_from: { name: "张三", mail_address: "zhang@example.com" },
+      subject: "Uma instrução muito longa",
+      head_from: { name: "Beltrano da Silva", mail_address: "beltrano@example.com" },
       folder_id: "INBOX",
       date_formatted: "2026-11-06 22:41",
-      body_preview: "很长的正文",
+      body_preview: "Corpo muito longo",
     },
   ];
-  const bodies = { "m-budget": "机密正文：预算四十二万", "m-long": "长".repeat(3000) };
+  const bodies = { "m-budget": "corpo confidencial: orçamento de quarenta e dois mil", "m-long": "z".repeat(3000) };
   writeFileSync(
     cli,
     `#!${process.execPath}
@@ -213,14 +219,14 @@ if (mode === 'auth') {
 const summaries = ${JSON.stringify(summaries)};
 const bodies = ${JSON.stringify(bodies)};
 const notify = Array.from({ length: 30 }, (_, i) => ({
-  message_id: 'n' + i, thread_id: 't-n' + i, subject: '本周产品动态', folder_id: 'INBOX',
-  head_from: { name: '通知机器人', mail_address: 'noreply@example.com' },
-  date_formatted: '2026-11-09 08:00', body_preview: '无需回复',
+  message_id: 'n' + i, thread_id: 't-n' + i, subject: 'Novidades do produto desta semana', folder_id: 'INBOX',
+  head_from: { name: 'Robô de notificações', mail_address: 'noreply@example.com' },
+  date_formatted: '2026-11-09 08:00', body_preview: 'Não é preciso responder',
 }));
 const wanted = Array.from({ length: 30 }, (_, i) => ({
-  message_id: 'w' + i, thread_id: 't-w' + i, subject: '请确认排期', folder_id: 'INBOX',
-  head_from: { name: '李四', mail_address: 'li@example.com' },
-  date_formatted: '2026-11-09 09:00', body_preview: '麻烦回复',
+  message_id: 'w' + i, thread_id: 't-w' + i, subject: 'Confirme o cronograma', folder_id: 'INBOX',
+  head_from: { name: 'Sicrano Souza', mail_address: 'sicrano@example.com' },
+  date_formatted: '2026-11-09 09:00', body_preview: 'Por favor, responda',
 }));
 let data;
 if (args[1] === '+triage' && mode === 'full') {
@@ -271,18 +277,18 @@ console.log(JSON.stringify({ ok: true, identity: 'user', data }));
   return { dir, run, parsed: resultFrom(readMessage(run.stdout), {}) };
 }
 
-test("mail is read as the user, a skipped sender's body is never read, and a long body is cut to a stated length", () => {
+test("o e-mail é lido como o usuário, o corpo de um remetente ignorado nunca é lido, e um corpo longo é cortado num tamanho declarado", () => {
   const { dir, run, parsed } = triage();
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.problem, undefined);
   assert.equal(parsed.result.events?.[0].type, "inbox.ready");
-  assert.doesNotMatch(run.stdout, /机密正文|长{100}/, "邮件正文不写进日志");
+  assert.doesNotMatch(run.stdout, /corpo confidencial|z{100}/, "o corpo do e-mail não vai para o log");
   const snapshot = JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8"));
   assert.deepEqual(
     snapshot.messages.map((m: { message_id: string }) => m.message_id),
     ["m-budget", "m-long"],
   );
-  assert.equal(snapshot.messages[0].body, "机密正文：预算四十二万");
+  assert.equal(snapshot.messages[0].body, "corpo confidencial: orçamento de quarenta e dois mil");
   assert.equal([...snapshot.messages[1].body].length, 1200);
   assert.equal(snapshot.messages[1].truncated, true);
   assert.equal(snapshot.messages[0].truncated, false);
@@ -294,12 +300,12 @@ test("mail is read as the user, a skipped sender's body is never read, and a lon
   assert.ok(calls.every((args) => args[args.indexOf("--as") + 1] === "user"));
   const read = calls.find((args) => args.includes("--message-ids"))!;
   assert.deepEqual(read[read.indexOf("--message-ids") + 1].split(","), ["m-budget", "m-long"]);
-  assert.ok(read.includes("--html=false"), "只取纯文本正文，不拉 HTML");
+  assert.ok(read.includes("--html=false"), "só o corpo em texto puro, sem buscar HTML");
   const filter = calls.find((args) => args.includes("--filter"))!;
   assert.equal(JSON.parse(filter[filter.indexOf("--filter") + 1]).folder_id, "INBOX");
 });
 
-test("skipped senders on the first page don't use up the cap, so the mail behind them is read, and none of them costs a body", () => {
+test("remetentes ignorados na primeira página não consomem o limite, então o e-mail atrás deles é lido, e nenhum deles custa um corpo", () => {
   const { dir, run, parsed } = triage("paged");
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.problem, undefined);
@@ -308,24 +314,28 @@ test("skipped senders on the first page don't use up the cap, so the mail behind
   assert.deepEqual(
     snapshot.messages.map((m: { message_id: string }) => m.message_id),
     ["m-budget"],
-    "第一页全是跳过的发件人，后面那封要回的邮件不能被挤掉",
+    "a primeira página é toda de remetentes ignorados; a mensagem seguinte, que precisa de resposta, não pode ser empurrada para fora",
   );
-  assert.equal(snapshot.scanned.complete, true, "读到窗口尽头了，清单要能说清这批就是全部");
+  assert.equal(
+    snapshot.scanned.complete,
+    true,
+    "a leitura foi até o fim da janela; a lista precisa dizer que este lote é tudo",
+  );
   const calls: string[][] = readFileSync(join(dir, "calls.jsonl"), "utf8")
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
   const pages = calls.filter((args) => args[1] === "+triage");
-  assert.equal(pages.length, 2, "还有 next page 就得接着翻");
+  assert.equal(pages.length, 2, "havendo next page, é preciso continuar paginando");
   assert.equal(pages[1][pages[1].indexOf("--page-token") + 1], "list:P2");
   assert.deepEqual(
     calls.filter((args) => args.includes("--message-ids")).map((args) => args[args.indexOf("--message-ids") + 1]),
     ["m-budget"],
-    "只按留下的邮件取正文，跳过的发件人一封都不取",
+    "o corpo só é buscado para as mensagens mantidas; nenhuma dos remetentes ignorados",
   );
 });
 
-test("pages that run out with nothing kept say there is nothing to read, and still ask for no bodies", () => {
+test("páginas que se esgotam sem nada mantido dizem que não há o que ler, e ainda assim não pedem nenhum corpo", () => {
   const { dir, run, parsed } = triage("paged-empty");
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.result.outcome, "nothing");
@@ -335,36 +345,56 @@ test("pages that run out with nothing kept say there is nothing to read, and sti
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
-  assert.equal(calls.filter((args) => args[1] === "+triage").length, 2, "翻到翻不动了才敢说没有");
+  assert.equal(
+    calls.filter((args) => args[1] === "+triage").length,
+    2,
+    "só se pode dizer que não há nada depois de paginar até não dar mais",
+  );
   assert.equal(
     JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8")).id,
     "old",
-    "读到窗口尽头才是真的没有，旧快照留着不动",
+    "só é realmente vazio quando a leitura chega ao fim da janela; o snapshot antigo fica intacto",
   );
 });
 
-test("a read that stops while pages remain says mail went unscanned instead of claiming there was nothing", () => {
+test("uma leitura que para enquanto restam páginas diz que houve e-mail não varrido, em vez de afirmar que não havia nada", () => {
   const { dir, run, parsed } = triage("paged-endless");
   assert.equal(run.status, 0, run.stderr);
-  assert.equal(parsed.result.outcome, "done", "没读全不是没事可做");
-  assert.doesNotMatch(run.stdout, /没有需要看的邮件/);
+  assert.equal(parsed.result.outcome, "done", "não ler tudo não é nada a fazer");
+  assert.doesNotMatch(run.stdout, /não há e-mails para ler/);
   const snapshot = JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8"));
-  assert.equal(snapshot.scanned.complete, false, "清单要说明还有页面没看");
+  assert.equal(snapshot.scanned.complete, false, "a lista precisa dizer que há páginas não vistas");
   assert.ok(snapshot.scanned.summaries > 0);
-  assert.match(parsed.result.events?.[0].summary ?? "", /没读/, "回执也要说清没读全");
-  assert.doesNotMatch(readFileSync(join(dir, "calls.jsonl"), "utf8"), /--message-ids/, "一封都没留下就不取正文");
+  assert.match(
+    parsed.result.events?.[0].summary ?? "",
+    /não lidas/,
+    "o recibo também precisa dizer que a leitura não foi completa",
+  );
+  assert.doesNotMatch(
+    readFileSync(join(dir, "calls.jsonl"), "utf8"),
+    /--message-ids/,
+    "sem nenhuma mensagem mantida, nenhum corpo é buscado",
+  );
 });
 
-test("a read that fills the cap while the listing has more says mail was left unread", () => {
+test("uma leitura que preenche o limite enquanto a listagem tem mais diz que houve e-mail deixado sem ler", () => {
   const { dir, run, parsed } = triage("full");
   assert.equal(run.status, 0, run.stderr);
   const snapshot = JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8"));
   assert.equal(snapshot.messages.length, 30);
-  assert.equal(snapshot.scanned.complete, false, "收满上限、后面还有邮件，不能说读全了");
-  assert.match(parsed.result.events?.[0].summary ?? "", /没读/, "回执也要说清没读全");
+  assert.equal(
+    snapshot.scanned.complete,
+    false,
+    "com o limite cheio e ainda havendo mensagens depois, não se pode dizer que tudo foi lido",
+  );
+  assert.match(
+    parsed.result.events?.[0].summary ?? "",
+    /não lidas/,
+    "o recibo também precisa dizer que a leitura não foi completa",
+  );
 });
 
-test("an empty inbox says so, keeps the old snapshot, and asks the mailbox for no bodies", () => {
+test("uma caixa vazia diz isso, mantém o snapshot antigo e não pede nenhum corpo à caixa de entrada", () => {
   const { dir, run, parsed } = triage("empty");
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.result.outcome, "nothing");
@@ -373,14 +403,14 @@ test("an empty inbox says so, keeps the old snapshot, and asks the mailbox for n
   assert.equal(JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8")).id, "old");
 });
 
-test("a mailbox that returned only some bodies is not saved as a complete snapshot", () => {
+test("uma caixa de entrada que devolveu apenas alguns corpos não é salva como um snapshot completo", () => {
   const { dir, run } = triage("partial");
   assert.notEqual(run.status, 0);
-  assert.match(run.stderr, /没有返回部分邮件的正文/);
+  assert.match(run.stderr, /não devolveu o corpo de algumas mensagens/);
   assert.equal(JSON.parse(readFileSync(join(dir, "inbox-input.json"), "utf8")).id, "old");
 });
 
-test("mail authorization failure asks once and keeps the previous snapshot", () => {
+test("uma falha de autorização do e-mail pergunta uma vez e mantém o snapshot anterior", () => {
   const { dir, run, parsed } = triage("auth");
   assert.equal(run.status, 0, run.stderr);
   assert.equal(parsed.result.outcome, "done");

@@ -1,13 +1,14 @@
-// Being seen. A worker with work in hand asks every second and a channel polls all day; a fact is a disk sync and stays in
-// the log for good, so being seen only goes in as often as the judgements on it can use.
-// Failure cases: a minute of asking writes a fact per ask, or one per run in hand; an idle worker or a channel, back every
-// 50 seconds, writes every time; holding stamps back makes a worker that is there look gone, so a run it keeps reporting goes
-// in doubt, it's told as offline, or one missed poll shows it as not online; or makes a worker that is gone look there, so a
-// run in the hand of a worker gone quiet goes in doubt instead of waiting for it; a run no longer reported is never judged,
-// or judged more than a stamp's lag early; the offline card stays open on the way back, or the run in hand isn't renewed by
-// the same ask that brings the worker back; a held-back ask also holds back a claim or a cancel; someone else's run, or a
-// run past holding, makes every ask a write or gets stamped; a clock set back leaves a stamp in the future that nothing
-// corrects; holding back depends on anything but the time given, or the log no longer replays to the view.
+// Ser visto. Um worker com trabalho em mãos consulta a cada segundo e um canal faz polling o dia inteiro; um fato é um sync
+// de disco e fica no log para sempre, então ser visto só entra com a frequência que os julgamentos sobre ele conseguem usar.
+// Casos de falha: um minuto de consultas escreve um fato por consulta, ou um por rodada em mãos; um worker ocioso ou um canal,
+// voltando a cada 50 segundos, escreve todas as vezes; reter os carimbos faz um worker que está lá parecer sumido, e uma
+// rodada que ele continua reportando fica incerta, ele é anunciado como offline, ou um único polling perdido o mostra como não
+// online; ou faz um worker que sumiu parecer estar lá, e uma rodada na mão de um worker que ficou calado fica incerta em vez de
+// esperar por ele; uma rodada que deixou de ser reportada nunca é julgada, ou é julgada antes do que o atraso de um carimbo
+// permite; o cartão de offline continua aberto na volta, ou a rodada em mãos não é renovada pela mesma consulta que traz o
+// worker de volta; uma consulta retida também retém um claim ou um cancelamento; a rodada de outro, ou uma rodada fora da
+// retenção, faz toda consulta virar escrita ou acaba carimbada; um relógio atrasado deixa um carimbo no futuro que nada
+// corrige; a retenção depende de qualquer coisa além do horário informado, ou o log deixa de se reproduzir na visão.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
@@ -23,17 +24,17 @@ const { serve } = await import("../host/http.ts");
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
-/** How far behind the last contact a stamp may be, and so how much sooner than its limit a judgement may come. */
+/** O quanto um carimbo pode ficar atrás do último contato e, assim, o quanto antes do limite um julgamento pode vir. */
 const LAG = MINUTE;
 const LEASE = 5 * MINUTE;
 const OFFLINE = 10 * MINUTE;
 
 const environment = { secret: "test-heartbeat", publicUrl: "https://hub.test" };
 const fixture = parseRules(readFileSync(new URL("./rules.fixture.json", import.meta.url), "utf8"), 0, "UTC");
-// Without the scheduled rules nothing else comes due, so what the log gains here is down to being seen.
+// Sem as regras agendadas nada mais vence, então o que o log ganha aqui vem de ser visto.
 const rules = { ...fixture, rules: fixture.rules.filter((rule) => "source" in rule.when) };
 
-/** The kernel as the shell runs it: each input decided at the current time, and one timer for what comes due. */
+/** O kernel como o host o executa: cada entrada decidida no horário atual e um temporizador só para o que vence. */
 class Hub {
   view: View = empty();
   log: Fact[] = [];
@@ -51,7 +52,7 @@ class Hub {
     for (let fired = 0; ; fired++) {
       const next = Math.min(Infinity, ...rows(this.view, "due").map((due) => due.at));
       if (next > time) break;
-      assert.ok(fired < 100, "a deadline keeps coming due");
+      assert.ok(fired < 100, "há um vencimento que não para de vencer");
       this.now = Math.max(this.now, next);
       this.act("tick");
     }
@@ -72,7 +73,7 @@ class Hub {
   }
 }
 
-/** A1 belongs to w1 and takes notes three at a time. */
+/** O a1 pertence ao w1 e pega notas três por vez. */
 function inHand(hub: Hub, n: number): number {
   hub.act("ingest", "app", { id: `note:${n}`, type: "feedback.new", subject: `#${n}` });
   return hub.act("claimNext", "w1", `claim-${n}`).run;
@@ -82,24 +83,24 @@ const wentInDoubt = (hub: Hub, run: number) =>
     fact.changes.some(({ table, key, row }) => table === "runs" && key === String(run) && row?.state === "unknown"),
   );
 
-test("asking every second with three runs in hand writes one fact a minute", () => {
+test("consultar a cada segundo com três rodadas em mãos escreve um fato por minuto", () => {
   const hub = new Hub();
   const runs: number[] = [];
   hub.repeat(SECOND, at(1), () => {
-    // Taken on while asking, so stamped at different moments unless a heartbeat brings them together.
+    // Pegas no meio das consultas, então carimbadas em momentos diferentes, a menos que um heartbeat as una.
     if ((hub.now - at(0)) % (20 * SECOND) === 0) runs.push(inHand(hub, runs.length + 1));
     hub.act("heartbeat", "w1", runs);
   });
   assert.equal(runs.length, 3);
   const before = hub.log.length;
   hub.repeat(SECOND, at(2), () => hub.act("heartbeat", "w1", runs));
-  assert.equal(hub.log.length - before, 1, "one minute of asking");
+  assert.equal(hub.log.length - before, 1, "um minuto de consultas");
   hub.repeat(SECOND, at(62), () => hub.act("heartbeat", "w1", runs));
-  assert.equal(hub.log.length - before, 61, "an hour more of asking");
+  assert.equal(hub.log.length - before, 61, "mais uma hora de consultas");
   assert.ok(hub.log.slice(before).every((fact) => fact.type === "heartbeat"));
 });
 
-test("back every 50 seconds with nothing in hand writes every other time, worker or channel", () => {
+test("voltar a cada 50 segundos sem nada em mãos escreve uma vez a cada duas, worker ou canal", () => {
   const worker = new Hub();
   worker.repeat(50 * SECOND, at(60), () => worker.act("heartbeat", "w1", []));
   assert.equal(worker.written("heartbeat"), 36);
@@ -109,7 +110,7 @@ test("back every 50 seconds with nothing in hand writes every other time, worker
 });
 
 for (const every of [SECOND, 50 * SECOND]) {
-  test(`a run reported every ${every / SECOND} seconds stays held, and nobody is told anything`, () => {
+  test(`uma rodada reportada a cada ${every / SECOND} segundos continua em mãos, e ninguém é avisado de nada`, () => {
     const hub = new Hub();
     const run = inHand(hub, 1);
     hub.repeat(every, at(30), () => hub.act("heartbeat", "w1", [run]));
@@ -121,12 +122,12 @@ for (const every of [SECOND, 50 * SECOND]) {
   });
 }
 
-// However a worker's asks fall against its last stamp, the judgement comes from the deadline table alone.
+// Não importa como as consultas de um worker caem frente ao último carimbo: o julgamento vem só da tabela de vencimentos.
 for (const [every, stops] of [
   [SECOND, [0, SECOND, 30 * SECOND, 59 * SECOND]],
   [50 * SECOND, [0, 50 * SECOND]],
 ] as const) {
-  test(`a run no longer reported by a worker back every ${every / SECOND} seconds goes in doubt, told once`, () => {
+  test(`worker que volta a cada ${every / SECOND} segundos: rodada não reportada fica incerta, com um aviso só`, () => {
     for (const stop of stops) {
       const hub = new Hub();
       const run = inHand(hub, 1);
@@ -139,15 +140,15 @@ for (const [every, stops] of [
       hub.repeat(every, last + 2 * LEASE, () => hub.act("heartbeat", "w1", other));
       assert.equal(hub.state(run), "unknown");
       const judged = wentInDoubt(hub, run)!.at;
-      assert.ok(judged > last + LEASE - LAG, `judged ${judged - last} ms after the last report`);
-      assert.ok(judged <= last + LEASE + 1, `judged ${judged - last} ms after the last report`);
+      assert.ok(judged > last + LEASE - LAG, `julgada ${judged - last} ms depois do último reporte`);
+      assert.ok(judged <= last + LEASE + 1, `julgada ${judged - last} ms depois do último reporte`);
       const cards = rows(hub.view, "cards");
       assert.deepEqual(
         cards.map((card) => card.key),
         [`run:${run}:unknown`],
       );
 
-      // A worker goes on reporting a run in doubt until it can hand it in: that's being seen, not news about the run.
+      // Um worker segue reportando uma rodada incerta até poder entregá-la: isso é ser visto, não notícia sobre a rodada.
       hub.runTo(hub.now + LAG);
       const before = hub.log.length;
       const stamp = hub.view.get("runs", run)!.seen_at;
@@ -159,7 +160,7 @@ for (const [every, stops] of [
   });
 }
 
-test("a worker gone with a run in hand keeps the run, is told of once about ten minutes on, and clears on its way back", () => {
+test("worker que some com uma rodada em mãos a mantém, é avisado uma vez uns dez minutos depois e se resolve na volta", () => {
   for (const stop of [0, SECOND, 30 * SECOND, 59 * SECOND]) {
     const hub = new Hub();
     const run = inHand(hub, 1);
@@ -169,17 +170,17 @@ test("a worker gone with a run in hand keeps the run, is told of once about ten 
       hub.act("heartbeat", "w1", [run]);
     });
     hub.runTo(last + 60 * MINUTE);
-    assert.equal(wentInDoubt(hub, run), undefined, "gone isn't lost: it may still be working");
+    assert.equal(wentInDoubt(hub, run), undefined, "sumir não é perder: ele pode ainda estar trabalhando");
     const cards = rows(hub.view, "cards");
     assert.equal(cards.length, 1);
-    assert.equal(cards[0].title, "接单程序没连上");
+    assert.equal(cards[0].title, "o worker não conectou");
     const told = Date.parse(cards[0].created_at);
-    assert.ok(told > last + OFFLINE - LAG, `told ${told - last} ms after the last ask`);
-    assert.ok(told <= last + OFFLINE + 1, `told ${told - last} ms after the last ask`);
+    assert.ok(told > last + OFFLINE - LAG, `avisado ${told - last} ms depois da última consulta`);
+    assert.ok(told <= last + OFFLINE + 1, `avisado ${told - last} ms depois da última consulta`);
 
     const before = hub.log.length;
     hub.act("heartbeat", "w1", [run]);
-    assert.equal(hub.log.length, before + 1, "the card, the worker and the run all change in the one fact");
+    assert.equal(hub.log.length, before + 1, "o cartão, o worker e a rodada mudam todos no mesmo fato");
     assert.equal(hub.view.get("cards", cards[0].id)!.state, "closed");
     assert.equal(hub.view.get("runs", run)!.seen_at, new Date(hub.now).toISOString());
     hub.repeat(SECOND, hub.now + 10 * MINUTE, () => hub.act("heartbeat", "w1", [run]));
@@ -188,7 +189,7 @@ test("a worker gone with a run in hand keeps the run, is told of once about ten 
   }
 });
 
-test("a worker away a few minutes and back with the run in hand was never in doubt", () => {
+test("um worker ausente por alguns minutos que volta com a rodada em mãos nunca ficou incerto", () => {
   for (const away of [30 * SECOND, 4 * MINUTE, 9 * MINUTE]) {
     const hub = new Hub();
     const run = inHand(hub, 1);
@@ -201,7 +202,7 @@ test("a worker away a few minutes and back with the run in hand was never in dou
   }
 });
 
-test("a run reported again is renewed by that very ask, though the worker was seen a moment ago", () => {
+test("uma rodada reportada de novo é renovada por essa mesma consulta, ainda que o worker tenha sido visto há pouco", () => {
   const hub = new Hub();
   const run = inHand(hub, 1);
   hub.repeat(SECOND, at(0) + LEASE - 30 * SECOND, () => hub.act("heartbeat", "w1", []));
@@ -211,7 +212,7 @@ test("a run reported again is renewed by that very ask, though the worker was se
   assert.equal(hub.state(run), "claimed");
 });
 
-test("a worker back without the run it took has that run in doubt straight away", () => {
+test("um worker que volta sem a rodada que pegou tem essa rodada marcada como incerta imediatamente", () => {
   const hub = new Hub();
   const run = inHand(hub, 1);
   hub.repeat(SECOND, at(5), () => hub.act("heartbeat", "w1", [run]));
@@ -221,16 +222,21 @@ test("a worker back without the run it took has that run in doubt straight away"
   assert.equal(hub.state(run), "unknown");
 });
 
-test("an ask closes an offline card even when nothing else about it is worth writing", () => {
+test("uma consulta encerra um cartão de offline mesmo quando nada mais nela vale uma escrita", () => {
   const hub = new Hub();
   hub.act("heartbeat", "w1", []);
-  const { card } = hub.act("createCard", { key: "worker:w1:offline:earlier", kind: "notice", title: "离线", text: "" });
+  const { card } = hub.act("createCard", {
+    key: "worker:w1:offline:earlier",
+    kind: "notice",
+    title: "Offline",
+    text: "",
+  });
   hub.runTo(hub.now + SECOND);
   hub.act("heartbeat", "w1", []);
   assert.equal(hub.view.get("cards", card)!.state, "closed");
 });
 
-test("someone else's run, or one no longer held, is neither stamped nor a reason to write", () => {
+test("a rodada de outro, ou uma que não está mais em mãos, não é carimbada nem é motivo para escrever", () => {
   const hub = new Hub();
   hub.act("ingest", "ops", { id: "a", type: "alert.raised", subject: "a" });
   const theirs = hub.act("claimNext", "w2", "theirs").run;
@@ -244,14 +250,14 @@ test("someone else's run, or one no longer held, is neither stamped nor a reason
   const written = hub.log.length;
   hub.runTo(hub.now + SECOND);
   hub.act("heartbeat", "w1", [theirs, finished, 999]);
-  assert.equal(hub.log.length, written, "nothing of its own was due");
+  assert.equal(hub.log.length, written, "nada dele estava vencido");
   hub.runTo(hub.now + LAG);
   hub.act("heartbeat", "w1", [theirs, finished, 999]);
-  assert.equal(hub.log.length, written + 1, "being seen is due");
+  assert.equal(hub.log.length, written + 1, "ser visto está vencido");
   assert.deepEqual(stamps(), before);
 });
 
-test("a clock set back corrects the stamps, rather than leaving them in the future", () => {
+test("um relógio atrasado corrige os carimbos, em vez de deixá-los no futuro", () => {
   const hub = new Hub();
   hub.runTo(at(60));
   const run = inHand(hub, 1);
@@ -266,7 +272,7 @@ test("a clock set back corrects the stamps, rather than leaving them in the futu
   assert.equal(hub.view.get("runs", run)!.seen_at, earlier);
 });
 
-test("holding back goes by the time given, changes nothing it was given, and the log replays to the view", () => {
+test("a retenção segue o horário informado, não muda nada do que recebeu, e o log se reproduz na visão", () => {
   const hub = new Hub();
   const run = inHand(hub, 1);
   hub.act("heartbeat", "w1", [run]);
@@ -290,7 +296,7 @@ test("holding back goes by the time given, changes nothing it was given, and the
   assert.deepEqual(snapshot(evolve(empty(), hub.log)), snapshot(hub.view));
 });
 
-test("one missed poll doesn't show a worker or channel as not online; being gone still does", () => {
+test("um único polling perdido não mostra um worker ou canal como não online; sumir ainda mostra", () => {
   const worker = (now: number) => runtime.stateOf(now).agents.find((agent) => agent.worker === "w1")!;
   const channel = (now: number) => runtime.stateOf(now).channels.find((known) => known.id === "chat")!;
   const seen = (now: number) => {
@@ -301,8 +307,8 @@ test("one missed poll doesn't show a worker or channel as not online; being gone
   seen(at(0));
   seen(at(0) + 50 * SECOND);
   for (let now = at(0); now < missed + 50 * SECOND; now += 5 * SECOND) {
-    assert.equal(worker(now).online, true, `worker ${(now - at(0)) / SECOND} seconds in`);
-    assert.equal(channel(now).online, true, `channel ${(now - at(0)) / SECOND} seconds in`);
+    assert.equal(worker(now).online, true, `worker aos ${(now - at(0)) / SECOND} segundos`);
+    assert.equal(channel(now).online, true, `canal aos ${(now - at(0)) / SECOND} segundos`);
   }
   const last = missed + 50 * SECOND;
   seen(last);
@@ -337,26 +343,26 @@ async function call(path: string, key: string, body?: unknown) {
   assert.equal(response.status, 200, path);
   return response.json();
 }
-// By type: the hub's own timer can add a fact at any moment, for a worker that isn't asking here.
+// Por tipo: o temporizador da própria central pode acrescentar um fato a qualquer momento, por um worker que não consulta aqui.
 const beenSeen = () =>
   runtime.one<{ n: number }>(
     "SELECT COUNT(*) AS n FROM facts WHERE json_extract(fact, '$.type') IN ('heartbeat', 'channelSeen')",
   )!.n;
 
-test("polling the doors over and over writes nothing, while a cancel and a new job still come straight through", async () => {
+test("polling repetido das portas não escreve nada, e um cancelamento e um trabalho novo ainda passam direto", async () => {
   await call("/v1/cards/next?wait=0", keys.chat);
   let seen = beenSeen();
-  // Not that nothing comes back: the hub's own timer can raise a card at any moment, for a worker gone quiet on the test's clock.
+  // Não que nada volte: o temporizador da central pode criar um cartão a qualquer momento, por um worker calado no relógio do teste.
   for (let n = 0; n < 10; n++) await call("/v1/cards/next?wait=0", keys.chat);
-  assert.equal(beenSeen(), seen, "an idle channel polling");
+  assert.equal(beenSeen(), seen, "um canal ocioso fazendo polling");
 
-  // The alert gives w1 work too. It was last seen on the test's own clock, so its offline deadline would be overdue, and an
-  // overdue deadline moves with every input until the timer gets to it.
+  // O alerta também dá trabalho ao w1. Ele foi visto pela última vez no relógio do próprio teste, então seu vencimento de
+  // offline estaria atrasado, e um vencimento atrasado se move a cada entrada até o temporizador alcançá-lo.
   runtime.heartbeat("w1", []);
   const ask = (query: string) => call(`/v1/work?wait=0&claim=door&${query}`, keys.w2);
   await call("/v1/events", keys.ops, { id: "door:1", type: "alert.raised", subject: "door" });
   const { job } = await ask("capacity=1");
-  assert.equal(job.rule.name, "告警");
+  assert.equal(job.rule.name, "alerta");
 
   seen = beenSeen();
   for (let n = 0; n < 10; n++) {
@@ -367,7 +373,7 @@ test("polling the doors over and over writes nothing, while a cancel and a new j
   await call(`/v1/runs/${job.run}/result`, job.token, { outcome: "cancelled" });
   await call("/v1/events", keys.ops, { id: "door:2", type: "alert.raised", subject: "door" });
   const next = await call("/v1/work?wait=0&claim=door-2&capacity=1", keys.w2);
-  assert.equal(next.job.rule.name, "告警");
+  assert.equal(next.job.rule.name, "alerta");
   assert.notEqual(next.job.run, job.run);
-  assert.equal(beenSeen(), seen, "a worker asking with a run in hand");
+  assert.equal(beenSeen(), seen, "um worker consultando com uma rodada em mãos");
 });

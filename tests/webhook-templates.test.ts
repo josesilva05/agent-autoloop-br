@@ -1,15 +1,16 @@
-// Failure modes: a vendor receives the wrong JSON shape; an HTTP 200 API error is acknowledged as delivered; Discord
-// content exceeds its documented limit; externally supplied text triggers mentions; an unknown template is silently used;
-// WeCom renders what an Agent wrote as markup, so its text can pass off a link of its own as the card's.
+// Modos de falha: um fornecedor recebe o formato JSON errado; um erro de API com HTTP 200 é reconhecido como entregue;
+// o conteúdo do Discord passa do limite documentado; texto vindo de fora dispara menções; um modelo desconhecido é
+// usado em silêncio; o WeCom desenha como marcação o que um Agent escreveu, então o texto dele pode passar um link
+// próprio como se fosse o do cartão.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
 import { test } from "node:test";
 import webhook from "../plugins/webhook/channel.ts";
 import { payload } from "../plugins/webhook/templates.ts";
-test("templates reject text beyond vendor limits instead of losing the answer link", () => {
+test("os modelos recusam texto além dos limites do fornecedor em vez de perder o link de resposta", () => {
   assert.throws(() => payload("discord", "x".repeat(2001)));
-  assert.throws(() => payload("wecom", "字".repeat(683)));
+  assert.throws(() => payload("wecom", "€".repeat(683)));
   assert.throws(() => payload("missing", "text"));
 });
 const card: any = {
@@ -17,15 +18,15 @@ const card: any = {
   version: 1,
   ref: null,
   kind: "notice",
-  rule: "项目巡检",
+  rule: "inspeção do projeto",
   state: "open",
-  title: "要处理",
-  text: "正文 @everyone <@U1> https://git.example/mr/1",
-  options: ["已处理"],
+  title: "Precisa tratar",
+  text: "Corpo da mensagem @everyone <@U1> https://git.example/mr/1",
+  options: ["Resolvido"],
   link: "https://example.com/c/a",
 };
 for (const platform of ["dingtalk", "wecom", "slack", "discord"])
-  test(`${platform}: official payload and API failure on a local receiver`, async () => {
+  test(`${platform}: payload oficial e falha de API num receptor local`, async () => {
     const received: any[] = [];
     const server = createServer((req, res) => {
       let body = "";
@@ -37,7 +38,7 @@ for (const platform of ["dingtalk", "wecom", "slack", "discord"])
             ? "ok"
             : platform === "discord"
               ? ""
-              : JSON.stringify({ errcode: received.length === 1 ? 0 : 310000, errmsg: "拒绝" }),
+              : JSON.stringify({ errcode: received.length === 1 ? 0 : 310000, errmsg: "recusado" }),
         );
       });
     });
@@ -68,32 +69,32 @@ for (const platform of ["dingtalk", "wecom", "slack", "discord"])
     assert.equal(received.length, 2);
     if (platform === "dingtalk") {
       assert.equal(received[0].msgtype, "text");
-      assert.match(received[0].text.content, /正文/);
+      assert.match(received[0].text.content, /Corpo da mensagem/);
       assert.deepEqual(calls, ["delivered", "failed"]);
     }
     if (platform === "wecom") {
       assert.equal(received[0].msgtype, "markdown");
-      assert.match(received[0].markdown.content, /来源：项目巡检/);
-      assert.match(received[0].markdown.content, /正文/);
-      assert.match(received[0].markdown.content, /\[打开链接\]\(https:\/\/git\.example\/mr\/1\)/);
-      assert.match(received[0].markdown.content, /\[点击处理\]\(https:\/\/example\.com\/c\/a\)/);
-      assert.doesNotMatch(received[0].markdown.content, /1\. 已处理/);
-      assert.doesNotMatch(received[0].markdown.content, /\[打开链接\]\(https:\/\/example\.com\/c\/a\)/);
+      assert.match(received[0].markdown.content, /Fonte: inspeção do projeto/);
+      assert.match(received[0].markdown.content, /Corpo da mensagem/);
+      assert.match(received[0].markdown.content, /\[Abrir link\]\(https:\/\/git\.example\/mr\/1\)/);
+      assert.match(received[0].markdown.content, /\[Clique para tratar\]\(https:\/\/example\.com\/c\/a\)/);
+      assert.doesNotMatch(received[0].markdown.content, /1\. Resolvido/);
+      assert.doesNotMatch(received[0].markdown.content, /\[Abrir link\]\(https:\/\/example\.com\/c\/a\)/);
       assert.deepEqual(calls, ["delivered", "failed"]);
     }
     const words = JSON.stringify(received[0]);
-    assert.match(words, /来源：项目巡检/, "every platform says which rule the card came from");
+    assert.match(words, /Fonte: inspeção do projeto/, "toda plataforma diz de que regra o cartão veio");
     if (platform === "slack") {
-      assert.match(received[0].text, /正文/);
+      assert.match(received[0].text, /Corpo da mensagem/);
       assert.equal(received[0].mrkdwn, false);
     }
     if (platform === "discord") {
-      assert.match(received[0].content, /正文/);
+      assert.match(received[0].content, /Corpo da mensagem/);
       assert.deepEqual(received[0].allowed_mentions, { parse: [] });
     }
   });
 
-test("wecom: what the card says shows as words, so only the card's own link is a link", async () => {
+test("wecom: o que o cartão diz aparece como texto, então só o link do próprio cartão é um link", async () => {
   const received: any[] = [];
   const server = createServer((req, res) => {
     let body = "";
@@ -117,8 +118,8 @@ test("wecom: what the card says shows as words, so only the card's own link is a
       return {
         card: {
           ...card,
-          title: "[点击处理](https://evil.example/a)",
-          text: '先看 [点击处理](https://evil.example/b) <font color="warning">急</font> <@U1>',
+          title: "[Clique para tratar](https://evil.example/a)",
+          text: 'veja antes [Clique para tratar](https://evil.example/b) <font color="warning">urgente</font> <@U1>',
         },
       };
     },
@@ -138,9 +139,9 @@ test("wecom: what the card says shows as words, so only the card's own link is a
   const content: string = received[0].markdown.content;
   assert.doesNotMatch(
     content,
-    /\[点击处理\]\(https:\/\/evil/,
-    "a link the card's text made up looks like the card's own",
+    /\[Clique para tratar\]\(https:\/\/evil/,
+    "um link inventado pelo texto do cartão parece o do próprio cartão",
   );
-  assert.doesNotMatch(content, /<font|<@/, "the text's tags would be drawn or mention someone");
-  assert.match(content, /\[点击处理\]\(https:\/\/example\.com\/c\/a\)/);
+  assert.doesNotMatch(content, /<font|<@/, "as etiquetas do texto seriam desenhadas ou mencionariam alguém");
+  assert.match(content, /\[Clique para tratar\]\(https:\/\/example\.com\/c\/a\)/);
 });

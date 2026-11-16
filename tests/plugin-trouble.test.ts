@@ -1,10 +1,11 @@
-// One process holds the hub, the worker and the channels, and plugins run inside it. Failure cases: an agent plugin that
-// can't read what it printed ends the process, and ends it again on every start because the run is still there; a channel
-// plugin that returns at once goes round without a pause and the hub never answers again, with the process alive so nothing
-// restarts it; a channel plugin's stray throw or unhandled rejection ends the process; the database held too long by
-// another process makes a tick throw from a timer and ends the process, the rules change that tick brought is lost, the retry
-// is lost to whatever comes along before it, or rules written wrong in that time are never told; a worker that stops isn't
-// started again; losing the place the log goes makes the error about it go round for ever, with the hub no longer answering.
+// Um processo só detém a central, o worker e os canais, e os plugins rodam dentro dele. Casos de falha: um plugin de
+// Agent que não consegue ler o que imprimiu encerra o processo, e o encerra de novo a cada inicialização porque a rodada
+// ainda está lá; um plugin de canal que retorna de imediato entra em ciclo sem pausa e a central nunca mais responde, com
+// o processo vivo e portanto nada o reiniciando; um throw desgarrado ou uma rejeição não tratada de um plugin de canal
+// encerra o processo; o banco segurado tempo demais por outro processo faz um tick lançar a partir de um temporizador e
+// encerra o processo, a mudança de regras que aquele tick trouxe se perde, a nova tentativa se perde para o que aparecer
+// antes dela, ou regras escritas errado nesse intervalo nunca são avisadas; um worker que para não é iniciado de novo;
+// perder o destino do log faz o erro sobre isso entrar em ciclo para sempre, com a central sem responder.
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
@@ -32,7 +33,7 @@ after(async () => {
     child.kill("SIGKILL");
     await new Promise((resolve) => child.once("exit", resolve));
   }
-  // Windows won't remove a folder a live process works in, and an agent let go just now may not have exited yet.
+  // O Windows não remove uma pasta em que um processo vivo trabalha, e um Agent solto há pouco pode ainda não ter saído.
   for (const home of homes) {
     try {
       rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
@@ -57,7 +58,7 @@ const edit = (file: string, change: (value: any) => void) => {
   writeFileSync(file, JSON.stringify(value, null, 2));
 };
 
-/** A real install in a home of its own, without the desktop channel, with these plugins in its folder. */
+/** Uma instalação real num home só seu, sem o canal de desktop, com estes plugins na sua pasta. */
 async function install(plugins: Record<string, string> = {}) {
   const home = mkdtempSync(join(tmpdir(), "agent-autoloop-plugin-trouble-"));
   homes.push(home);
@@ -104,7 +105,7 @@ async function install(plugins: Record<string, string> = {}) {
   return { home, port, cli, up, said: () => readFileSync(log, "utf8") };
 }
 
-/** Each on a connection of its own: a hub that's stopped answering must not look like a reused one that closed. */
+/** Cada um numa conexão própria: uma central que parou de responder não pode parecer uma reutilizada que fechou. */
 async function answers(port: number) {
   try {
     const response = await fetch(`http://127.0.0.1:${port}/healthz`, {
@@ -120,15 +121,15 @@ async function answers(port: number) {
 async function until(done: () => boolean | Promise<boolean>, what: string, patience = 20_000) {
   const end = Date.now() + patience;
   while (!(await done())) {
-    if (Date.now() > end) assert.fail(`等不到：${what}`);
+    if (Date.now() > end) assert.fail(`não chegou: ${what}`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
 
 const alive = (child: ChildProcess) => child.exitCode === null && child.signalCode === null;
 
-test("an agent plugin that can't read what it printed fails that run, and the hub stays up", async () => {
-  // Node itself prints, so the program really runs everywhere: there's no /bin/echo on Windows.
+test("um plugin de Agent que não consegue ler o que imprimiu faz aquela rodada falhar, e a central continua de pé", async () => {
+  // O próprio Node imprime, então o programa realmente roda em todo lugar: não existe /bin/echo no Windows.
   const it = await install({
     "unreadable/agent.ts": `export default {
       command: () => [${JSON.stringify(process.execPath)}, "-e", "console.log('ok')"],
@@ -142,7 +143,7 @@ test("an agent plugin that can't read what it printed fails that run, and the hu
     }
   });
   const up = it.up();
-  await until(() => answers(it.port), "中台应答");
+  await until(() => answers(it.port), "a central responder");
   assert.equal(it.cli("emit", "try.start", "--subject", "#1").status, 0);
   const owner = () => JSON.parse(readFileSync(join(it.home, "config.json"), "utf8")).owner as string;
   const firstRun = async () => {
@@ -152,30 +153,30 @@ test("an agent plugin that can't read what it printed fails that run, and the hu
     }).catch(() => null);
     return response?.ok ? (await response.json()).runs.at(-1) : undefined;
   };
-  await until(async () => alive(up) === false || (await firstRun())?.attempts === 1, "这一轮算没跑成");
+  await until(async () => alive(up) === false || (await firstRun())?.attempts === 1, "esta rodada contar como falha");
   assert.equal(alive(up), true, it.said());
-  assert.match((await firstRun()).error, /读不懂/);
+  assert.match((await firstRun()).error, /Não entendi a saída deste Agent/);
   assert.equal(await answers(it.port), true);
 });
 
-test("a channel plugin that returns at once doesn't stop the hub answering", async () => {
+test("um plugin de canal que retorna de imediato não impede a central de responder", async () => {
   const it = await install({ "quick/channel.ts": "export default async function quick() {}" });
   const key = it.cli("key", "new", "channel", "quick").stdout.trim();
   edit(join(it.home, "config.json"), (config) => (config.channels = { quick: { use: "quick", key } }));
-  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { quick: { name: "快" } }));
+  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { quick: { name: "rápido" } }));
   const up = it.up();
-  await until(() => answers(it.port), "中台应答");
+  await until(() => answers(it.port), "a central responder");
   assert.equal(alive(up), true);
-  await until(() => it.said().includes("[quick] stopped"), "日志说通道停了");
+  await until(() => it.said().includes("[quick] parou"), "o log dizer que o canal parou");
   await new Promise((resolve) => setTimeout(resolve, 1_000));
-  assert.equal(it.said().split("[quick] stopped").length - 1, 1, "it waits before going again");
+  assert.equal(it.said().split("[quick] parou").length - 1, 1, "ele espera antes de ir de novo");
 });
 
-test("a worker that stops is started again, and the hub stays up", async (t) => {
-  // A turn that ends on its own leaves nothing in hand, and an idle worker then sits out its whole fifty-second poll
-  // before it looks at the folder again — so this one holds the turn open until the test writes `release`, and the
-  // folder breaks only once it says it has started. The two-minute bound is only so that an assertion failing before that
-  // release cannot leave it polling for a file nobody will write.
+test("um worker que para é iniciado de novo, e a central continua de pé", async (t) => {
+  // Uma rodada que termina sozinha não deixa nada em mão, e um worker ocioso então espera seus cinquenta segundos de
+  // poll inteiros antes de olhar a pasta de novo — por isso esta aqui mantém a rodada aberta até o teste escrever
+  // `release`, e a pasta só quebra depois que ela diz que iniciou. O limite de dois minutos serve apenas para que uma
+  // asserção que falhe antes daquela escrita não o deixe consultando um arquivo que ninguém vai escrever.
   const hold = `const { existsSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 const signals = process.env.AGENT_AUTOLOOP_HOME + ".signals";
@@ -194,30 +195,30 @@ export default { command: () => [process.execPath, "-e", hold], read: () => ({})
       delete agent.command;
     }
   });
-  // Beside the home, not in it: the cleanup removes the home, and on Windows a signal inside goes first, leaving the agent
-  // holding the folder until its two-minute bound. The agent only writes here, so one that exits late leaves nothing behind.
+  // Ao lado do home, não dentro dele: a limpeza remove o home, e no Windows um sinal dentro dele vai primeiro, deixando
+  // o Agent segurando a pasta até o seu limite de dois minutos. O Agent só escreve aqui, então um que saia tarde não deixa nada para trás.
   const signals = it.home + ".signals";
   mkdirSync(signals);
-  // The agent outlives a stopped worker by design, so this lets it go, whether or not the test got that far.
+  // O Agent sobrevive a um worker parado por projeto, então isto o libera, quer o teste tenha chegado lá ou não.
   t.after(() => writeFileSync(join(signals, "release"), ""));
   const up = it.up();
-  await until(() => answers(it.port), "中台应答");
+  await until(() => answers(it.port), "a central responder");
   assert.equal(it.cli("emit", "try.start", "--subject", "#1").status, 0);
   const runs = join(it.home, "worker", "runs");
-  // Started and not just about to: one that can't write to its folder while starting counts as the hub being out of reach,
-  // and that waits 30 seconds before the next round.
-  await until(() => it.said().includes("turn 1 started"), "这一轮开始");
-  // The log says so before the launch is through, and on Windows that takes ten times as long as the step below.
-  await until(() => existsSync(join(signals, "started")), "Agent 起来了");
-  // With a run in hand it comes round every second, and something in the way of its folder stops the next round.
+  // Iniciada e não apenas prestes a iniciar: uma que não consegue escrever na sua pasta enquanto inicia conta como
+  // central fora de alcance, e isso espera 30 segundos antes da próxima rodada.
+  await until(() => it.said().includes("turno 1 iniciada"), "esta rodada iniciar");
+  // O log diz isso antes de o lançamento terminar, e no Windows isso leva dez vezes mais que o passo abaixo.
+  await until(() => existsSync(join(signals, "started")), "o Agent ter sido iniciado");
+  // Com uma rodada em mão ele volta a cada segundo, e algo no caminho da sua pasta impede a próxima rodada.
   rmSync(runs, { recursive: true, force: true });
   writeFileSync(runs, "");
-  await until(() => alive(up) === false || it.said().includes("[worker] stopped"), "日志说接单程序停了");
+  await until(() => alive(up) === false || it.said().includes("[worker] parou"), "o log dizer que o worker parou");
   assert.equal(alive(up), true, it.said());
   assert.equal(await answers(it.port), true);
 });
 
-test("with nowhere left to write to it stops, as it always has, instead of going round on the error", async () => {
+test("sem nenhum lugar para escrever, ele para, como sempre fez, em vez de entrar em ciclo no erro", async () => {
   const it = await install({
     "stray/channel.ts": `export default async function stray({ signal }) {
       const noisy = setInterval(() => { throw new Error("thrown out of reach"); }, 100);
@@ -227,16 +228,16 @@ test("with nowhere left to write to it stops, as it always has, instead of going
   });
   const key = it.cli("key", "new", "channel", "stray").stdout.trim();
   edit(join(it.home, "config.json"), (config) => (config.channels = { stray: { use: "stray", key } }));
-  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { stray: { name: "乱" } }));
+  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { stray: { name: "bagunça" } }));
   const up = it.up();
-  await until(() => it.said().includes("thrown out of reach"), "日志记下抛错");
+  await until(() => it.said().includes("thrown out of reach"), "o log registrar o throw");
   up.stdout!.destroy();
   up.stderr!.destroy();
-  await until(() => !alive(up), "进程退出");
+  await until(() => !alive(up), "o processo sair");
   assert.equal(up.exitCode, 1);
 });
 
-test("a channel plugin's stray throw and unhandled rejection stay its own trouble", async () => {
+test("o throw desgarrado e a rejeição não tratada de um plugin de canal continuam sendo problema só dele", async () => {
   const it = await install({
     "stray/channel.ts": `export default async function stray({ signal }) {
       setTimeout(() => { throw new Error("thrown out of reach"); }, 200);
@@ -246,18 +247,18 @@ test("a channel plugin's stray throw and unhandled rejection stay its own troubl
   });
   const key = it.cli("key", "new", "channel", "stray").stdout.trim();
   edit(join(it.home, "config.json"), (config) => (config.channels = { stray: { use: "stray", key } }));
-  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { stray: { name: "乱" } }));
+  edit(join(it.home, "rules.json"), (rules) => (rules.channels = { stray: { name: "bagunça" } }));
   const up = it.up();
-  await until(() => alive(up) === false || it.said().includes("thrown out of reach"), "日志记下抛错");
+  await until(() => alive(up) === false || it.said().includes("thrown out of reach"), "o log registrar o throw");
   await until(
     () => alive(up) === false || it.said().includes("rejected with nobody listening"),
-    "日志记下没人接的 Promise",
+    "o log registrar a Promise que ninguém tratou",
   );
   assert.equal(alive(up), true, it.said());
   assert.equal(await answers(it.port), true);
 });
 
-/** A real hub whose database another process holds while its rules change, until the tick that brought them has failed. */
+/** Uma central real cujo banco outro processo segura enquanto suas regras mudam, até o tick que as trouxe ter falhado. */
 async function heldWhileRulesChange(
   change: (rules: any) => void,
   { before = (_home: string) => {}, failures = 1 } = {},
@@ -265,17 +266,17 @@ async function heldWhileRulesChange(
   const it = await install();
   before(it.home);
   const up = it.up();
-  await until(() => answers(it.port), "中台应答");
+  await until(() => answers(it.port), "a central responder");
   const db = new DatabaseSync(join(it.home, "hub.db"));
   db.exec("BEGIN IMMEDIATE");
-  // Moved into place, so the watcher sees one change and no second tick is waiting on the lock when it's let go.
+  // Movido para o lugar, para que o observador veja uma mudança só e nenhum segundo tick fique esperando o lock ao ser liberado.
   const file = join(it.home, "rules.json");
   const rules = JSON.parse(readFileSync(file, "utf8"));
   change(rules);
   writeFileSync(`${file}.new`, JSON.stringify(rules, null, 2));
   renameSync(`${file}.new`, file);
   const failed = () => it.said().split("Error: database is locked").length - 1;
-  await until(() => alive(up) === false || failed() >= failures, "这一次到点失败", 30_000);
+  await until(() => alive(up) === false || failed() >= failures, "esta vez o prazo falhar", 30_000);
   db.exec("ROLLBACK");
   const askFirst = () => {
     const row = db.prepare("SELECT data FROM projections WHERE collection='config' AND key='rules'").get()!;
@@ -294,26 +295,30 @@ async function heldWhileRulesChange(
   return { it, up, askFirst, cards, landed };
 }
 
-test("the database held too long by another process fails a tick, not the hub, and the change still lands", async () => {
-  const { up, askFirst, landed } = await heldWhileRulesChange((rules) => (rules.askFirst = ["只问这一件"]));
-  await until(() => alive(up) === false || askFirst()[0] === "只问这一件", "新规则生效");
+test("o banco segurado tempo demais por outro processo faz um tick falhar, não a central, e a mudança ainda assim chega", async () => {
+  const { up, askFirst, landed } = await heldWhileRulesChange((rules) => (rules.askFirst = ["perguntar só isto"]));
+  await until(() => alive(up) === false || askFirst()[0] === "perguntar só isto", "as regras novas valerem");
   await landed();
 });
 
-test("whatever comes along while a failed tick waits to go again doesn't lose it", async () => {
-  // With no worker asking, the only other thing due is the card about it, ten minutes off. The second failure is the one to
-  // wait for: a file watcher can report one change twice, and a tick waiting on the lock would go through when it's let go.
-  const { it, up, askFirst, landed } = await heldWhileRulesChange((rules) => (rules.askFirst = ["只问这一件"]), {
+test("o que aparecer enquanto um tick que falhou espera para ir de novo não o perde", async () => {
+  // Sem um worker perguntando, a única outra coisa a vencer é o cartão sobre isso, dez minutos adiante. A segunda falha
+  // é a que se deve esperar: um observador de arquivos pode reportar uma mudança duas vezes, e um tick esperando o lock
+  // seguiria assim que ele fosse liberado.
+  const { it, up, askFirst, landed } = await heldWhileRulesChange((rules) => (rules.askFirst = ["perguntar só isto"]), {
     before: (home) => edit(join(home, "config.json"), (config) => delete config.worker),
     failures: 2,
   });
   assert.equal(it.cli("emit", "try.start", "--subject", "#1").status, 0);
-  await until(() => alive(up) === false || askFirst()[0] === "只问这一件", "新规则生效");
+  await until(() => alive(up) === false || askFirst()[0] === "perguntar só isto", "as regras novas valerem");
   await landed();
 });
 
-test("rules written wrong while the database is held are told once it's free", async () => {
+test("regras escritas errado enquanto o banco está segurado são avisadas assim que ele libera", async () => {
   const { up, cards, landed } = await heldWhileRulesChange((rules) => (rules.rules[0].to = "nobody"));
-  await until(() => alive(up) === false || cards().includes("rules.json 写错了，还在用旧规则"), "告诉本人规则写错了");
+  await until(
+    () => alive(up) === false || cards().includes("o rules.json está com erro; as regras antigas continuam em uso"),
+    "avisar o titular de que as regras estão com erro",
+  );
   await landed();
 });

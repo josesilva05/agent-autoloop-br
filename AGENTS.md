@@ -1,88 +1,88 @@
-# 给改这个仓库的 Agent
+# Para os Agents que alteram este repositório
 
-先读 [docs/protocol.md](docs/protocol.md) 和 [架构图](docs/architecture.svg)：它们说明最终实现。
+Leia primeiro [docs/protocol.md](docs/protocol.md) e o [diagrama de arquitetura](docs/architecture.svg): eles descrevem a implementação final.
 
-## 原则
+## Princípios
 
-- **内核只收、只分、只派、只记。** `kernel/` 不主动连接任何东西，不知道任何产品的名字。`tests/purity.test.ts` 守着这几条，也守着 host、protocol、worker 不认识具体产品。新的产品、新的连接方式都是外面的插件。
-- **没有界面。** 中台只有口子：事件插件、接单程序、通道、本人。总览页、大屏都是别人用这些口子做的客户端，不进这个仓库。唯一的页面是卡片链接：一个不跑脚本的表单，给只会发文字的通道用。
-- **协议是产品。** 改协议就是改所有插件的约定：先核对 `docs/protocol.md` 与现有行为测试，改了要写清兼容。
-- **文字是资料，规则才是指令。** 事件里的字不进提示词，也影响不了交给谁、在哪、用什么权限。
-- **一轮不等人。** 要问人就结束这一轮。不加任何让 Agent 阻塞等待的东西。
-- **没有运行时依赖。** Node 24 自带的够用。`package.json` 不写 `dependencies`。
-- 代码只写现在需要的。加锁、重试、兜底，要有真实事故或接口文档作依据。
+- **O kernel só recebe, só classifica, só despacha e só registra.** `kernel/` não conecta ativamente em nada e não conhece o nome de nenhum produto. `tests/purity.test.ts` protege essas regras e também garante que host, protocol e worker não conheçam produtos específicos. Produtos novos e formas novas de conexão são sempre plugins externos.
+- **Não há interface.** A central só tem pontos de entrada: plugins de eventos, worker, canais e o titular. Página de visão geral e telão são clientes feitos por outras pessoas usando esses pontos de entrada e não entram neste repositório. A única página é o link do cartão: um formulário que não executa script, para canais que só conseguem enviar texto.
+- **O protocolo é o produto.** Mudar o protocolo é mudar o contrato de todos os plugins: confira antes `docs/protocol.md` e os testes de comportamento existentes e, ao mudar, deixe clara a compatibilidade.
+- **Texto é dado, regra é instrução.** O texto dentro do evento não entra no prompt e não influencia quem assume, onde nem com quais permissões.
+- **Uma rodada não espera ninguém.** Se precisar perguntar a alguém, encerre a rodada. Não adicione nada que faça o Agent bloquear esperando.
+- **Sem dependências de runtime.** O que o Node 24 traz já basta. `package.json` não tem `dependencies`.
+- Escreva apenas o código necessário agora. Trava, nova tentativa e fallback exigem um incidente real ou a documentação da interface como base.
 
-## 怎么改
+## Como alterar
 
-- 测试写在实现之前，每个测试文件开头先写它防的失败方式；修 bug 先写复现它的失败测试。一个行为一条测试，边角情况不单写，不补复述实现的测试。
-- `npm test`、`npm run typecheck` 和 `npm run format:check` 都要过。没动 `kernel/`、`protocol/`、`sim/` 时，`npm run test:quick` 跳过模拟和穷举，其余测试照跑。
-- `main` 合并前必须通过 Ubuntu、macOS 和 Windows 的 `check`，三项都核对 PR 的最终提交。
-- CI 由 `scripts/ci-scope.sh` 按改动范围分流：纯文档全部跳过；其他代码的 PR 跳过模拟和穷举；`kernel/`、`protocol/` 和模拟本身的 PR 另跑 2 万步模拟（`npm run test:sim`）；只有改 `tests/simulation.test.ts`、`sim/enumerate.ts` 的 PR 跑完整检查，别处跑不到它们。合进 main 后都再跑一遍快速测试和安装冒烟，跑起来的这一遍不会被后面的推送取消；还在排队的由更新的那一遍接替，它覆盖前面所有提交。`nightly` 工作流每天跑一次 20 万步模拟、穷举、强杀和变异，并用最新的 Node 跑快速测试和安装冒烟；改 `sim/` 或它自己的 PR 只跑强杀和变异。让测试读取某份文档时，同步改这个脚本。
-- `npm test` 跑固定种子的 20 万步模拟与有界穷举；涉及日志、到期表或并发时还跑 `npm run test:nightly`。变异必须先证明原版测试实际执行且通过，不拿语法错误当检出；漏过任何一处都算失败。
-- 升级不写数据迁移。事实日志是唯一的权威状态；投影及索引在同一事务内持久化，正常启动复用，格式指纹变化时从日志逐条重建；查询视图的列写在 `host/state.ts`，每次启动重建，不按版本加迁移文件。
-- 面向用户的字用中文大白话；代码注释用英文，只写代码看不出来的原因。
+- Testes são escritos antes da implementação, e cada arquivo de teste começa explicando a forma de falha que ele evita; para corrigir um bug, escreva antes um teste que falhe reproduzindo-o. Um teste por comportamento, casos extremos não ganham teste próprio e não se escrevem testes que apenas repetem a implementação.
+- `npm test`, `npm run typecheck` e `npm run format:check` precisam passar. Quando `kernel/`, `protocol/` e `sim/` não forem alterados, `npm run test:quick` pula a simulação e a enumeração e roda os demais testes normalmente.
+- Antes de mesclar em `main` é obrigatório passar no `check` de Ubuntu, macOS e Windows, e os três conferem o commit final do PR.
+- O CI é roteado por `scripts/ci-scope.sh` conforme o escopo da mudança: documentação pura pula tudo; PRs de outros códigos pulam simulação e enumeração; PRs que alteram `kernel/`, `protocol/` e a própria simulação rodam adicionalmente a simulação de 20 mil passos (`npm run test:sim`); só PRs que alteram `tests/simulation.test.ts` ou `sim/enumerate.ts` rodam a verificação completa, e em nenhum outro lugar elas são executadas. Depois de mesclar em main, tudo roda de novo os testes rápidos e o smoke de instalação; a execução já iniciada não é cancelada por pushes seguintes, e as que ainda estão na fila são substituídas pela execução mais nova, que cobre todos os commits anteriores. O workflow `nightly` roda uma vez por dia a simulação de 200 mil passos, enumeração, morte forçada e mutação, além dos testes rápidos e do smoke de instalação com o Node mais recente; PRs que alteram `sim/` ou o próprio workflow rodam apenas morte forçada e mutação. Ao fazer um teste ler algum documento, altere este script em conjunto.
+- `npm test` roda a simulação de 200 mil passos com semente fixa e a enumeração com limite; quando envolver log, tabela de vencimentos ou concorrência, rode também `npm run test:nightly`. Mutação precisa provar antes que os testes originais de fato executaram e passaram, sem tratar erro de sintaxe como detecção; qualquer ponto não coberto conta como falha.
+- Atualização não escreve migração de dados. O registro de fatos é o único estado autoritativo; projeções e índices são persistidos na mesma transação, reutilizados na inicialização normal e reconstruídos item por item a partir do log quando a impressão digital do formato muda; as colunas das visões de consulta ficam em `host/state.ts`, reconstruídas a cada inicialização, sem arquivos de migração por versão.
+- O texto voltado ao usuário usa português simples e direto; comentários de código ficam em português e explicam apenas o porquê que o código não mostra.
 
-## 社区贡献
+## Contribuições da comunidade
 
-- 外部 PR 尽量合：要改的地方维护者直接在对方分支上改好再合，保留 PR 作者，不让对方反复修改。方向不对或合不了才关闭，并说明原因。
-- 外部 Issue 能做的由维护者修，不等对方提 PR。提交写 `Fixes #编号`，用 `Co-authored-by: <编号>+<账号>@users.noreply.github.com` 署上报告者。
+- PRs externos devem ser mesclados sempre que possível: o que precisa mudar, os mantenedores ajustam direto na branch da outra pessoa e então mesclam, preservando a autoria do PR e sem fazê-la revisar repetidamente. Só se fecha quando a direção está errada ou é impossível mesclar, e com a razão explicada.
+- Issues externas viáveis são corrigidas pelos mantenedores, sem esperar a outra pessoa abrir PR. O commit traz `Fixes #número` e credita quem relatou com `Co-authored-by: <número>+<conta>@users.noreply.github.com`.
 
-## 审查要点
+## Pontos de revisão
 
-改 `kernel/`、`worker/`、`protocol/`、`host/` 的 PR，合并前让一个没写这段代码的 Agent 审一遍：只给它代码，不给作者的结论。它要回答三句：改的函数还有谁在用；接外部程序的有没有真实运行记录；同类问题别处还有没有。把对应的提交号和审查结论记在 PR 的「如何验证」里，代码差异有变化就重新审。涉及安装、后台服务或接外部程序的改动，一起记下真机环境、跑到的步骤和结果。
+Em PRs que alteram `kernel/`, `worker/`, `protocol/` ou `host/`, antes de mesclar, peça a um Agent que não escreveu aquele código para revisar: entregue apenas o código, sem as conclusões do autor. Ele precisa responder três frases: quem mais usa as funções alteradas; se o que conecta a programas externos tem registro de execução real; e se há problemas do mesmo tipo em outros lugares. Registre no "Como verificar" do PR o número do commit correspondente e a conclusão da revisão e revise de novo sempre que o diff mudar. Em mudanças que envolvem instalação, serviço em segundo plano ou conexão com programas externos, registre também o ambiente em máquina real, os passos executados e os resultados.
 
-PR 一开出来就开审查，几个 PR 同时审，不排队。审查报的问题只修必须修的。必须修只算两种：真实用户大概率会碰到的，或者踩了下面这份清单的。几个罕见条件凑在一起才发生的记下来，有人碰到再修，不排进下一批；假程序复现不等于事故，不能当加兜底的依据。
+A revisão começa assim que o PR é aberto, com vários PRs revisados ao mesmo tempo, sem fila. Dos problemas apontados pela revisão, corrija apenas os obrigatórios. Obrigatório só vale para dois tipos: o que um usuário real muito provavelmente encontraria, ou o que viola a lista abaixo. O que só acontece com várias condições raras juntas é registrado e corrigido quando alguém encontrar, sem entrar no próximo lote; reproduzir com um programa falso não é incidente e não serve de base para adicionar fallback.
 
-审计只审真有人在用的功能，结果先交清单，不默认当批全修。
+A auditoria revisa apenas funcionalidades que alguém realmente usa, entrega primeiro a lista e por padrão não assume que o lote inteiro será corrigido.
 
-这些算出错：
+Conta como erro:
 
-- 没有密钥、拿错种类的密钥也能进门；一个来源能以别的来源的名义发事件；一轮的 token 能碰别的轮次；通道的回答没核对回答者和原消息。
-- 事件里别人写的文字进了提示词，或者能影响交给谁、在哪个目录、用什么权限。
-- 同一条事件被记两次或派两次；同一组同时跑起超过规定的轮数；没跑成的活丢了、马上重派、或没和期间新来的同一事项的事件合在一起。
-- 回答没叫醒提问的事项，或者一张卡片的回答被算了两次；回答和结案都改变了同一张卡片。
-- 回执写错导致业务重做。
-- 接单程序丢了跑完的结果、把还在跑的当成跑完、把接上原会话后断了的一轮换新会话重做、停止时留下子进程。
-- 内核里出现了对外请求、产品名字或界面。
-- 卡片页面把别人写的字当成标记显示，或者打开链接就算回答。
-- 老插件、规则或配置不改就跑不了，这一版却不是第一位版本（见[协议](docs/protocol.md#版本与兼容)）。
+- Entrar sem chave, ou com uma chave do tipo errado; uma fonte conseguir enviar eventos em nome de outra; o token de uma rodada alcançar outras rodadas; a resposta do canal não conferir quem respondeu e a mensagem original.
+- Texto escrito por terceiros dentro do evento entrar no prompt, ou conseguir influenciar quem assume, em qual diretório e com quais permissões.
+- O mesmo evento ser registrado duas vezes ou despachado duas vezes; o mesmo grupo iniciar mais rodadas simultâneas do que o permitido; trabalho que falhou ser perdido, ser despachado de novo na hora, ou não ser agrupado com eventos novos do mesmo assunto que chegaram no intervalo.
+- A resposta não acordar o assunto que perguntou, ou a resposta a um mesmo cartão ser contada duas vezes; resposta e encerramento alterarem o mesmo cartão.
+- Um recibo escrito errado provocar refação do trabalho de negócio.
+- O worker perder o resultado de uma rodada concluída, tratar como concluída uma que ainda roda, refazer em sessão nova uma rodada que parou depois de retomar a sessão original, ou deixar subprocessos ao parar.
+- Aparecer no kernel requisição para fora, nome de produto ou interface.
+- A página do cartão exibir como markup texto escrito por terceiros, ou abrir o link já contar como resposta.
+- Plugin, regra ou configuração antigos não funcionarem sem alteração, sendo que esta não é uma versão major (veja o [protocolo](docs/protocol.md#versão-e-compatibilidade)).
 
-## 一批怎么收尾
+## Como fechar um lote
 
-改动按批做。开工时定下这批的清单，中途的新发现记到下一批。这些都做完才算完：
+As mudanças são feitas em lotes. Defina a lista do lote ao começar e registre as descobertas novas no meio do caminho para o lote seguinte. Só está terminado quando tudo isto for feito:
 
-- `main` 的检查和每日检查都过。
-- 相关 Issue 的状态都说对了。
-- 工作树和临时分支清掉。
-- 让 Codex 审一遍这批的全部改动，查出的问题留在这一批修。第一个改内核或测试的 PR 合并后就跑一遍每日检查和这次审查，不放到最后。
+- O `check` do `main` e a verificação diária passam.
+- O estado das Issues relacionadas está correto.
+- Worktrees e branches temporárias foram limpas.
+- O Codex revisou todas as mudanças do lote, e os problemas encontrados são corrigidos dentro deste lote. Assim que o primeiro PR que altera kernel ou testes for mesclado, rode a verificação diária e essa revisão, sem deixar para o fim.
 
-一批做完不跟着发版，改动攒到下一个常规版。
+Terminar um lote não implica publicar versão; as mudanças se acumulam para a próxima versão regular.
 
-## 怎么发版
+## Como publicar uma versão
 
-常规改动一天最多发一版，崩溃、丢数据、安全问题、装不上的修复随时发；版本号怎么加见[协议](docs/protocol.md#版本与兼容)。版本号只写在 tag 上，不进任何文件。选一个 `main` 的检查已经通过、真实跑过并核实过的提交，在它上面跑每日检查（`gh workflow run nightly.yml --ref main -f commit=<完整提交号>`，20 万步模拟和穷举也在里面），过了再把 tag 打在它上面，写清这一版改了什么。发出去的 tag 不挪不删。
+Mudanças regulares publicam no máximo uma versão por dia; correções de travamento, perda de dados, problema de segurança e impossibilidade de instalação saem a qualquer momento. Como incrementar o número de versão está no [protocolo](docs/protocol.md#versão-e-compatibilidade). O número de versão fica apenas na tag e não entra em nenhum arquivo. Escolha um commit de `main` cujo check já tenha passado e que tenha sido executado e validado de verdade, rode nele a verificação diária (`gh workflow run nightly.yml --ref main -f commit=<hash completo do commit>`, que inclui a simulação de 200 mil passos e a enumeração) e, depois que passar, aplique a tag nesse commit, deixando claro o que esta versão mudou. Tags publicadas não são movidas nem apagadas.
 
-## 内核边界
+## Fronteiras do kernel
 
-`decide(view, input, now, environment)` 只能产生事实；判断和提交在同一事务中，视图按索引读取，判断只保留这次的改动；`evolve` 独占持久投影写入，`commit` 独占日志追加。内核不读时钟、不取随机数、不读环境或文件。时间、规则变更、主密钥和请求从外壳传入；`host/http.ts` 只把 Node 请求变成 Request。视图随时从日志重建，不能绕过日志改业务数据。规则版本、回答、回执都能用 `why` 和 `/v1/stream` 读到。
+`decide(view, input, now, environment)` só pode produzir fatos; a decisão e o commit acontecem na mesma transação, a visão é lida pelos índices e a decisão mantém apenas as mudanças desta vez; `evolve` tem exclusividade sobre a gravação da projeção persistente e `commit` sobre o acréscimo ao log. O kernel não lê relógio, não obtém números aleatórios e não lê ambiente nem arquivos. Tempo, mudança de regras, chave mestra e requisição entram pelo host; `host/http.ts` apenas converte a requisição do Node em Request. A visão pode ser reconstruída do log a qualquer momento, e dados de negócio não podem ser alterados contornando o log. Versão das regras, respostas e recibos podem ser lidos por `why` e `/v1/stream`.
 
-## 插件与交付边界
+## Fronteiras de plugins e entrega
 
-- 内置与第三方插件统一为 `plugins/<名字>/{agent,channel,source}.ts`，安装目录优先，内核不导入插件。命令行在 `cli/`，接单程序在 `worker/`；不要再加另一套发现路径。
-- 外部事件只能带资料。Agent、目录、权限、交付仓库、审查命令由可信规则与项目 main 决定。回执事件继承 hops，超过 8 层留记录但不继续派发。
-- 交付进程不能检出或运行 PR 的代码、测试、配置、hooks；只能把裸 Git 对象变成文字快照。默认 Codex 审查忽略用户配置与记忆，保留快照只读沙箱。
-- 队列、并发和重派属于中台。交付插件按 GitHub 状态确定这一轮该做什么，托付给中台的复查记录交付重试次数；应急单次运行复用同一流程。
-- `ops/delivery.json`、四个交付标签和 `delivery` 状态保持约定，审查状态、审查命令和各 Agent 的审查器可配置。Ship 判断放本仓库 Action，依赖的 GitHub Action 固定到完整 SHA。
-- 必须保住的事故逻辑，只收真实运行或真实用户碰到过的：设置只来自 main；分支自己的改动才审查；冲突解决保留；草稿检查不放行；提交或 main 变化不合并；自动合并确认关闭；丢失的合并响应读回；Ship 成功与健康版本一起验证；后续文档提交不掩盖未发布代码；已完成的交付不被后续发布倒退。
-- 交付的其他约定，没有事故依据，要调整时直接改：发现问题的提交不再审第二次；看不到内容的章鱼合并不放行；只审查的 PR 不因清标签失败被合并；目标分支改了不合并；来源声明用提交状态 `delivery-agent/<PR 编号>`。共用策略可以为一个 Agent 指定多位审查器，每轮只在全部完成后登记。
-- 改同一个约定时一起检查代码、协议、示例、两份 README、INSTALL、SKILL、SECURITY 和架构图。搜索旧路径、旧名称、旧数量和旧的能力限制。设计直接写进协议和维护约定。
+- Plugins embutidos e de terceiros são unificados em `plugins/<nome>/{agent,channel,source}.ts`, com o diretório de instalação tendo prioridade e o kernel não importando plugins. A linha de comando fica em `cli/` e o worker em `worker/`; não adicione outro caminho de descoberta.
+- Eventos externos só podem carregar dados. Agent, diretório, permissões, repositório de entrega e comando de revisão são decididos por regras confiáveis e pela main do projeto. Eventos de recibo herdam os hops e, acima de 8 saltos, são registrados mas não continuam sendo despachados.
+- O processo de entrega não pode fazer checkout nem executar código, testes, configurações ou hooks do PR; pode apenas transformar objetos Git brutos em snapshot de texto. Por padrão a revisão do Codex ignora configuração e memória do usuário e mantém o sandbox somente leitura do snapshot.
+- Fila, concorrência e novo despacho pertencem à central. O plugin de entrega determina o que esta rodada deve fazer pelos status do GitHub e confia à central o registro de reverificação com o número de novas tentativas de entrega; execuções únicas de emergência reutilizam o mesmo fluxo.
+- `ops/delivery.json`, os quatro rótulos de entrega e o status `delivery` mantêm a convenção; status de revisão, comando de revisão e o revisor de cada Agent são configuráveis. A decisão de Ship fica em uma Action deste repositório, e as GitHub Actions de dependência são fixadas no SHA completo.
+- Lógicas de incidente que precisam ser preservadas, aceitas apenas as encontradas em execução real ou por usuário real: as configurações vêm apenas da main; só as mudanças do próprio branch são revisadas; a resolução de conflitos é preservada; verificação de rascunho não libera; mudança de commit ou da main não mescla; auto-merge confirma o fechamento; resposta de merge perdida é relida; sucesso do Ship é verificado junto com a versão saudável; commits de documentação posteriores não encobrem código não publicado; entregas concluídas não são revertidas por publicações posteriores.
+- Outras convenções da entrega, sem base em incidente, podem ser ajustadas diretamente: o commit que apresentou o problema não é revisado uma segunda vez; octopus merge cujo conteúdo não é visível não é liberado; um PR apenas revisado não é mesclado por falha na remoção de rótulos; mudança de branch de destino não mescla; a declaração de origem usa o status de commit `delivery-agent/<nº do PR>`. Uma política compartilhada pode indicar vários revisores para um Agent, e cada rodada só é registrada depois que todos concluírem.
+- Ao alterar uma mesma convenção, verifique em conjunto código, protocolo, exemplos, o README, INSTALL, SKILL, SECURITY e o diagrama de arquitetura. Busque caminhos antigos, nomes antigos, quantidades antigas e limites antigos de capacidade. O design é escrito diretamente no protocolo e nas convenções de manutenção.
 
-## 验证范围
+## Escopo de verificação
 
-现有测试是行为规格，不为迁就实现改预期；本地什么时候跑模拟、穷举、强杀和变异见「怎么改」，不扩写验证框架。性能只记录实测，不设达标线，不作为发布门槛；不为加速模拟保留另一套内核。实测采用 README 和协议的口径：空闲内存与千连接内存分开，持久化写入不换成批量提交。不写守数字的测试（行数、内存、检查条数）：边界用查越没越界的测试守，长了多少写进汇报让人判断。
+Os testes existentes são a especificação de comportamento: não altere o esperado para acomodar a implementação. Quando rodar localmente simulação, enumeração, morte forçada e mutação está em "Como alterar", e a estrutura de verificação não é expandida. Desempenho apenas registra o medido, sem definir linha de corte e sem servir de critério de bloqueio para publicação; não se mantém um segundo kernel para acelerar a simulação. As medições seguem o critério do README e do protocolo: memória ociosa e memória com mil conexões são separadas, e gravação durável não é trocada por commit em lote. Não escreva testes que vigiam números (linhas, memória, quantidade de verificações): limites são protegidos por testes que verificam se houve excesso, e o quanto cresceu vai no relatório para julgamento humano.
 
-真机脚本在 `scripts/real-agents.ts`、`scripts/real-protocols.ts` 和 `scripts/delivery-e2e.ts`。真实交付脚本要求 `owner/name --run`，会创建并删除指定私有测试仓库；只有用户明确要求运行时才执行。其他测试使用临时 `AGENT_AUTOLOOP_HOME` 和随机端口。飞书用假 CLI；不能拿已在线的应用再开一个事件监听。通道用本地假 HTTP 服务，不发真消息。
+Os scripts em máquina real estão em `scripts/real-agents.ts`, `scripts/real-protocols.ts` e `scripts/delivery-e2e.ts`. O script de entrega real exige `owner/name --run`, cria e apaga o repositório privado de teste indicado e só é executado quando o usuário pede explicitamente. Os outros testes usam `AGENT_AUTOLOOP_HOME` temporário e portas aleatórias. O Feishu usa uma CLI falsa; não é permitido abrir mais um listener de eventos em um aplicativo já online. Canais usam um serviço HTTP falso local e não enviam mensagens reais.
 
-本机用 `init --no-service` 准备验收时，先从临时 `config.json` 和 `rules.json` 的 `channels` 移除 `desktop` 再启动 `up`。验收桌面通道时才保留 `desktop`，并用放在 PATH 最前面的假命令接收通知。后台启动时记下这次进程的 PID，正常结束、失败和中断时都等该进程退出后再删临时目录。
+Ao preparar o aceite na máquina local com `init --no-service`, remova antes `desktop` de `channels` no `config.json` e no `rules.json` temporários e então inicie o `up`. Só mantenha `desktop` ao validar o canal de desktop, usando um comando falso colocado no início do PATH para receber as notificações. Ao iniciar em segundo plano, registre o PID do processo desta execução e, em encerramento normal, falha ou interrupção, espere o processo sair antes de apagar o diretório temporário.
 
-`scripts/install-smoke.sh` 在临时 HOME 里走一遍从安装到卸载，装的是已提交的代码，CI 在 Ubuntu 和 macOS 上都跑。Windows 用 `scripts/install-smoke-windows.ts`，共用行为和原生进程检查用 `npm run test:windows`。Unix shell、Homebrew 与服务模拟仍在 Unix 验证，Windows 原生安装、通知和进程树由专用测试覆盖。登录服务在真实桌面会话验证，CI 不注册用户任务。
+`scripts/install-smoke.sh` percorre da instalação à desinstalação em um HOME temporário, instalando o código já commitado, e o CI roda em Ubuntu e macOS. No Windows use `scripts/install-smoke-windows.ts`, e para comportamento compartilhado e verificações nativas de processo use `npm run test:windows`. Shell Unix, Homebrew e simulação de serviço continuam sendo validados em Unix, enquanto instalação nativa, notificações e árvore de processos do Windows são cobertos por testes dedicados. O serviço de logon é validado em uma sessão desktop real, e o CI não registra tarefa de usuário.

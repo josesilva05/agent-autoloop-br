@@ -1,8 +1,8 @@
-// Failure modes on Windows: a home written as an 8.3 short name (a TEMP like C:\Users\ADMINI~1\Temp) takes the hub down
-// with a libuv assertion the first time its rules folder changes; a hub with more rights than the signed-in desktop is
-// taken for one without, so a login task that runs it elevated goes unnoticed, or one with the desktop's own rights (UAC
-// off, an unfiltered Administrator, an ordinary account) is removed; the startup shortcut offered instead starts
-// something other than what the task would.
+// Modos de falha no Windows: um home escrito como nome curto 8.3 (um TEMP como C:\Users\ADMINI~1\Temp) derruba a central
+// com uma asserção do libuv na primeira mudança na sua pasta de regras; uma central com mais direitos do que o desktop
+// onde se fez login é tomada por uma sem eles, então uma tarefa de login que a executa elevada passa despercebida, ou
+// uma com os direitos do próprio desktop (UAC desligado, um Administrator não filtrado, uma conta comum) é removida; o
+// atalho de inicialização oferecido como alternativa inicia algo diferente do que a tarefa iniciaria.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -25,10 +25,10 @@ mkdirSync(join(scratch, "home"));
 copyFileSync(join(import.meta.dirname, "rules.fixture.json"), join(scratch, "home", "rules.json"));
 
 test(
-  "a hub whose home is an 8.3 short name keeps going when its rules folder changes",
+  "uma central cujo home é um nome curto 8.3 continua funcionando quando sua pasta de regras muda",
   { skip: !windows },
   async (t) => {
-    if (short === scratch) return t.skip("this volume has no 8.3 names");
+    if (short === scratch) return t.skip("este volume não tem nomes 8.3");
     const { serve } = await import("../host/http.ts");
     const server = serve(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
@@ -46,7 +46,7 @@ test(
   },
 );
 
-/** The number of a process a login task starts at `level` in the signed-in session; it ends itself within a minute. */
+/** O número de um processo que uma tarefa de login inicia no `level` dado, na sessão onde se fez login; ele se encerra em até um minuto. */
 function taskProcess(level: "Highest" | "Limited") {
   const output = join(scratch, `${level}.pid`);
   const name = `agent-autoloop-test-${level}-${process.pid}`;
@@ -62,10 +62,10 @@ function taskProcess(level: "Highest" | "Limited") {
   return Number(readFileSync(output, "utf8").trim());
 }
 
-// Making a task that runs at the highest level takes an elevated administrator and a signed-in desktop, as on the test
-// machine and not on CI.
+// Criar uma tarefa que roda no nível mais alto exige um administrador elevado e um desktop com sessão aberta, como na
+// máquina de testes e não no CI.
 test(
-  "a process with more rights than the desktop is told apart from one with the desktop's own",
+  "um processo com mais direitos do que o desktop é distinguido de um com os direitos do próprio desktop",
   { skip: !windows || !!process.env.CI },
   async () => {
     const { aboveDesktop } = await import("../host/service.ts");
@@ -74,7 +74,7 @@ test(
     try {
       assert.equal(aboveDesktop(higher), true);
       assert.equal(aboveDesktop(same), false);
-      // An elevated process in a session with no desktop (SSH, a service) has nothing to compare with.
+      // Um processo elevado numa sessão sem desktop (SSH, um serviço) não tem nada com que comparar.
       assert.equal(aboveDesktop(process.pid), false);
     } finally {
       for (const pid of [higher, same]) spawnSync("taskkill", ["/F", "/PID", String(pid)], { windowsHide: true });
@@ -82,9 +82,9 @@ test(
   },
 );
 
-test("the startup shortcut runs exactly what the login task runs", { skip: !windows }, async () => {
+test("o atalho de inicialização executa exatamente o que a tarefa de login executa", { skip: !windows }, async () => {
   const { startupShortcut, windowsLauncher } = await import("../host/service.ts");
-  // WScript.Shell saves shortcuts through the system code page; the Administrator account this is for has an ASCII path.
+  // O WScript.Shell grava atalhos pela página de código do sistema; a conta de Administrator para a qual isto serve tem um caminho ASCII.
   const folder = join(scratch, "Start ' Menu");
   mkdirSync(folder);
   powershell(startupShortcut(psQuote(folder)));
@@ -92,7 +92,7 @@ test("the startup shortcut runs exactly what the login task runs", { skip: !wind
     (Get-ChildItem -LiteralPath ${psQuote(folder)} -Filter *.lnk | Select-Object -First 1).FullName)
     @($s.TargetPath, $s.Arguments, $s.WorkingDirectory) -join [char]10`).split("\n");
   const task = windowsLauncher();
-  // The shortcut writes C:\Windows with the folder's own capitals, which Windows doesn't care about.
+  // O atalho escreve C:\Windows com as maiúsculas da própria pasta, e o Windows não se importa com isso.
   assert.deepEqual(
     [shortcut[0].toLowerCase(), ...shortcut.slice(1)],
     [task.program.toLowerCase(), task.args, task.directory],

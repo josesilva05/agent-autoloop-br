@@ -1,4 +1,4 @@
-// Node's HTTP server and nothing more: each request becomes a web Request for the kernel, each answer goes back out.
+// O servidor HTTP do Node e nada mais: cada requisição vira um Request web para o kernel, cada resposta sai de volta.
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { makeHandler } from "./server.ts";
@@ -21,7 +21,7 @@ export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { co
         ...body,
       });
       const answer = await runtime.handle(request);
-      // The rest of an unread body would be taken for the next request on this connection.
+      // O resto de um corpo não lido seria interpretado como a próxima requisição desta conexão.
       if (!req.complete) res.setHeader("connection", "close");
       res.writeHead(answer.status, Object.fromEntries(answer.headers));
       if (!answer.body) return void res.end();
@@ -31,7 +31,9 @@ export function serve(port: number, host = "127.0.0.1", { commit = "dev" }: { co
     } catch (error) {
       console.error(error);
       if (res.headersSent) return void res.end();
-      res.writeHead(500, { "content-type": "application/json" }).end(JSON.stringify({ error: "中台出错了" }));
+      res
+        .writeHead(500, { "content-type": "application/json" })
+        .end(JSON.stringify({ error: "a central encontrou um erro" }));
     }
   });
   server.on("close", runtime.close);

@@ -1,14 +1,14 @@
-// `agent-autoloop update`: what came from the public repository follows its releases, which have passed every check, not main,
-// which may not have yet. A copy from anywhere else follows that place. install.sh decides the same way, or an update would
-// fail on a copy it had moved.
+// `agent-autoloop update`: o que veio do repositório público segue as releases, que já passaram por todas as verificações,
+// e não a main, que pode ainda não ter passado. Uma cópia vinda de outro lugar segue esse lugar. O install.sh decide da mesma
+// forma, senão uma atualização falharia numa cópia que ele mesmo moveu.
 import { spawnSync } from "node:child_process";
 
-const PUBLISHED = "https://github.com/KKKKhazix/agent-autoloop.git";
+const PUBLISHED = "https://github.com/josesilva05/agent-autoloop-br.git";
 const RELEASE = /refs\/tags\/(v(\d+)\.(\d+)\.(\d+))$/;
 
 function git(root: string, ...args: string[]) {
   const done = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
-  if (done.status !== 0) throw new Error(`git ${args[0]} 没成功：${done.stderr?.trim() || done.error?.message}`);
+  if (done.status !== 0) throw new Error(`git ${args[0]} falhou: ${done.stderr?.trim() || done.error?.message}`);
   return done.stdout.trim();
 }
 
@@ -25,7 +25,7 @@ function latestRelease(root: string) {
   return releases.sort((a, b) => newer(a.version, b.version)).at(-1)?.tag ?? null;
 }
 
-/** Brings this copy up to date. `to` is the release it's now at, if it follows releases. */
+/** Traz esta cópia para a versão atual. `to` é a release em que ela ficou, se seguir releases. */
 export function updateCode(root: string) {
   const before = git(root, "rev-parse", "HEAD");
   const to = latestRelease(root);

@@ -1,7 +1,8 @@
-// The plist an install writes must never stay world-writable: launchd refuses to load a plist others can write, and
-// says only "Bootstrap failed: 5: Input/output error". Failure modes: an install from a umask-0 shell (a GUI app's)
-// writes the plist born world-writable and the service never starts; a later reinstall rewrites the bytes but keeps
-// the mode, so the machine stays broken however many times it reinstalls.
+// O plist que uma instalação escreve nunca pode continuar gravável por todos: o launchd se recusa a carregar um plist
+// que outros podem escrever, e diz apenas "Bootstrap failed: 5: Input/output error". Modos de falha: uma instalação a
+// partir de um shell com umask 0 (o de um app gráfico) escreve o plist já gravável por todos e o serviço nunca inicia;
+// uma reinstalação posterior reescreve os bytes mas mantém o modo, então a máquina continua quebrada por mais vezes que
+// se reinstale.
 import assert from "node:assert/strict";
 import { chmodSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ mkdirSync(person);
 mkdirSync(fakes);
 process.env.HOME = person;
 process.env.PATH = `${fakes}:${process.env.PATH}`;
-// `print` says no service is loaded, so the wait for the old one to be gone ends at once; the rest just succeed.
+// `print` diz que nenhum serviço está carregado, então a espera pelo antigo sumir termina de imediato; o resto só tem sucesso.
 writeFileSync(
   join(fakes, "launchctl"),
   `#!/bin/sh
@@ -29,16 +30,16 @@ const { installService } = await import("../host/service.ts");
 
 const agents = join(person, "Library", "LaunchAgents");
 
-test("a plist born world-writable is repaired by the next install, not just rewritten", () => {
+test("um plist que nasce gravável por todos é reparado pela instalação seguinte, não apenas reescrito", () => {
   const umask = process.umask(0o000);
   try {
-    installService(); // the incident: an install whose files are born world-writable
+    installService(); // o incidente: uma instalação cujos arquivos nascem graváveis por todos
   } finally {
     process.umask(umask);
   }
   const [name] = readdirSync(agents);
   assert.match(name!, /^agent-autoloop.*\.plist$/);
-  chmodSync(join(agents, name!), 0o666); // what the broken install left on the machine
-  installService(); // a reinstall must fix the file, not only its contents
+  chmodSync(join(agents, name!), 0o666); // o que a instalação quebrada deixou na máquina
+  installService(); // uma reinstalação precisa consertar o arquivo, não só o conteúdo dele
   assert.equal(statSync(join(agents, name!)).mode & 0o777, 0o644);
 });

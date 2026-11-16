@@ -1,5 +1,6 @@
-// The hub's inputs by name, for tests and measuring scripts. What runs for real takes them at the doors in kernel/http.ts,
-// through `execute`. Import it after the environment is set, as host/runtime.ts has to be.
+// As entradas da central por nome, para testes e scripts de medição. O que roda de verdade as recebe nas portas em
+// kernel/http.ts, através de `execute`. Importe isto depois que o ambiente estiver definido, como precisa ser com
+// host/runtime.ts.
 import { db, execute, getView, rules, type KeyKind } from "../host/runtime.ts";
 import { beforeCleanup } from "./helpers.ts";
 import { evolve, keyOf, rows, type Row, type Table } from "../kernel/evolve.ts";
@@ -49,7 +50,7 @@ export const failed = (channel: string, id: number, version: number, error: stri
   execute("failed", [channel, id, version, error], now);
 export const removeKey = (kind: KeyKind, name: string) => execute("removeKey", [kind, name]) as boolean;
 
-/** Empties a table to reset a fixture: no fact says so, which nothing that runs for real may do. */
+/** Esvazia uma tabela para resetar um fixture: nenhum fato registra isso, e nada que rode de verdade pode fazer. */
 export function fixtureClear(table: Table) {
   const latest = getView();
   const changes = rows(latest, table).map((row) => ({ table, key: keyOf(table, row), row: null }));

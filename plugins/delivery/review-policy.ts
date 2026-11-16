@@ -15,7 +15,9 @@ const isObject = (value: any) => value && typeof value === "object" && !Array.is
 
 export function sharedPolicy(value: any): SharedPolicy {
   const bad = () => {
-    throw new Error("共用审查策略不正确：请检查审查器、深度、可信账号和非空默认审查列表");
+    throw new Error(
+      "A política de revisão compartilhada está incorreta: verifique revisores, profundidade, contas confiáveis e a lista de revisão padrão não vazia",
+    );
   };
   if (!isObject(value) || Object.keys(value).sort().join() !== "agents,default,reviewers,trusted_submitters") bad();
   const { trusted_submitters, reviewers, agents, default: fallback } = value;
@@ -52,7 +54,9 @@ export async function readSharedPolicy(spec: string, apiFor: (repo: string) => (
     rest.length ||
     path.split("/").some((part) => !part || part === "." || part === "..")
   )
-    throw new Error("共用审查策略要写成 owner/repo:仓库内路径");
+    throw new Error(
+      "A política de revisão compartilhada deve ser escrita como owner/repo:caminho dentro do repositório",
+    );
   const { content } = await apiFor(repo)(`contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=main`);
   return sharedPolicy(JSON.parse(Buffer.from(content, "base64").toString("utf8")));
 }
@@ -79,7 +83,7 @@ export function reviewSignature(reviewers: NamedReviewer[]) {
   const model = "gpt-6.1-sol";
   if (reviewers.length === 1) {
     const [reviewer] = reviewers;
-    // Match the name that older rounds used for the default plan.
+    // Usa o mesmo nome que as rodadas mais antigas registravam para o plano padrão.
     if (
       reviewer.name === "codex" &&
       (reviewer.model ?? model) === model &&

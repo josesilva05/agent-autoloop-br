@@ -1,6 +1,6 @@
-// `check` reads a rules file and nothing else. Failure cases: checking a draft opens the hub's database, creates a master
-// key, or loads the draft into the running hub as its rules; only the installed rules file can be checked; a bad file
-// passes, or a missing one crashes instead of saying so.
+// `check` lê um arquivo de regras e nada mais. Casos de falha: conferir um rascunho abre o banco de dados da central, cria uma
+// chave mestra, ou carrega o rascunho na central em execução como se fossem as regras dela; só o arquivo de regras instalado
+// pode ser conferido; um arquivo inválido passa, ou um arquivo ausente quebra em vez de dizer o que houve.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -34,17 +34,17 @@ const facts = (hubHome: string) => {
   }
 };
 
-test("checking any file touches no hub: no database, no key, nothing written", () => {
+test("conferir qualquer arquivo não toca em nenhuma central: sem banco de dados, sem chave, nada gravado", () => {
   const empty = join(home, "empty-home");
   const done = cli({ AGENT_AUTOLOOP_HOME: empty }, "check", draft);
   assert.equal(done.status, 0, done.stderr);
-  assert.match(done.stdout, /规则没问题/);
-  assert.ok(!existsSync(empty) || readdirSync(empty).length === 0, "the home stays as it was");
+  assert.match(done.stdout, /Regras OK/);
+  assert.ok(!existsSync(empty) || readdirSync(empty).length === 0, "o home fica como estava");
 });
 
-test("checking a draft next to a hub leaves its log as it was", () => {
+test("conferir um rascunho ao lado de uma central deixa o registro dela como estava", () => {
   const hubHome = join(home, "hub-home");
-  // A hub with its own rules and a log, as `key new` makes it.
+  // Uma central com as próprias regras e um registro, do jeito que `key new` a cria.
   const made = cli({ AGENT_AUTOLOOP_HOME: hubHome, AGENT_AUTOLOOP_RULES: draft }, "key", "new", "owner", "owner");
   assert.equal(made.status, 0, made.stderr);
   const before = facts(hubHome);
@@ -53,22 +53,22 @@ test("checking a draft next to a hub leaves its log as it was", () => {
   const other = join(home, "other.json");
   writeFileSync(other, JSON.stringify(changed));
   assert.equal(cli({ AGENT_AUTOLOOP_HOME: hubHome, AGENT_AUTOLOOP_RULES: draft }, "check", other).status, 0);
-  // The old check loaded the file it checked into the hub: this one differs from what the hub runs.
+  // O check antigo carregava na central o arquivo que conferia: este aqui difere do que a central executa.
   assert.equal(cli({ AGENT_AUTOLOOP_HOME: hubHome, AGENT_AUTOLOOP_RULES: other }, "check").status, 0);
-  assert.deepEqual(facts(hubHome), before, "no rules fact, no fact at all");
+  assert.deepEqual(facts(hubHome), before, "nenhum fato de regras, nenhum fato");
 });
 
-test("without a file it checks the installed rules; a bad or missing file fails and says why", () => {
+test("sem um arquivo ele confere as regras instaladas; um arquivo inválido ou ausente falha e diz o porquê", () => {
   const installed = join(home, "installed");
   const plain = cli({ AGENT_AUTOLOOP_HOME: installed }, "check");
   assert.equal(plain.status, 1);
-  assert.ok(plain.stderr.includes(`读不到 ${join(installed, "rules.json")}`));
+  assert.ok(plain.stderr.includes(`Não foi possível ler ${join(installed, "rules.json")}`));
   const bad = JSON.parse(fixture);
   bad.rules[0].colour = "red";
   const badFile = join(home, "bad.json");
   writeFileSync(badFile, JSON.stringify(bad));
   const refused = cli({ AGENT_AUTOLOOP_HOME: installed }, "check", badFile);
   assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /规则「意见」有不认识的字段 colour/);
+  assert.match(refused.stderr, /a regra "opiniões".*tem o campo desconhecido colour/);
   assert.ok(!existsSync(join(installed, "hub.db")));
 });

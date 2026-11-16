@@ -1,6 +1,6 @@
-// GitLab webhooks. Failure modes: a wrong or missing token is taken; the action isn't in the event's type; a retried
-// delivery counts twice; a later event on the same merge request is dropped as a duplicate of an earlier one;
-// comments on different issues or merge requests collapse into the same repository-wide subject.
+// Webhooks do GitLab. Modos de falha: um token errado ou ausente é aceito; a action não entra no type do evento; uma
+// entrega repetida conta duas vezes; um evento posterior sobre o mesmo merge request é descartado como duplicata de um
+// anterior; comentários em issues ou merge requests diferentes desabam no mesmo subject de todo o repositório.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import gitlab from "../plugins/gitlab/source.ts";
@@ -20,40 +20,40 @@ const mergeRequest = (action: string) =>
       id: 98765,
       iid: 42,
       action,
-      title: "Fix login flow",
+      title: "Corrige o fluxo de login",
       url: "https://gitlab.com/org/proj/merge_requests/42",
-      description: "Fixes the login flow for mobile.",
+      description: "Corrige o fluxo de login no celular.",
     },
     project: { path_with_namespace: "org/proj", web_url: "https://gitlab.com/org/proj" },
   });
 
-test("gitlab: a merge request event carries its action, subject and words", () => {
+test("gitlab: um evento de merge request carrega sua action, subject e texto", () => {
   const [event] = gitlab({ headers: headers(), body: mergeRequest("open"), secret });
   assert.equal(event.type, "merge_request.open");
   assert.equal(event.subject, "org/proj#42");
-  assert.equal(event.summary, "Fix login flow");
-  assert.equal(event.detail, "Fixes the login flow for mobile.");
+  assert.equal(event.summary, "Corrige o fluxo de login");
+  assert.equal(event.detail, "Corrige o fluxo de login no celular.");
   assert.equal(event.link, "https://gitlab.com/org/proj/merge_requests/42");
   assert.equal(event.id, "evt-12345");
 });
 
-test("gitlab: a push has no number in its subject", () => {
+test("gitlab: um push não tem número no subject", () => {
   const body = JSON.stringify({
     object_kind: "push",
-    commits: [{ message: "Add a thing" }],
+    commits: [{ message: "Adiciona uma coisa" }],
     project: { path_with_namespace: "org/proj", web_url: "https://gitlab.com/org/proj" },
   });
   const [event] = gitlab({ headers: headers(), body, secret });
   assert.equal(event.type, "push");
   assert.equal(event.subject, "org/proj");
-  assert.equal(event.summary, "Add a thing");
+  assert.equal(event.summary, "Adiciona uma coisa");
 });
 
-test("gitlab: comments keep the subject of their issue or merge request", () => {
+test("gitlab: comentários mantêm o subject da sua issue ou do seu merge request", () => {
   // https://docs.gitlab.com/user/project/integrations/webhook_events/#comment-events
   for (const target of ["issue", "merge_request"]) {
     for (const iid of [42, 43]) {
-      const object = { id: 98765 + iid, iid, title: "Fix login flow" };
+      const object = { id: 98765 + iid, iid, title: "Corrige o fluxo de login" };
       const project = { path_with_namespace: "org/proj" };
       const [opened] = gitlab({
         headers: noKey,
@@ -67,7 +67,7 @@ test("gitlab: comments keep the subject of their issue or merge request", () => 
           project,
           object_attributes: {
             id: 12345,
-            note: "Please check mobile login",
+            note: "Verifique o login no celular",
             noteable_type: target === "issue" ? "Issue" : "MergeRequest",
             noteable_id: object.id,
             action: "create",
@@ -80,19 +80,19 @@ test("gitlab: comments keep the subject of their issue or merge request", () => 
       assert.equal(comment.subject, `org/proj#${iid}`);
       assert.equal(comment.subject, opened.subject);
       assert.equal(comment.type, "note.create");
-      assert.equal(comment.detail, "Please check mobile login");
+      assert.equal(comment.detail, "Verifique o login no celular");
       assert.equal(comment.link, `https://gitlab.com/org/proj/${target}s/${iid}#note_12345`);
     }
   }
 });
 
-test("gitlab: without Idempotency-Key a retry keeps its id and a later event gets its own", () => {
+test("gitlab: sem Idempotency-Key, uma nova tentativa mantém o id e um evento posterior ganha o seu", () => {
   const id = (body: string) => gitlab({ headers: noKey, body, secret })[0].id;
   assert.equal(id(mergeRequest("open")), id(mergeRequest("open")));
   assert.notEqual(id(mergeRequest("open")), id(mergeRequest("update")));
 });
 
-test("gitlab: a wrong or missing token is refused", () => {
+test("gitlab: um token errado ou ausente é recusado", () => {
   const body = mergeRequest("open");
   assert.throws(() => gitlab({ headers: { "x-gitlab-token": "wrong-secret" }, body, secret }), /signature/);
   assert.throws(() => gitlab({ headers: {}, body, secret }), /signature/);

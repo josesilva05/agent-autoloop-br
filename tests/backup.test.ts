@@ -1,8 +1,9 @@
-// Failure modes: a backup or its check fails on a real hub's database, whose indexes call functions only the hub has; a backup
-// taken while the hub runs misses what's in the WAL; a restore leaves the old WAL beside the new database, or drops what's only
-// in the WAL of the folder it reads; a broken master.key or database is restored; a failed restore loses what it replaced, its
-// WAL included; restoring runs while anything has the database open, a hub started some other way or between requests
-// included; a database too broken to read stops the restore that would replace it; a restore runs without being confirmed.
+// Modos de falha: um backup ou a verificação dele falha no banco de dados de uma central real, cujos índices chamam funções que
+// só a central tem; um backup feito com a central em execução perde o que está no WAL; uma restauração deixa o WAL antigo ao
+// lado do banco novo, ou descarta o que só está no WAL da pasta que ela lê; um master.key ou banco quebrado é restaurado; uma
+// restauração que falha perde o que substituiu, WAL incluído; a restauração roda enquanto qualquer coisa tem o banco aberto,
+// incluindo uma central iniciada de outro jeito ou entre requisições; um banco quebrado demais para ser lido interrompe a
+// restauração que o substituiria; uma restauração roda sem ser confirmada.
 import assert from "node:assert/strict";
 import { execFile, spawn, spawnSync } from "node:child_process";
 import {
@@ -60,7 +61,7 @@ const rows = (file: string) => {
 };
 const key = "k".repeat(43);
 
-/** A database with one row in its file and another only in its WAL, as a hub that was killed leaves it. */
+/** Um banco com uma linha no arquivo e outra só no WAL, como deixa uma central que foi morta. */
 function withWal(into: string) {
   const live = new DatabaseSync(join(scratch, `live-${++folders}.db`));
   live.exec("PRAGMA journal_mode=WAL; CREATE TABLE facts(seq INTEGER PRIMARY KEY); INSERT INTO facts VALUES (1);");
@@ -72,7 +73,7 @@ function withWal(into: string) {
   writeFileSync(join(into, "master.key"), `${key}\n`, { mode: 0o600 });
 }
 
-test("a real hub's data, backed up while it runs, comes back whole under its own key", async () => {
+test("os dados de uma central real, com backup feito enquanto ela roda, voltam inteiros sob a própria chave", async () => {
   hub.ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
   const target = join(folder(), "snapshot");
   const { files } = await backup(home, target);
@@ -82,12 +83,12 @@ test("a real hub's data, backed up while it runs, comes back whole under its own
   const { n } = hub.one<{ n: number }>("SELECT COUNT(*) AS n FROM facts")!;
   assert.ok(n > 0);
   assert.equal(rows(join(target, "hub.db")), n);
-  await assert.rejects(backup(home, target), /不是空的/);
+  await assert.rejects(backup(home, target), /não está vazio/);
 
   const other = folder();
   await restore(other, target);
   assert.equal(readFileSync(join(other, "master.key"), "utf8"), readFileSync(join(home, "master.key"), "utf8"));
-  // Started on the restored files, as the hub would be: it opens, and it knows what the first one knew.
+  // Iniciado nos arquivos restaurados, como a central seria: ele abre, e sabe o que a primeira sabia.
   const started = spawnSync(
     process.execPath,
     [
@@ -106,7 +107,7 @@ test("a real hub's data, backed up while it runs, comes back whole under its own
   );
 });
 
-test("a backup into an empty folder that's already there makes it private: it holds the keys", async () => {
+test("um backup numa pasta vazia que já existe a torna privada: ela guarda as chaves", async () => {
   const target = join(folder(), "made-beforehand");
   mkdirSync(target);
   chmodSync(target, 0o755);
@@ -114,7 +115,7 @@ test("a backup into an empty folder that's already there makes it private: it ho
   privateMode(target, 0o700);
 });
 
-test("a restore keeps what it replaced, and the old WAL doesn't stay beside the new database", async () => {
+test("uma restauração preserva o que substituiu, e o WAL antigo não fica ao lado do banco novo", async () => {
   const source = folder();
   withWal(source);
   const target = folder();
@@ -129,11 +130,11 @@ test("a restore keeps what it replaced, and the old WAL doesn't stay beside the 
   assert.equal(rows(join(target, "hub.db")), 2);
   assert.equal(readFileSync(join(target, "master.key"), "utf8").trim(), key);
   privateMode(join(target, "hub.db"), 0o600);
-  assert.equal(readFileSync(join(target, "config.json"), "utf8"), "{}", "what the backup doesn't have stays");
-  assert.equal(rows(join(safety, "hub.db")), 2, "what it replaced is kept, WAL and all");
+  assert.equal(readFileSync(join(target, "config.json"), "utf8"), "{}", "o que o backup não tem fica");
+  assert.equal(rows(join(safety, "hub.db")), 2, "o que foi substituído é preservado, WAL e tudo");
 });
 
-test("a folder with a WAL beside its database restores what's only in the WAL", async () => {
+test("uma pasta com um WAL ao lado do banco restaura o que só está no WAL", async () => {
   const source = folder();
   withWal(source);
   const target = folder();
@@ -141,7 +142,7 @@ test("a folder with a WAL beside its database restores what's only in the WAL", 
   assert.equal(rows(join(target, "hub.db")), 2);
 });
 
-test("a restore that fails halfway puts everything back, the WAL with its database", async () => {
+test("uma restauração que falha no meio põe tudo de volta, o WAL junto com o banco", async () => {
   const target = folder();
   withWal(target);
   writeFileSync(join(target, "config.json"), "mine");
@@ -157,24 +158,24 @@ test("a restore that fails halfway puts everything back, the WAL with its databa
   );
 });
 
-test("a restore refuses a backup whose key or database is broken", async () => {
+test("uma restauração recusa um backup cuja chave ou banco está quebrado", async () => {
   const brokenKey = folder();
   withWal(brokenKey);
   writeFileSync(join(brokenKey, "master.key"), "short");
   const target = folder();
-  await assert.rejects(restore(target, brokenKey), /master\.key 坏了/);
+  await assert.rejects(restore(target, brokenKey), /master\.key do backup está corrompido/);
 
   const brokenDatabase = folder();
   writeFileSync(join(brokenDatabase, "hub.db"), "this isn't a database, not even close to one".repeat(100));
   writeFileSync(join(brokenDatabase, "master.key"), key);
-  await assert.rejects(restore(target, brokenDatabase), /读不出来/);
-  assert.deepEqual(readdirSync(target), [], "nothing was touched");
+  await assert.rejects(restore(target, brokenDatabase), /Não foi possível ler o hub\.db/);
+  assert.deepEqual(readdirSync(target), [], "nada foi tocado");
 });
 
-test("a restore refuses while anything has the database open, and only then", async () => {
+test("uma restauração recusa enquanto qualquer coisa tem o banco aberto, e só então", async () => {
   const good = folder();
   withWal(good);
-  await assert.rejects(restore(home, good), /中台还在跑/, "a hub in this process");
+  await assert.rejects(restore(home, good), /A central ainda está em execução/, "uma central neste processo");
 
   const target = folder();
   withWal(target);
@@ -194,20 +195,20 @@ test("a restore refuses while anything has the database open, and only then", as
   );
   await once(holder.stdout, "data");
   try {
-    // Another process, idle between requests, that left no number anywhere: how a hub embedded in something else looks.
-    await assert.rejects(restore(target, good), /中台还在跑/);
-    assert.equal(rows(join(target, "hub.db")), 3, "nothing was touched");
+    // Outro processo, ocioso entre requisições, que não deixou número em lugar nenhum: é assim que uma central embutida em outra coisa parece.
+    await assert.rejects(restore(target, good), /A central ainda está em execução/);
+    assert.equal(rows(join(target, "hub.db")), 3, "nada foi tocado");
   } finally {
     holder.kill("SIGKILL");
     await once(holder, "exit");
   }
-  // Killed, it holds nothing any more, and what it wrote is still there for the copy that's kept.
+  // Morto, ele não segura mais nada, e o que escreveu ainda está lá para a cópia que é preservada.
   const { safety } = await restore(target, good);
   assert.equal(rows(join(target, "hub.db")), 2);
   assert.equal(rows(join(safety, "hub.db")), 3);
 });
 
-test("a database too broken to read doesn't stop the restore that would replace it", async () => {
+test("um banco quebrado demais para ser lido não interrompe a restauração que o substituiria", async () => {
   const good = folder();
   withWal(good);
   const target = folder();
@@ -216,7 +217,7 @@ test("a database too broken to read doesn't stop the restore that would replace 
   assert.equal(rows(join(target, "hub.db")), 2);
 });
 
-test("the commands write where they're told and ask before replacing anything", async () => {
+test("os comandos gravam onde lhes é dito e perguntam antes de substituir qualquer coisa", async () => {
   const machine = folder();
   await restore(machine, await backupOfHub());
   const cli = (...args: string[]) =>
@@ -226,14 +227,14 @@ test("the commands write where they're told and ask before replacing anything", 
       { env: { ...process.env, AGENT_AUTOLOOP_HOME: machine } },
     );
   const target = join(folder(), "snapshot");
-  assert.match((await cli("backup", target)).stdout, /备份好了/);
+  assert.match((await cli("backup", target)).stdout, /Backup concluído/);
   assert.ok(existsSync(join(target, "hub.db")));
-  await assert.rejects(cli("backup", target), /不是空的/);
-  await assert.rejects(cli("backup", "--wat"), /不认识的参数/);
+  await assert.rejects(cli("backup", target), /não está vazio/);
+  await assert.rejects(cli("backup", "--wat"), /Parâmetro não reconhecido/);
 
   await assert.rejects(cli("restore", target), /--yes/);
-  await assert.rejects(cli("restore"), /用法/);
-  assert.match((await cli("restore", target, "--yes")).stdout, /恢复好了/);
+  await assert.rejects(cli("restore"), /Uso/);
+  assert.match((await cli("restore", target, "--yes")).stdout, /Restauração concluída/);
 });
 
 async function backupOfHub() {

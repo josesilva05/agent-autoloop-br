@@ -1,6 +1,7 @@
-// `try` against a real hub, from `init` on. Failure cases: a failure from before this try is reported as this try's, or
-// not said at all so it looks as if nothing is going on; a failure of a run that was already waiting isn't reported; a
-// question still open from before is missed because no new card comes for it, so try waits out its five minutes.
+// `try` contra uma central real, a partir do `init`. Casos de falha: uma falha de antes deste try é relatada como sendo deste
+// try, ou não é dita de jeito nenhum e parece que nada está acontecendo; uma falha de uma rodada que já esperava não é
+// relatada; uma pergunta ainda aberta de antes passa despercebida porque nenhum cartão novo chega para ela, então o try
+// espera os seus cinco minutos inteiros.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,10 +15,10 @@ const bin = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
 const fence = "```";
 const ASKS = `#!/bin/sh
 cat <<'END'
-问了一个问题
+Fiz uma pergunta
 
 ${fence}agent-autoloop
-{"ask":[{"title":"试跑：选一个颜色","text":"选哪个都行","options":["蓝色","绿色"],"key":"try-color"}]}
+{"ask":[{"title":"Execução de teste: escolha uma cor","text":"Esta é uma execução de teste; qualquer opção serve.","options":["Azul","Verde"],"key":"try-color"}]}
 ${fence}
 END
 `;
@@ -32,7 +33,7 @@ const freePort = () =>
     });
   });
 
-/** A throwaway install running `up`, with this script as its agent and stand-ins for whatever shows a notification. */
+/** Uma instalação descartável rodando `up`, com este script como Agent e substitutos para o que quer que mostre uma notificação. */
 async function install(t: { after: (done: () => unknown) => void }, agent: string) {
   const home = mkdtempSync(join(tmpdir(), "agent-autoloop-try-"));
   const standIns = join(home, "stand-ins");
@@ -74,7 +75,7 @@ async function install(t: { after: (done: () => unknown) => void }, agent: strin
     if (ready) break;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  /** Runs `try` as an Agent would, with nobody at a terminal, and stops it at the limit if it's still going. */
+  /** Roda o `try` como um Agent rodaria, sem ninguém num terminal, e o interrompe no limite se ainda estiver em curso. */
   return (limit: number) =>
     new Promise<{ code: number | null; out: string; err: string; stillGoing: boolean }>((resolve) => {
       const child = spawn(process.execPath, [...program, "try"], { env, stdio: ["ignore", "pipe", "pipe"] });
@@ -92,33 +93,36 @@ async function install(t: { after: (done: () => unknown) => void }, agent: strin
     });
 }
 
-test("a second try finds the question still open from the first", async (t) => {
+test("um segundo try encontra a pergunta ainda aberta do primeiro", async (t) => {
   const runTry = await install(t, ASKS);
   const first = await runTry(20_000);
   assert.equal(first.code, 0, first.err);
-  assert.match(first.out, /#1 试跑：选一个颜色/);
+  assert.match(first.out, /#1 Execução de teste: escolha uma cor/);
   const second = await runTry(20_000);
-  assert.equal(second.stillGoing, false, "it should find the open card, not wait out its five minutes");
+  assert.equal(second.stillGoing, false, "ele deve encontrar o cartão aberto, não esperar os cinco minutos inteiros");
   assert.equal(second.code, 0, second.err);
-  assert.match(second.out, /#1 试跑：选一个颜色/);
+  assert.match(second.out, /#1 Execução de teste: escolha uma cor/);
 });
 
-test("a failure from before isn't this try's: it says when the retry is and waits for it", async (t) => {
+test("uma falha de antes não é deste try: ele diz quando é a nova tentativa e espera por ela", async (t) => {
   const runTry = await install(t, FAILS);
   const first = await runTry(20_000);
   assert.equal(first.code, 1);
-  assert.match(first.err, /Agent 没跑成：退出码 1：boom/);
+  assert.match(first.err, /O Agent falhou: código de saída 1: boom/);
   const second = await runTry(4_000);
-  assert.equal(second.stillGoing, true, `the old failure ended it: ${second.err}`);
-  assert.doesNotMatch(second.out, /开始干活/);
-  assert.match(second.out, /上一次没跑成（退出码 1：boom），\d\d:\d\d 会自动再试/);
+  assert.equal(second.stillGoing, true, `a falha antiga o encerrou: ${second.err}`);
+  assert.doesNotMatch(second.out, /começou a trabalhar/);
+  assert.match(
+    second.out,
+    /A tentativa anterior falhou \(código de saída 1: boom\); nova tentativa automática às \d\d:\d\d/,
+  );
 });
 
-// The retry is minutes away, too long to wait for against a real hub.
-test("only a failure since this try started counts", () => {
+// A nova tentativa está a minutos de distância, tempo demais para esperar contra uma central real.
+test("só conta uma falha ocorrida depois que este try começou", () => {
   const run = (id: number, attempts: number, fields = {}) => ({
     id,
-    rule: "试一下",
+    rule: "experimente",
     state: "queued",
     attempts,
     error: "boom",
@@ -126,10 +130,10 @@ test("only a failure since this try started counts", () => {
     ...fields,
   });
   const before = attemptsOf([run(1, 1)]);
-  assert.equal(newFailure([run(1, 1)], before), undefined, "still waiting for its retry");
-  assert.equal(newFailure([run(1, 2)], before)?.id, 1, "it failed again");
-  assert.equal(newFailure([run(2, 1)], before)?.id, 2, "a new run failed");
-  assert.equal(newFailure([run(3, 0)], before), undefined, "not tried yet");
-  assert.equal(newFailure([run(4, 1, { state: "claimed" })], before), undefined, "going again");
-  assert.equal(newFailure([run(5, 1, { rule: "别的" })], before), undefined, "another rule");
+  assert.equal(newFailure([run(1, 1)], before), undefined, "ainda esperando a nova tentativa");
+  assert.equal(newFailure([run(1, 2)], before)?.id, 1, "ela falhou de novo");
+  assert.equal(newFailure([run(2, 1)], before)?.id, 2, "uma rodada nova falhou");
+  assert.equal(newFailure([run(3, 0)], before), undefined, "ainda não tentada");
+  assert.equal(newFailure([run(4, 1, { state: "claimed" })], before), undefined, "em curso de novo");
+  assert.equal(newFailure([run(5, 1, { rule: "outra" })], before), undefined, "outra regra");
 });

@@ -1,10 +1,10 @@
-// The hub is long-running. Upgrade node under Homebrew and the `Cellar` directory this process started from is
-// deleted while it keeps working; ACP and delivery start every turn's child process with `process.execPath`, so from
-// then on each turn fails with ENOENT until someone restarts the service. What is checked here: children are given
-// the `opt` link beside the version, a version directory that no longer exists still resolves through that link, and
-// a node outside Homebrew is left as it is.
-// Failure modes: the Cellar path is handed to children; a deleted version path is kept even though `opt` resolves;
-// the `opt` link is used when it resolves nowhere.
+// A central fica rodando por muito tempo. Atualize o node pelo Homebrew e o diretório `Cellar` de onde este processo
+// partiu é apagado enquanto ele continua trabalhando; ACP e entrega iniciam o processo filho de cada rodada com
+// `process.execPath`, então daí em diante toda rodada falha com ENOENT até alguém reiniciar o serviço. O que se verifica
+// aqui: os filhos recebem o link `opt` ao lado da versão, um diretório de versão que não existe mais ainda resolve por
+// esse link, e um node fora do Homebrew é deixado como está.
+// Modos de falha: o caminho do Cellar é entregue aos filhos; um caminho de versão apagado é mantido mesmo com o `opt`
+// resolvendo; o link `opt` é usado quando não resolve para lugar nenhum.
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +17,7 @@ import delivery from "../plugins/delivery/agent.ts";
 const scratch = mkdtempSync(join(tmpdir(), "node-path-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
-/** A Homebrew-shaped tree: `opt/<formula>` points into one of the versions under `Cellar`. */
+/** Uma árvore no formato do Homebrew: `opt/<formula>` aponta para uma das versões dentro de `Cellar`. */
 function brew(formula: string, versions: string[], linked: string) {
   const root = mkdtempSync(join(scratch, `${formula}-`));
   for (const version of versions) {
@@ -34,37 +34,37 @@ function brew(formula: string, versions: string[], linked: string) {
   };
 }
 
-test("the node this process runs is named by its opt link", () => {
+test("o node em que este processo roda é identificado pelo link opt dele", () => {
   const tree = brew("node", ["26.13.0"], "26.13.0");
   assert.equal(stablePath(tree.bin("26.13.0"), tree.roots), tree.opt);
 });
 
-test("a version directory deleted by an upgrade still resolves through the link", () => {
+test("um diretório de versão apagado por uma atualização ainda resolve pelo link", () => {
   const tree = brew("node", ["24.1.0", "26.13.0"], "26.13.0");
   const old = tree.bin("24.1.0");
   rmSync(join(tree.roots[0], "Cellar", "node", "24.1.0"), { recursive: true, force: true });
-  assert.equal(stablePath(old, tree.roots), tree.opt, "the deleted path would fail every turn");
+  assert.equal(stablePath(old, tree.roots), tree.opt, "o caminho apagado faria toda rodada falhar");
 });
 
-test("a version that is still installed is left alone when the link has moved on", () => {
+test("uma versão que ainda está instalada é deixada em paz quando o link seguiu adiante", () => {
   const tree = brew("node", ["24.1.0", "26.13.0"], "26.13.0");
   assert.equal(stablePath(tree.bin("24.1.0"), tree.roots), tree.bin("24.1.0"));
 });
 
-test("a link that resolves nowhere doesn't take the place of the node that is running", () => {
+test("um link que não resolve para lugar nenhum não toma o lugar do node que está rodando", () => {
   const tree = brew("node", ["26.13.0"], "26.13.0");
   rmSync(join(tree.roots[0], "Cellar", "node", "26.13.0"), { recursive: true, force: true });
   assert.equal(stablePath(tree.bin("26.13.0"), tree.roots), tree.bin("26.13.0"));
 });
 
-test("a node outside Homebrew is named as it is", () => {
+test("um node fora do Homebrew é identificado como é", () => {
   assert.equal(stablePath("/usr/local/bin/node"), "/usr/local/bin/node");
   assert.equal(stablePath("/opt/node/bin/node"), "/opt/node/bin/node");
 });
 
-test("ACP and delivery start their child with that path", () => {
+test("ACP e entrega iniciam o filho com esse caminho", () => {
   const turn = {
-    prompt: "做这件事",
+    prompt: "faça isto",
     session: "s",
     resume: null,
     cwd: "/x",

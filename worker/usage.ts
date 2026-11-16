@@ -1,5 +1,5 @@
-// A session's running total isn't what a launch used; how far the total rose during the launch is. The launch keeps
-// where the total stood when it began, because a worker that stops after moving this file on reads that launch again.
+// O total acumulado de uma sessão não é o que uma inicialização usou; é o quanto o total subiu durante ela. A inicialização
+// guarda onde o total estava quando começou, porque um worker que para depois de avançar este arquivo lê aquela inicialização de novo.
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -9,7 +9,7 @@ import type { Usage } from "./agents.ts";
 const DIRECTORY = path.join(HOME, "worker", "usage");
 const FIELDS = ["input", "output", "cached", "cost"] as const;
 
-// A session's name comes from the agent program, so it isn't used as a file name.
+// O nome de uma sessão vem do programa do Agent, então não é usado como nome de arquivo.
 const file = (adapter: string, session: string) => {
   const name = createHash("sha256")
     .update(JSON.stringify([adapter, session]))
@@ -32,7 +32,7 @@ export function saveUsage(adapter: string, session: string, usage: Usage) {
   renameSync(`${target}.tmp`, target);
 }
 
-/** With no idea where a total began, or one that fell, what the launch used is unknown: neither nothing nor everything. */
+/** Sem saber onde um total começou, ou com um total que caiu, o que a inicialização usou é desconhecido: nem nada nem tudo. */
 export function usageDelta(total: Usage, baseline: Usage | undefined): Usage | undefined {
   if (!baseline) return undefined;
   const rise: Usage = {};

@@ -1,7 +1,7 @@
-// Listing earlier runs with `agent-autoloop runs`. Failure modes: only the newest page is ever read, so a rule's runs
-// from yesterday never show and `why` can't be given their number; a run still going, or an old one still unsettled that the
-// hub adds to its first page, is listed twice or out of order; the next page skips or repeats a run; a page number that
-// isn't one reaches the hub as a bad address instead of saying how to use the command.
+// Listar rodadas anteriores com `agent-autoloop runs`. Modos de falha: só a página mais nova é lida, então as rodadas de ontem
+// de uma regra nunca aparecem e o `why` não recebe o número delas; uma rodada ainda em curso, ou uma antiga ainda não assentada
+// que a central acrescenta à primeira página, é listada duas vezes ou fora de ordem; a próxima página pula ou repete uma rodada;
+// um número de página que não é um chega à central como um endereço inválido em vez de dizer como se usa o comando.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -20,13 +20,13 @@ const run = (id: number, rule: string, state = "done") => ({
   claimedAt: now,
   finishedAt: state === "claimed" || state === "queued" ? null : now,
   notBefore: null,
-  summary: `第 ${id} 轮的结果`,
+  summary: `Resultado da rodada ${id}`,
   error: "",
   events: [],
 });
 const ids = (from: number, to: number) => Array.from({ length: from - to + 1 }, (_, i) => from - i);
 
-/** A hub of `total` runs, newest first, in pages of 60 the way /v1/state gives them; every seventh is rule B. */
+/** Uma central com `total` rodadas, das mais novas para as mais antigas, em páginas de 60 do jeito que /v1/state as dá; cada sétima é da regra B. */
 function hub(total: number, active: ReturnType<typeof run>[] = []) {
   const asked: (number | undefined)[] = [];
   const all = ids(total, 1).map((id) => run(id, id % 7 === 0 ? "B" : "A"));
@@ -44,7 +44,7 @@ function hub(total: number, active: ReturnType<typeof run>[] = []) {
   return { page, asked };
 }
 
-test("a rule's runs older than the first page are found, and the next page starts after the last one shown", async () => {
+test("as rodadas de uma regra anteriores à primeira página são encontradas, e a página seguinte começa depois da última mostrada", async () => {
   const { page } = hub(300);
   const found = await findRuns(page, { rule: "B" });
   assert.deepEqual(
@@ -69,7 +69,7 @@ test("a rule's runs older than the first page are found, and the next page start
   assert.equal(last.more, null);
 });
 
-test("--before starts the list there", async () => {
+test("--before começa a lista naquele ponto", async () => {
   const { page, asked } = hub(100);
   const found = await findRuns(page, { before: 50 });
   assert.equal(asked[0], 50);
@@ -79,7 +79,7 @@ test("--before starts the list there", async () => {
   );
 });
 
-test("runs still going are left to status, and an old unsettled one the first page adds is listed once, in order", async () => {
+test("rodadas ainda em curso ficam com o status, e uma antiga não assentada que a primeira página acrescenta é listada uma vez, em ordem", async () => {
   const { page } = hub(130, [run(130, "A", "claimed"), run(129, "A", "queued"), run(5, "B", "unknown")]);
   const found = await findRuns(page, { rule: "B", want: 100 });
   const shown = found.runs.map((one) => one.id);
@@ -92,21 +92,21 @@ test("runs still going are left to status, and an old unsettled one the first pa
   );
 });
 
-test("each run is one entry with its number, how it ended and its rule; more says how to go on", async () => {
+test("cada rodada é uma entrada com o número, como terminou e a regra; more diz como continuar", async () => {
   const { page } = hub(30);
   const text = runsText(await findRuns(page, { rule: "A", want: 2 }), { rule: "A", color: false, columns: 100 });
-  assert.match(text, /#30 +做完了 +A\n +第 30 轮的结果/);
-  assert.match(text, /#29 +做完了 +A/);
+  assert.match(text, /#30 +Concluído +A\n +Resultado da rodada 30/);
+  assert.match(text, /#29 +Concluído +A/);
   assert.match(text, /agent-autoloop runs A --before 29/);
   const none = runsText(await findRuns(page, { rule: "C" }), { rule: "C", color: false, columns: 100 });
-  assert.match(none, /「C」没有做完的轮次/);
+  assert.match(none, /"C" não tem rodadas concluídas/);
 });
 
 const program = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
 const dir = mkdtempSync(join(tmpdir(), "agent-autoloop-runs-"));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-test("a --before that isn't a run number says how to use it instead of asking the hub", async () => {
+test("um --before que não é um número de rodada diz como se usa em vez de perguntar à central", async () => {
   for (const before of ["x", "0", "1.5"]) {
     const ran = await promisify(execFile)(
       process.execPath,
@@ -117,6 +117,6 @@ test("a --before that isn't a run number says how to use it instead of asking th
       (error) => error as { code: number; stderr: string },
     );
     assert.equal(ran.code, 1);
-    assert.match(ran.stderr, /用法：agent-autoloop runs/);
+    assert.match(ran.stderr, /Uso: agent-autoloop runs/);
   }
 });

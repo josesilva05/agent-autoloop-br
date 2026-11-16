@@ -1,6 +1,6 @@
-// Failure modes: a source revokes somebody else's key; a revoked key keeps a pending poll or stream alive; CLI writes
-// a different database instead of revoking through the running hub; a key named the way `key new` allows cannot be
-// revoked; removing a key that was never there is reported as if the key was revoked.
+// Modos de falha: uma fonte revoga a chave de outra pessoa; uma chave revogada mantém vivo um poll ou stream pendente; a CLI
+// grava num banco de dados diferente em vez de revogar pela central em execução; uma chave nomeada do jeito que `key new`
+// permite não pode ser revogada; remover uma chave que nunca existiu é relatado como se ela tivesse sido revogada.
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { setup } from "./helpers.ts";
@@ -20,7 +20,7 @@ const request = (path: string, key: string, method = "GET") =>
       signal: AbortSignal.timeout(2000),
     }),
   );
-test("a name `key new` allows can be revoked, and removal says whether it was there", async () => {
+test("um nome que `key new` permite pode ser revogado, e a remoção diz se ele existia", async () => {
   const name = "MacBook_prod.2";
   const key = hub.addKey("source", name);
   const path = `/v1/keys/source/${encodeURIComponent(name)}`;
@@ -39,7 +39,7 @@ test("a name `key new` allows can be revoked, and removal says whether it was th
   assert.equal((await request("/v1/events", longKey, "POST")).status, 401);
 });
 
-test("only the owner removes keys and pending work is refused immediately", async () => {
+test("só o titular remove chaves, e o trabalho pendente é recusado na hora", async () => {
   assert.equal((await request("/v1/keys/worker/w1", source, "DELETE")).status, 401);
   const waiting = request("/v1/work?claim=pending&wait=50", worker);
   await new Promise((resolve) => setImmediate(resolve));

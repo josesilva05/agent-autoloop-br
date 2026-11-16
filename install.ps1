@@ -1,7 +1,7 @@
-﻿# Installs the same released code as install.sh, using native Windows tools.
+﻿# Instala o mesmo código publicado que o install.sh, usando as ferramentas nativas do Windows.
 $ErrorActionPreference = 'Stop'
 $installArgs = @($args)
-$published = 'https://github.com/KKKKhazix/agent-autoloop.git'
+$published = 'https://github.com/josesilva05/agent-autoloop-br.git'
 $repository = if ($env:AGENT_AUTOLOOP_REPO) { $env:AGENT_AUTOLOOP_REPO } else { $published }
 $installRoot = if ($env:AGENT_AUTOLOOP_HOME) { [IO.Path]::GetFullPath($env:AGENT_AUTOLOOP_HOME) } else { Join-Path $env:USERPROFILE '.agent-autoloop' }
 $app = Join-Path $installRoot 'app'
@@ -9,11 +9,11 @@ $program = Join-Path $app 'bin\agent-autoloop.ts'
 $node = (Get-Command node.exe -ErrorAction Stop).Source
 $git = (Get-Command git.exe -ErrorAction Stop).Source
 $nodeVersion = & $node -p process.versions.node
-if ($LASTEXITCODE -ne 0 -or [int]$nodeVersion.Split('.')[0] -lt 24) { throw '需要 Node.js 24 或更新，装好后再运行安装命令。' }
+if ($LASTEXITCODE -ne 0 -or [int]$nodeVersion.Split('.')[0] -lt 24) { throw 'É preciso ter o Node.js 24 ou mais novo; depois de instalar, rode de novo o comando de instalação.' }
 
 function Invoke-RepoGit {
     & $git @args
-    if ($LASTEXITCODE -ne 0) { throw "Git 没成功：$($args[0])" }
+    if ($LASTEXITCODE -ne 0) { throw "O git falhou: $($args[0])" }
 }
 
 [IO.Directory]::CreateDirectory($installRoot) | Out-Null
@@ -48,9 +48,9 @@ if (!$env:AGENT_AUTOLOOP_HOME) {
 if ($installArgs.Count -and $installArgs[0] -eq 'join') {
     & $node --disable-warning=ExperimentalWarning $program @installArgs
 } elseif (Test-Path (Join-Path $installRoot 'config.json')) {
-    Write-Host '更新好了。'
+    Write-Host 'Atualização concluída.'
     if ('--no-service' -notin $installArgs) { & $node --disable-warning=ExperimentalWarning $program service install }
 } else {
     & $node --disable-warning=ExperimentalWarning $program init @installArgs
 }
-if ($LASTEXITCODE -ne 0) { throw '安装没有完成，请按上面的原因处理。' }
+if ($LASTEXITCODE -ne 0) { throw 'A instalação não foi concluída; resolva pelo motivo indicado acima.' }

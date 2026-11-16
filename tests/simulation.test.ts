@@ -1,5 +1,6 @@
-// Failure modes: faults lose accepted events, duplicate execution or answers, exceed parallel limits, change receipts,
-// diverge from replay, or strand work after recovery; an enumerator silently skips one ordering; mutation checks do not run.
+// Modos de falha: as falhas perdem eventos aceitos, duplicam execuções ou respostas, excedem limites de paralelismo,
+// alteram recibos, divergem da reprodução ou deixam trabalho encalhado depois da recuperação; um enumerador pula em
+// silêncio uma das ordens; as verificações de mutação não rodam.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { simulate } from "../sim/random.ts";
@@ -9,7 +10,7 @@ import { AuthError } from "../kernel/errors.ts";
 import { empty, evolve } from "../kernel/evolve.ts";
 import { invariants } from "../sim/invariants.ts";
 
-test("200000 deterministic fault steps preserve safety and recovered work terminates", () => {
+test("200000 passos determinísticos de falha preservam a segurança e o trabalho recuperado termina", () => {
   const result = simulate(0x5eed, 200000);
   assert.equal(result.steps, 200000);
   for (const fault of ["lost", "duplicate", "restart", "offline", "channel", "clock"])
@@ -18,7 +19,7 @@ test("200000 deterministic fault steps preserve safety and recovered work termin
   console.log(JSON.stringify(result));
 });
 
-test("bounded exhaustive schedules use two workers, two events and one card", () => {
+test("ordens exaustivas limitadas usam dois workers, dois eventos e um cartão", () => {
   const result = enumerate();
   assert.equal(result.paths, 40320);
   assert.equal(result.actions, 8);
@@ -26,27 +27,28 @@ test("bounded exhaustive schedules use two workers, two events and one card", ()
   console.log(JSON.stringify(result));
 });
 
-test("the simulator rejects a hub that refuses valid receipt replays", () => {
+test("o simulador rejeita uma central que recusa reproduções válidas de recibo", () => {
   const original = World.prototype.call;
   World.prototype.call = function (type: string, ...args: any[]) {
     const run = this.view.get("runs", args[0])!;
-    if (type === "finish" && run?.last_issued && run.issued === null) throw new AuthError("故意拒绝有效重放");
+    if (type === "finish" && run?.last_issued && run.issued === null)
+      throw new AuthError("recusa intencional de uma reprodução válida");
     return original.call(this, type, ...args);
   };
   try {
-    assert.throws(() => simulate(24301, 2048), /种子/);
+    assert.throws(() => simulate(24301, 2048), /semente/);
   } finally {
     World.prototype.call = original;
   }
 });
 
-test("answer checks reject a run in the wrong subject lane", () => {
+test("as verificações de resposta rejeitam uma rodada no lane de outro assunto", () => {
   const w = new World();
   w.call("createCard", {
     key: "q",
     kind: "ask",
-    title: "选",
-    options: ["甲", "乙"],
+    title: "escolha",
+    options: ["alfa", "beta"],
     rule: "one",
     lane: "#1",
     grp: "shared",
@@ -55,10 +57,10 @@ test("answer checks reject a run in the wrong subject lane", () => {
   w.call("answer", 1, { choice: 0 });
   const log = structuredClone(w.log);
   for (const f of log) for (const c of f.changes) if (c.table === "runs" && c.row) c.row.lane = "wrong-lane";
-  assert.throws(() => invariants(evolve(new World().view, log.slice(1)), log), /原事项/);
+  assert.throws(() => invariants(evolve(new World().view, log.slice(1)), log), /assunto original/);
 });
 
-test("the simulation catches omitted deadlines that strand deferred work", () => {
+test("a simulação pega vencimentos omitidos que deixam trabalho adiado encalhado", () => {
   const original = World.prototype.act;
   World.prototype.act = function (input) {
     const value = original.call(this, input);

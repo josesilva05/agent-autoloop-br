@@ -1,4 +1,5 @@
-// `agent-autoloop mcp`: the hub's doors as MCP tools over stdio, using the keys already in this machine's config.json.
+// `agent-autoloop mcp`: as portas da central expostas como ferramentas MCP por stdio, usando as chaves que já estão no
+// config.json desta máquina.
 import { readConfig } from "../host/config.ts";
 import { eachLine } from "../host/lines.ts";
 import { versionName } from "../host/version.ts";
@@ -7,37 +8,57 @@ import { hubClient, type Hub } from "../protocol/client.ts";
 const positive = { type: "integer", minimum: 1 };
 const string = { type: "string", minLength: 1 };
 const specs = [
-  ["status", "查看现在的事项和卡片；before 写上一页的 nextBefore，往前翻更早的轮次", { before: positive }, []],
-  ["why", "查看一轮的事件、规则和结果", { run: positive }, ["run"]],
+  [
+    "status",
+    "Consulta os assuntos e cartões atuais; em before informe o nextBefore da página anterior para voltar a rodadas mais antigas",
+    { before: positive },
+    [],
+  ],
+  ["why", "Consulta os eventos, a regra e o resultado de uma rodada", { run: positive }, ["run"]],
   [
     "answer",
-    "回答卡片；选项从 0 开始，也可以写自己的答案",
+    "Responde a um cartão; as opções começam em 0, e você também pode escrever a sua própria resposta",
     { card: positive, choice: { type: "integer", minimum: 0 }, text: string },
     ["card"],
   ],
-  ["resolve", "将卡片结案，写明已核实的结果", { card: positive, reason: string }, ["card", "reason"]],
-  ["stop", "停止一轮", { run: positive }, ["run"]],
+  [
+    "resolve",
+    "Encerra um cartão informando o resultado verificado",
+    { card: positive, reason: string },
+    ["card", "reason"],
+  ],
+  ["stop", "Interrompe uma rodada", { run: positive }, ["run"]],
   [
     "emit",
-    "用本机来源发送事件；相同编号只记一次",
+    "Envia um evento com a fonte desta máquina; o mesmo identificador é registrado uma única vez",
     { id: string, type: string, subject: string, summary: string, detail: string, link: string },
     ["id", "type"],
   ],
-  ["tell", "用本机来源发送通知；相同编号只发一次", { key: string, text: string }, ["key", "text"]],
+  [
+    "tell",
+    "Envia uma notificação com a fonte desta máquina; o mesmo identificador é enviado uma única vez",
+    { key: string, text: string },
+    ["key", "text"],
+  ],
   [
     "pause",
-    "暂停一条规则：到点不跑、来事件不接也不排队；跳过的事件不会自动补，手动恢复时会列出，之后可以 replay",
+    "Pausa uma regra: não dispara no horário agendado e não recebe nem enfileira eventos; os eventos ignorados não são repostos automaticamente, são listados na retomada manual e depois podem ser reexecutados com replay",
     { rule: string, reason: string, until: string },
     ["rule"],
   ],
-  ["resume", "恢复一条暂停的规则，结果里列出暂停期间跳过的事件（paused.skipped）", { rule: string }, ["rule"]],
+  [
+    "resume",
+    "Retoma uma regra pausada e lista na resposta os eventos ignorados durante a pausa (paused.skipped)",
+    { rule: string },
+    ["rule"],
+  ],
   [
     "replay",
-    "补跑一条规则从 since 起暂停时跳过的事件，每条只补一次；since 用恢复结果里的 paused.since",
+    "Reexecuta os eventos que uma regra ignorou desde since durante a pausa, cada um uma única vez; use o paused.since da resposta do resume",
     { rule: string, since: string },
     ["rule", "since"],
   ],
-  ["run", "立即运行一条规则一轮", { rule: string, subject: string, reason: string }, ["rule"]],
+  ["run", "Executa imediatamente uma rodada de uma regra", { rule: string, subject: string, reason: string }, ["rule"]],
 ] as const;
 
 const usesSourceKey = (name: string) => ["emit", "tell"].includes(name);
@@ -112,7 +133,7 @@ export async function mcp() {
   async function answerCall(id: unknown, params: any) {
     const tool = tools.find((tool) => tool.name === params?.name);
     const args = params?.arguments ?? {};
-    if (!tool || !validArguments(tool, args)) return refuse(id, -32602, "工具名或参数不正确");
+    if (!tool || !validArguments(tool, args)) return refuse(id, -32602, "Nome de ferramenta ou argumentos inválidos");
     const hub = hubClient(config.url, usesSourceKey(tool.name) ? config.source!.key : config.owner!);
     try {
       const result = await callTool(hub, tool.name, args);
@@ -127,10 +148,10 @@ export async function mcp() {
     try {
       request = JSON.parse(line);
     } catch {
-      return refuse(null, -32700, "不是 JSON");
+      return refuse(null, -32700, "não é JSON");
     }
     if (!request || request.jsonrpc !== "2.0" || typeof request.method !== "string") {
-      return refuse(request?.id ?? null, -32600, "请求格式不正确");
+      return refuse(request?.id ?? null, -32600, "Formato de solicitação inválido");
     }
     const { id, method, params } = request;
     if (id === undefined) return;
@@ -139,8 +160,8 @@ export async function mcp() {
       reply(id, { result: { protocolVersion: "2025-11-25", capabilities: { tools: {} }, serverInfo } });
     } else if (method === "ping") reply(id, { result: {} });
     else if (method === "tools/list") reply(id, { result: { tools } });
-    // Each answers by itself, however long it takes: a client's ping has to get through meanwhile.
+    // Cada chamada responde por si, por mais que demore: o ping do cliente tem de conseguir passar nesse meio tempo.
     else if (method === "tools/call") void answerCall(id, params);
-    else refuse(id, -32601, "没有这个方法");
+    else refuse(id, -32601, "Método inexistente");
   });
 }

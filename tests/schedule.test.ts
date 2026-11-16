@@ -1,11 +1,13 @@
-// The clock's events. Failure cases: a schedule fires when it isn't due, twice for one moment, or on a schedule that has
-// just been changed; a hub asleep through several runs each of them (only the latest is owed) or none; a timer fires early,
-// twice, or doesn't wake its own thread in its session; writing the same key makes a second timer; cancelling leaves it; a
-// fired timer stops a new one being set under its key; a bad rules file stops the hub or isn't told; told every tick, or
-// the card stays after it's fixed; a rules file that is gone stops the hub, or isn't picked up when it's moved back, or
-// brings back a card the owner closed at every tick.
-// Cancelling a timer that isn't waiting spoils the receipt it's in; a timer coming due after its rule has gone stops the
-// clock for everything else, or starts something; a clock set back runs the same scheduled moment a second time.
+// Os eventos do relógio. Casos de falha: um agendamento dispara quando não está vencido, duas vezes no mesmo instante,
+// ou num agendamento que acabou de mudar; uma central dormindo através de várias execuções deve só a última (ou nenhuma);
+// uma reverificação dispara cedo, duas vezes, ou não acorda o próprio assunto na sessão dele; escrever a mesma chave
+// cria uma segunda reverificação; cancelar a preserva; uma reverificação disparada impede que outra seja marcada sob a
+// mesma chave; um arquivo de regras ruim impede a central de subir ou não é avisado; avisado a cada tick, ou o cartão
+// continua depois de corrigido; um arquivo de regras que some impede a central de subir, ou não é percebido quando volta
+// para o lugar, ou traz de volta um cartão que o titular fechou a cada tick.
+// Cancelar uma reverificação que não está em espera estraga o recibo em que ela está; uma reverificação que vence depois
+// que a regra dela se foi para o relógio de todo o resto, ou inicia algo; um relógio voltado para trás roda o mesmo
+// instante agendado uma segunda vez.
 import assert from "node:assert/strict";
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,55 +35,55 @@ const keepWorkersHere = (now: number) => {
   heartbeat("w2", [], now);
 };
 
-test("a schedule fires once when it's due, as an event of its own rule", () => {
+test("um agendamento dispara uma vez quando vence, como um evento da própria regra", () => {
   clean();
-  // 10:00 in Shanghai at at(0): the five-minutely one is next due at 10:05, the morning one tomorrow.
+  // 10:00 em Asia/Shanghai em at(0): o de cinco em cinco minutos vence em seguida às 10:05, o matinal só amanhã.
   tick(at(0));
   assert.deepEqual(ticks(), []);
   tick(at(4));
   assert.deepEqual(ticks(), []);
   tick(at(5));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:05:00.000Z"]);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:05:00.000Z"]);
   tick(at(5.5));
   assert.equal(ticks().length, 1);
   const job = claim("w1", at(6))!;
-  assert.equal(job.rule.name, "巡检");
+  assert.equal(job.rule.name, "inspeção");
   assert.deepEqual(
     job.context.events.map((e) => [e.source, e.sourceName, e.type]),
-    [["schedule", "定时", "schedule.tick"]],
+    [["schedule", "agendamento", "schedule.tick"]],
   );
-  assert.deepEqual(JSON.parse(one<{ routed: string }>("SELECT routed FROM events")!.routed), ["巡检"]);
+  assert.deepEqual(JSON.parse(one<{ routed: string }>("SELECT routed FROM events")!.routed), ["inspeção"]);
 });
 
-test("a hub asleep through several owes only the latest", () => {
+test("uma central dormindo através de várias só deve a última", () => {
   clean();
   tick(at(0));
   tick(at(37));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:35:00.000Z"]);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:35:00.000Z"]);
   tick(at(38));
   assert.equal(ticks().length, 1);
   tick(at(40));
   assert.equal(ticks().length, 2);
 });
 
-test("a schedule that changes starts counting from the change", () => {
+test("um agendamento que muda começa a contar a partir da mudança", () => {
   clean();
   tick(at(0));
   const changed = JSON.parse(readFileSync(rulesFile, "utf8"));
   changed.rules[4].when.cron = "0 12 * * *";
   writeFileSync(rulesFile, JSON.stringify(changed));
   tick(at(6));
-  assert.deepEqual(ticks(), [], "the old time doesn't fire under the new schedule");
+  assert.deepEqual(ticks(), [], "o horário antigo não dispara sob o agendamento novo");
   tick(at(119));
   assert.deepEqual(ticks(), []);
   tick(at(120));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T04:00:00.000Z"]);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T04:00:00.000Z"]);
   changed.rules[4].when.cron = "*/5 * * * *";
   writeFileSync(rulesFile, JSON.stringify(changed));
   tick(at(121));
 });
 
-test("a run's look-again fires once at its time, on its thread, in its session, with what it left", () => {
+test("a reverificação de uma rodada dispara uma vez na hora dela, no assunto dela, na sessão dela, com o que ela deixou", () => {
   clean();
   ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
   const job = claim("w1", at(0))!;
@@ -89,7 +91,10 @@ test("a run's look-again fires once at its time, on its thread, in its session, 
   finish(
     job.run,
     job.token,
-    { outcome: "done", later: [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "看原站恢复了没有" }] },
+    {
+      outcome: "done",
+      later: [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "ver se o site original se recuperou" }],
+    },
     at(1),
   );
   keepWorkersHere(at(59));
@@ -98,12 +103,12 @@ test("a run's look-again fires once at its time, on its thread, in its session, 
   keepWorkersHere(at(60));
   tick(at(60));
   tick(at(60.5));
-  // 11:00 is also when the five-minutely rule comes due, on the same worker.
+  // 11:00 é também quando a regra de cinco em cinco minutos vence, no mesmo worker.
   const poll = claim("w1", at(61))!;
-  assert.equal(poll.rule.name, "巡检");
+  assert.equal(poll.rule.name, "inspeção");
   finish(poll.run, poll.token, { outcome: "nothing" }, at(61));
   const next = claim("w1", at(61))!;
-  assert.equal(next.rule.name, "意见");
+  assert.equal(next.rule.name, "opiniões");
   assert.equal(next.session, "s-1");
   assert.deepEqual(
     next.context.events.map((e) => [e.type, e.subject]),
@@ -111,22 +116,22 @@ test("a run's look-again fires once at its time, on its thread, in its session, 
   );
   assert.deepEqual(
     next.context.timers.map((t) => [t.key, t.about]),
-    [["recheck", "看原站恢复了没有"]],
+    [["recheck", "ver se o site original se recuperou"]],
   );
   finish(
     next.run,
     next.token,
-    { outcome: "nothing", later: [{ key: "recheck", at: new Date(at(120)).toISOString(), about: "再看一次" }] },
+    { outcome: "nothing", later: [{ key: "recheck", at: new Date(at(120)).toISOString(), about: "ver mais uma vez" }] },
     at(62),
   );
   assert.equal(
     all("SELECT id FROM timers WHERE event_id IS NULL").length,
     1,
-    "the fired one doesn't stop a new one under its key",
+    "a que disparou não impede uma nova sob a mesma chave",
   );
 });
 
-test("the same key moves a timer; another thread has its own; a run sees what's waiting and can cancel it", () => {
+test("a mesma chave move a reverificação; outro assunto tem a sua; uma rodada vê o que está em espera e pode cancelar", () => {
   clean();
   const end = (n: number, now: number, later: object[]) => {
     ingest("app", { id: `${n}:${now}`, type: "feedback.new", subject: `#${n}` }, now);
@@ -135,21 +140,21 @@ test("the same key moves a timer; another thread has its own; a run sees what's 
     finish(job.run, job.token, { outcome: "done", later }, now);
     return seen;
   };
-  end(1, at(0), [{ key: "k", at: new Date(at(100)).toISOString(), about: "第一次" }]);
-  const seen = end(1, at(1), [{ key: "k", at: new Date(at(200)).toISOString(), about: "改了" }]);
+  end(1, at(0), [{ key: "k", at: new Date(at(100)).toISOString(), about: "primeira vez" }]);
+  const seen = end(1, at(1), [{ key: "k", at: new Date(at(200)).toISOString(), about: "mudou" }]);
   assert.deepEqual(
     seen.map((t) => [t.key, t.about]),
-    [["k", "第一次"]],
+    [["k", "primeira vez"]],
   );
-  end(2, at(2), [{ key: "k", at: new Date(at(300)).toISOString(), about: "别的事项" }]);
+  end(2, at(2), [{ key: "k", at: new Date(at(300)).toISOString(), about: "outro assunto" }]);
   assert.deepEqual(
     all<{ lane: string; about: string; at: string }>("SELECT lane, about FROM timers ORDER BY id").map((t) => [
       t.lane,
       t.about,
     ]),
     [
-      ["#1", "改了"],
-      ["#2", "别的事项"],
+      ["#1", "mudou"],
+      ["#2", "outro assunto"],
     ],
   );
   end(1, at(3), [{ key: "k", cancel: true }]);
@@ -159,15 +164,15 @@ test("the same key moves a timer; another thread has its own; a run sees what's 
   );
 });
 
-test("cancelling a look-again that isn't waiting changes nothing, and the rest of the receipt counts", () => {
+test("cancelar uma reverificação que não está em espera não muda nada, e o resto do recibo conta", () => {
   clean();
   ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
   const job = claim("w1", at(0))!;
   const later = [
     { key: "never-set", cancel: true },
-    { key: "kept", at: new Date(at(100)).toISOString(), about: "再看" },
+    { key: "kept", at: new Date(at(100)).toISOString(), about: "ver de novo" },
   ];
-  assert.deepEqual(finish(job.run, job.token, { outcome: "done", summary: "好了", later }, at(1)).rejected, []);
+  assert.deepEqual(finish(job.run, job.token, { outcome: "done", summary: "Pronto", later }, at(1)).rejected, []);
   assert.equal(one<{ state: string }>("SELECT state FROM runs WHERE id = ?", [job.run])!.state, "done");
   assert.deepEqual(
     all<{ key: string }>("SELECT key FROM timers").map((t) => t.key),
@@ -175,51 +180,51 @@ test("cancelling a look-again that isn't waiting changes nothing, and the rest o
   );
 });
 
-test("a look-again coming due after its rule has gone is kept on record, starts nothing and doesn't stop the clock", () => {
+test("uma reverificação que vence depois que a regra se foi fica registrada, não inicia nada e não para o relógio", () => {
   clean();
   ingest("app", { id: "1", type: "feedback.new", subject: "#1" }, at(0));
   const job = claim("w1", at(0))!;
-  const later = [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "看原站恢复了没有" }];
+  const later = [{ key: "recheck", at: new Date(at(60)).toISOString(), about: "ver se o site original se recuperou" }];
   finish(job.run, job.token, { outcome: "done", later }, at(1));
   const before = readFileSync(rulesFile, "utf8");
   const changed = JSON.parse(before);
-  changed.rules = changed.rules.filter((rule: { name: string }) => rule.name !== "意见");
+  changed.rules = changed.rules.filter((rule: { name: string }) => rule.name !== "opiniões");
   writeFileSync(rulesFile, JSON.stringify(changed));
   try {
     tick(at(60));
     const event = one<{ routed: string }>("SELECT routed FROM events WHERE type = 'timer.due'")!;
     assert.deepEqual(JSON.parse(event.routed), []);
-    assert.deepEqual(all("SELECT id FROM timers WHERE event_id IS NULL"), [], "it doesn't come due again");
-    assert.deepEqual(all("SELECT id FROM runs WHERE rule = '意见' AND state = 'queued'"), []);
+    assert.deepEqual(all("SELECT id FROM timers WHERE event_id IS NULL"), [], "ela não vence de novo");
+    assert.deepEqual(all("SELECT id FROM runs WHERE rule = 'opiniões' AND state = 'queued'"), []);
   } finally {
     writeFileSync(rulesFile, before);
     reloadRules();
   }
 });
 
-test("a clock set back doesn't run the same scheduled moment twice, even with the schedule changed meanwhile", () => {
+test("um relógio voltado para trás não roda o mesmo instante agendado duas vezes, mesmo com o agendamento mudado no meio", () => {
   clean();
   tick(at(0));
   tick(at(5));
-  assert.deepEqual(ticks(), ["巡检@2026-10-18T02:05:00.000Z"]);
+  assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:05:00.000Z"]);
   const before = readFileSync(rulesFile, "utf8");
   const changed = JSON.parse(before);
   changed.rules = changed.rules.map((rule: { name: string }) =>
-    rule.name === "巡检" ? { ...rule, when: { cron: "5 10 * * *" } } : rule,
+    rule.name === "inspeção" ? { ...rule, when: { cron: "5 10 * * *" } } : rule,
   );
-  // Back at 10:02, a schedule that also reads 10:05 starts counting from there.
+  // De volta às 10:02, um agendamento que também lê 10:05 começa a contar a partir dali.
   writeFileSync(rulesFile, JSON.stringify(changed));
   try {
     tick(at(2));
     tick(at(5));
-    assert.deepEqual(ticks(), ["巡检@2026-10-18T02:05:00.000Z"]);
+    assert.deepEqual(ticks(), ["inspeção@2026-10-18T02:05:00.000Z"]);
   } finally {
     writeFileSync(rulesFile, before);
     reloadRules();
   }
 });
 
-test("a bad rules file keeps the hub going, says so once, and the card closes when it's fixed", () => {
+test("um arquivo de regras ruim mantém a central rodando, avisa uma vez, e o cartão fecha quando é corrigido", () => {
   clean();
   const good = readFileSync(rulesFile, "utf8");
   const bad = JSON.parse(good);
@@ -238,23 +243,23 @@ test("a bad rules file keeps the hub going, says so once, and the card closes wh
   assert.equal(cards()[0].state, "closed");
 });
 
-test("a rules file that goes away keeps the hub going, says so once, and the card closes when it's back", () => {
+test("um arquivo de regras que some mantém a central rodando, avisa uma vez, e o cartão fecha quando ele volta", () => {
   clean();
   const away = `${rulesFile}.away`;
-  // Moving it back keeps its modification time, so coming back must not look like nothing changed.
+  // Voltar com ele preserva o tempo de modificação, então o retorno não pode parecer que nada mudou.
   renameSync(rulesFile, away);
   tick(at(0));
   tick(at(1));
   const cards = () => all<{ text: string; state: string }>("SELECT text, state FROM cards");
   assert.equal(cards().length, 1);
-  assert.match(cards()[0].text, /找不到/);
+  assert.match(cards()[0].text, /não encontrei/);
   assert.equal(cards()[0].state, "open");
   renameSync(away, rulesFile);
   tick(at(2));
   assert.equal(cards()[0].state, "closed");
 });
 
-test("a card closed while the rules file is still gone stays closed, and going again after it's back is said again", () => {
+test("um cartão fechado enquanto o arquivo de regras ainda some continua fechado, e sumir de novo depois de voltar é avisado de novo", () => {
   clean();
   const away = `${rulesFile}.away`;
   const cards = () => all<{ id: number; state: string }>("SELECT id, state FROM cards ORDER BY id");
@@ -262,9 +267,9 @@ test("a card closed while the rules file is still gone stays closed, and going a
   try {
     tick(at(0));
     assert.equal(cards().length, 1);
-    execute("answer", [cards()[0].id, { by: "本人" }], at(1));
+    execute("answer", [cards()[0].id, { by: "o titular" }], at(1));
     tick(at(2));
-    assert.equal(cards().length, 1, "the owner has heard");
+    assert.equal(cards().length, 1, "o titular ficou sabendo");
     renameSync(away, rulesFile);
     tick(at(3));
     renameSync(rulesFile, away);

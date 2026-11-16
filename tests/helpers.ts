@@ -1,5 +1,5 @@
-// Each test file runs in its own process with its own home and the fixture rules; modules are imported after this sets
-// the environment they read.
+// Cada arquivo de teste roda no seu próprio processo, com seu próprio home e as regras do fixture; os módulos são
+// importados depois que isto define o ambiente que eles leem.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -19,13 +19,13 @@ export function setup(name: string, rules = "rules.fixture.json") {
   return directory;
 }
 
-/** A moment in a test's own time, minutes after a fixed start: 10:00 in Asia/Shanghai. */
+/** Um instante no tempo do próprio teste, em minutos após um início fixo: 10:00 em Asia/Shanghai. */
 export const at = (minutes: number) => Date.parse("2026-10-18T02:00:00.000Z") + minutes * 60_000;
 
 /**
- * A stand-in ACP agent in a file of its own, to run for real. It answers as an agent should unless `script` says otherwise,
- * by replacing `on[method]`, with `send`, `update`, `say` and `ask` to talk with. A stubborn one has to end by itself too:
- * a test that fails leaves nothing running.
+ * Um Agent ACP substituto num arquivo só dele, para rodar de verdade. Ele responde como um Agent deve responder, a menos
+ * que `script` diga o contrário substituindo `on[method]`, com `send`, `update`, `say` e `ask` à disposição. Um
+ * teimoso também tem que terminar por conta própria: um teste que falha não pode deixar nada rodando.
  */
 export function acpAgent(dir: string, name: string, script = "") {
   const file = join(dir, `${name}.mjs`);
@@ -49,7 +49,7 @@ const on = {
   initialize: (m) => send({ id: m.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true } } }),
   'session/new': (m) => send({ id: m.id, result: { sessionId: 'agent-session' } }),
   'session/load': (m) => send({ id: m.id, result: {} }),
-  'session/prompt': (m) => { say('做完了'); send({ id: m.id, result: { stopReason: 'end_turn' } }); },
+  'session/prompt': (m) => { say('Concluído'); send({ id: m.id, result: { stopReason: 'end_turn' } }); },
 };
 ${script}
 readline.createInterface({ input: process.stdin }).on('line', (line) => {

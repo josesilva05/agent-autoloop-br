@@ -1,5 +1,6 @@
-// Failure modes: systemd splits an install path at spaces, expands its `$` or `%`, or loads a different path after quotes
-// and backslashes are parsed; a control character writes another directive into the generated service.
+// Modos de falha: o systemd divide um caminho de instalação nos espaços, expande seus `$` ou `%`, ou carrega um caminho
+// diferente depois que aspas e barras invertidas são interpretadas; um caractere de controle escreve outra diretiva no
+// serviço gerado.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { unit } from "../host/service.ts";
@@ -10,9 +11,9 @@ const ordinary = {
   program: "/opt/agent-autoloop/bin/agent-autoloop.ts",
 };
 
-test("a systemd service keeps its existing structure and zero-argument use", () => {
+test("um serviço systemd mantém sua estrutura existente e o uso sem argumentos", () => {
   const service = unit(ordinary);
-  assert.ok(service.includes("Description=Agent 自动化中台"));
+  assert.ok(service.includes("Description=Central de automação de Agents"));
   assert.ok(service.includes('Environment="AGENT_AUTOLOOP_HOME=/home/me/.agent-autoloop"'));
   assert.ok(
     service.includes(
@@ -24,15 +25,15 @@ test("a systemd service keeps its existing structure and zero-argument use", () 
   assert.doesNotThrow(() => unit());
 });
 
-test("systemd receives spaces and special path characters literally", () => {
+test("o systemd recebe espaços e caracteres especiais de caminho literalmente", () => {
   const service = unit({
-    home: String.raw`/home/用户/Agent Work/$cache%/say"hi"/back\slash`,
+    home: String.raw`/home/usuário/Agent Work/$cache%/say"hi"/back\slash`,
     executable: String.raw`/opt/Node $cache%/say"hi"/node`,
     program: String.raw`/opt/Agent Work/$repo%/back\slash/agent.ts`,
   });
   assert.ok(
     service.includes(
-      String.raw`Environment="AGENT_AUTOLOOP_HOME=/home/用户/Agent Work/$cache%%/say\"hi\"/back\\slash"`,
+      String.raw`Environment="AGENT_AUTOLOOP_HOME=/home/usuário/Agent Work/$cache%%/say\"hi\"/back\\slash"`,
     ),
   );
   assert.ok(
@@ -42,8 +43,8 @@ test("systemd receives spaces and special path characters literally", () => {
   );
 });
 
-test("systemd service values reject control characters", () => {
+test("valores de serviço do systemd rejeitam caracteres de controle", () => {
   for (const control of ["\0", "\t", "\n", "\r", "\u007f"]) {
-    assert.throws(() => unit({ ...ordinary, home: `/home/me/before${control}after` }), /控制字符/);
+    assert.throws(() => unit({ ...ordinary, home: `/home/me/before${control}after` }), /caracteres de controle/);
   }
 });

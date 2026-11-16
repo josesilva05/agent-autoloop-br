@@ -1,4 +1,4 @@
-// A view reads an indexed projection. A decision owns only its overlay; evolve alone persists changes.
+// Uma view lê uma projeção indexada. Uma decisão é dona só da sua sobreposição; apenas evolve persiste as mudanças.
 import { DatabaseSync, type StatementSync, type SQLInputValue } from "node:sqlite";
 export type Row = Record<string, any>;
 export const TABLES = [
@@ -63,7 +63,7 @@ export function initialize(db: DatabaseSync) {
   ready.add(db);
 }
 function indexProjection(db: DatabaseSync) {
-  // Including collection prevents the planner preferring a collection-wide primary-key scan for IN predicates.
+  // Incluir collection impede o planejador de preferir uma varredura de chave primária da coleção inteira em predicados IN.
   db.exec(
     "CREATE INDEX IF NOT EXISTS projection_delivery_due ON projections(collection,json_extract(data,'$.given_up'),key) WHERE collection='deliveries' AND json_extract(data,'$.not_before') IS NOT NULL",
   );
@@ -89,7 +89,7 @@ export class View {
   readonly format: string;
   private base?: View;
   private changes = new Map<Table, Map<string, Row | null>>();
-  // The biggest row there is, and every queued run asks for it. Facts bring a new view, so this can't go stale.
+  // A maior linha que existe, e toda rodada na fila pede por ela. Fatos trazem uma view nova, então isto não fica defasado.
   private configs = new Map<string, Row | undefined>();
   constructor(db: DatabaseSync, seq = 0, next: Record<string, number> = {}, format = "") {
     this.db = db;
@@ -142,7 +142,7 @@ export class View {
       params.push(value);
       return `${field(key)} IS ?`;
     });
-    // With IN filters, sorting the matching rows avoids the planner scanning every historic ID in order.
+    // Com filtros IN, ordenar as linhas que casam evita que o planejador varra em ordem todos os IDs históricos.
     const order = NUMBERED.has(table) ? `${Object.values(match).some(Array.isArray) ? "+" : ""}${field("id")}` : "key";
     const sql = `SELECT key,data FROM projections WHERE collection='${table}'${conditions.map((c) => ` AND ${c}`).join("")} ORDER BY ${order} ${reverse ? "DESC" : "ASC"}${limit === undefined ? "" : " LIMIT ?"}`;
     if (limit !== undefined) params.push(limit);
@@ -221,7 +221,7 @@ export function evolve(view: View, facts: Iterable<Fact>, db = view.db, reset = 
       else {
         const data = JSON.stringify(row);
         put.run(table, key, data);
-        // A held run keeps the configuration it claimed, including through projection rebuilds.
+        // Uma rodada retida mantém a configuração que pegou, inclusive através de reconstruções da projeção.
         if (table === "config" && key === "rules") put.run(table, String(row.version), data);
       }
     }

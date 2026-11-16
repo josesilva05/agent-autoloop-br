@@ -1,11 +1,11 @@
-// What a long queue costs each input. Everything runs on one thread and a worker with work in hand asks every second, so
-// a read that grows with the queue holds up every other request.
-// Failure cases: the rules are read and parsed again for each queued run, and again for each worker; remembering them
-// hides new rules from the next view or from another writer's next reader, leaks a draft's change into the view it came
-// from, keeps a decision from seeing the rules it just changed, or hands a held run the current rules for its own.
-// An input that changed nothing still reads the queue to work out deadlines that can't have moved, or writes a fact for
-// them; leaving them alone strands what only the clock changes, because a tick no longer brings the table up to date, or
-// a change no longer does, or a clock set back never gets its deadlines back.
+// O que uma fila longa custa a cada entrada. Tudo roda numa thread só e um worker com trabalho em mãos consulta a cada segundo,
+// então uma leitura que cresce com a fila trava todas as outras requisições.
+// Casos de falha: as regras são lidas e analisadas de novo para cada rodada na fila, e de novo para cada worker; guardá-las
+// esconde regras novas da próxima visão ou do próximo leitor de outro escritor, vaza a mudança de um rascunho para a visão de
+// onde ele veio, impede uma decisão de ver as regras que acabou de mudar, ou entrega a uma rodada em mãos as regras atuais no
+// lugar das suas. Uma entrada que não mudou nada ainda assim lê a fila para calcular vencimentos que não podem ter se movido,
+// ou escreve um fato por eles; deixá-los de lado encalha o que só o relógio muda, porque um tick não traz mais a tabela para o
+// presente, ou uma mudança não traz mais, ou um relógio atrasado nunca recupera seus vencimentos.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { DatabaseSync, StatementSync } from "node:sqlite";
@@ -22,7 +22,7 @@ const environment = { secret: "test-queue-costs", publicUrl: "https://hub.test" 
 const fixture = parseRules(readFileSync(new URL("./rules.fixture.json", import.meta.url), "utf8"), 0, "UTC");
 const rules = { ...fixture, rules: fixture.rules.filter((rule) => "source" in rule.when) };
 
-/** The kernel as the shell runs it, at a fixed time. */
+/** O kernel como o host o executa, num horário fixo. */
 class Hub {
   view: View = empty();
   now = 1000;
@@ -34,14 +34,14 @@ class Hub {
     this.view = evolve(this.view, decided.facts);
     return decided.value;
   }
-  /** Runs queued for w1, each its own subject. */
+  /** Rodadas na fila para o w1, cada uma com seu próprio objeto. */
   queue(count: number, from = 0) {
     for (let n = from; n < from + count; n++)
       this.act("ingest", "app", { id: `${n}`, type: "feedback.new", subject: `#${n}` });
   }
 }
 
-/** How many times the rules are parsed while this runs, on a view nothing has read from yet. */
+/** Quantas vezes as regras são analisadas enquanto isto roda, numa visão da qual nada leu ainda. */
 function rulesParsed(hub: Hub, type: string, ...args: unknown[]) {
   const fresh = evolve(hub.view, []);
   const parse = JSON.parse;
@@ -64,7 +64,7 @@ for (const [type, args] of [
   ["ingest", ["app", { id: "more", type: "feedback.new", subject: "#more" }]],
   ["tick", []],
 ] as const) {
-  test(`${type} parses the rules once, however long the queue`, () => {
+  test(`${type} analisa as regras uma vez só, não importa o tamanho da fila`, () => {
     const hub = new Hub();
     hub.queue(1);
     assert.equal(rulesParsed(hub, type, ...args), 1);
@@ -73,39 +73,42 @@ for (const [type, args] of [
   });
 }
 
-test("a held run's older rules are parsed once more, however many runs hold them", () => {
+test("as regras mais antigas de uma rodada em mãos são analisadas mais uma vez, não importa quantas rodadas as tenham", () => {
   const hub = new Hub();
   hub.queue(3);
   for (const n of [0, 1, 2]) hub.act("claimNext", "w1", `claim-${n}`);
-  hub.act("rules", { ...rules, askFirst: ["别的"] });
+  hub.act("rules", { ...rules, askFirst: ["outra coisa"] });
   assert.equal(rulesParsed(hub, "tick"), 2);
 });
 
-test("new rules reach the next view, and a decision in flight leaves the view it came from alone", () => {
+test("regras novas chegam à próxima visão, e uma decisão em andamento deixa intacta a visão de onde veio", () => {
   const hub = new Hub();
   const before = hub.view;
   const was = configuration(before).askFirst;
-  const decided = decide(before, { type: "rules", args: [{ ...rules, askFirst: ["别的"] }] }, 2000, environment);
+  const decided = decide(before, { type: "rules", args: [{ ...rules, askFirst: ["outra coisa"] }] }, 2000, environment);
   assert.deepEqual(configuration(before).askFirst, was);
-  assert.deepEqual(configuration(evolve(before, decided.facts)).askFirst, ["别的"]);
+  assert.deepEqual(configuration(evolve(before, decided.facts)).askFirst, ["outra coisa"]);
 });
 
-test("a view opened after another writer changed the rules sees the new ones", () => {
+test("uma visão aberta depois de outro escritor mudar as regras vê as novas", () => {
   const db = new DatabaseSync(":memory:");
   const facts = (view: View, given: typeof rules) =>
     decide(view, { type: "rules", args: [given] }, 1000, environment).facts;
   const view = openView(db, "format");
   const first = commit(db, view, () => facts(view, rules));
   assert.deepEqual(configuration(first).askFirst, rules.askFirst);
-  // A command writes to this database from its own process, on a view of its own.
+  // Um comando escreve neste banco a partir do seu próprio processo, numa visão só dele.
   const other = openView(db, "format");
-  commit(db, other, () => facts(other, { ...rules, askFirst: ["别的"] }));
-  assert.deepEqual(configuration(openView(db, "format")).askFirst, ["别的"]);
+  commit(db, other, () => facts(other, { ...rules, askFirst: ["outra coisa"] }));
+  assert.deepEqual(configuration(openView(db, "format")).askFirst, ["outra coisa"]);
   db.close();
 });
 
-test("a decision that changes the rules sees its own change for what it does next", () => {
-  const moved = { ...rules, rules: rules.rules.map((rule) => (rule.name === "意见" ? { ...rule, to: "a2" } : rule)) };
+test("uma decisão que muda as regras vê a própria mudança no que faz em seguida", () => {
+  const moved = {
+    ...rules,
+    rules: rules.rules.map((rule) => (rule.name === "opiniões" ? { ...rule, to: "a2" } : rule)),
+  };
   const hub = new Hub();
   hub.queue(1);
   const decided = decide(hub.view, { type: "rules", args: [moved] }, 2000, environment);
@@ -114,7 +117,7 @@ test("a decision that changes the rules sees its own change for what it does nex
   assert.equal(run.rules_version, decided.facts[0].seq);
 });
 
-test("a held run keeps the rules it was claimed under, read off the same view as the current ones", () => {
+test("uma rodada em mãos mantém as regras sob as quais recebeu o claim, lidas da mesma visão que as atuais", () => {
   const moved = { ...rules, agents: { ...rules.agents, a1: { ...rules.agents.a1, worker: "w2" } } };
   const hub = new Hub();
   hub.queue(1);
@@ -126,7 +129,7 @@ test("a held run keeps the rules it was claimed under, read off the same view as
   assert.equal(configuration(view).agents.a1.worker, "w2");
 });
 
-/** How many times the runs are read from the database while an input is decided, and what it decided. */
+/** Quantas vezes as rodadas são lidas do banco enquanto uma entrada é decidida, e o que ela decidiu. */
 function runReads(hub: Hub, type: string, ...args: unknown[]) {
   const all = StatementSync.prototype.all;
   let reads = 0;
@@ -145,7 +148,7 @@ function runReads(hub: Hub, type: string, ...args: unknown[]) {
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
 
-/** One run in hand and more behind it, and everyone just seen. */
+/** Uma rodada em mãos e mais atrás dela, e todos vistos há pouco. */
 function busyHub() {
   const hub = new Hub();
   hub.queue(5);
@@ -157,7 +160,7 @@ function busyHub() {
   return { hub, job };
 }
 
-test("an input that changes nothing reads no runs and writes no fact", () => {
+test("uma entrada que não muda nada não lê rodadas nem escreve fato", () => {
   const { hub, job } = busyHub();
   const nothing: [string, ...unknown[]][] = [
     ["heartbeat", "w1", [job.run]],
@@ -173,7 +176,7 @@ test("an input that changes nothing reads no runs and writes no fact", () => {
   }
 });
 
-test("a receipt handed in again reads no runs", () => {
+test("um recibo entregue de novo não lê rodadas", () => {
   const { hub, job } = busyHub();
   hub.act("finish", job.run, job.token, { outcome: "done" });
   const again = runReads(hub, "finish", job.run, job.token, { outcome: "done" });
@@ -182,7 +185,7 @@ test("a receipt handed in again reads no runs", () => {
   assert.equal(again.reads, 0);
 });
 
-test("a claim that finds nothing reads the runs only to look for one", () => {
+test("um claim que não encontra nada lê as rodadas só para procurar uma", () => {
   const hub = new Hub();
   hub.queue(5);
   for (const n of [0, 1, 2]) hub.act("claimNext", "w1", `claim-${n}`);
@@ -194,23 +197,23 @@ test("a claim that finds nothing reads the runs only to look for one", () => {
   assert.equal(blocked.reads, 1);
 });
 
-/** A failed run waiting for its retry, with its deadline in the table. */
+/** Uma rodada que falhou esperando sua nova tentativa, com o vencimento na tabela. */
 function waitingForRetry() {
   const hub = new Hub();
   hub.queue(1);
   const job = hub.act("claimNext", "w1", "first");
-  hub.act("finish", job.run, job.token, { outcome: "failed", error: "没跑成" });
+  hub.act("finish", job.run, job.token, { outcome: "failed", error: "FALHOU" });
   const retry = rows(hub.view, "due").find((due) => due.kind === "retry")!;
   assert.equal(retry.at, hub.now + 5 * MINUTE);
   return { hub, job, retry };
 }
 
-test("what only the clock changes waits for the tick the deadline brings, and that tick sees to it", () => {
+test("o que só o relógio muda espera pelo tick que o vencimento traz, e esse tick resolve", () => {
   const { hub, retry } = waitingForRetry();
   hub.now = retry.at - 30 * SECOND;
   hub.act("heartbeat", "w1", []);
   hub.now = retry.at + 1;
-  // Past its time and nothing changed: the table stands until the timer set for that deadline fires.
+  // Passou do horário e nada mudou: a tabela fica de pé até o temporizador marcado para aquele vencimento disparar.
   assert.deepEqual(decide(hub.view, { type: "heartbeat", args: ["w1", []] }, hub.now, environment).facts, []);
   assert.equal(
     rows(hub.view, "due").some((due) => due.kind === "retry"),
@@ -221,10 +224,10 @@ test("what only the clock changes waits for the tick the deadline brings, and th
   hub.act("tick");
   const kinds = rows(hub.view, "due").map((due) => due.kind);
   assert.equal(kinds.includes("retry"), false);
-  assert.equal(kinds.includes("offline"), true, "a run ready to go is now waiting on its worker");
+  assert.equal(kinds.includes("offline"), true, "uma rodada pronta para ir agora espera pelo seu worker");
 });
 
-test("a run past its retry time can be claimed before any tick", () => {
+test("uma rodada além do horário de nova tentativa pode receber claim antes de qualquer tick", () => {
   const { hub, retry } = waitingForRetry();
   hub.now = retry.at + 1;
   const job = hub.act("claimNext", "w1", "second");
@@ -235,7 +238,7 @@ test("a run past its retry time can be claimed before any tick", () => {
   );
 });
 
-test("anything that changes something brings the whole table up to date", () => {
+test("qualquer coisa que mude algo traz a tabela inteira para o presente", () => {
   const { hub, retry } = waitingForRetry();
   hub.now = retry.at + 1;
   hub.act("ingest", "ops", { id: "other", type: "alert.raised" });
@@ -245,13 +248,13 @@ test("anything that changes something brings the whole table up to date", () => 
   );
 });
 
-test("a tick with nothing to do leaves the table and writes nothing", () => {
+test("um tick sem nada a fazer deixa a tabela como está e não escreve nada", () => {
   const { hub, retry } = waitingForRetry();
   hub.now = retry.at - MINUTE;
   assert.deepEqual(decide(hub.view, { type: "tick", args: [] }, hub.now, environment).facts, []);
 });
 
-test("a clock set back gets its deadlines back at the next tick", () => {
+test("um relógio atrasado recupera seus vencimentos no próximo tick", () => {
   const { hub, retry } = waitingForRetry();
   hub.now = retry.at + 1;
   hub.act("tick");
@@ -264,7 +267,7 @@ test("a clock set back gets its deadlines back at the next tick", () => {
   assert.equal(rows(hub.view, "due").find((due) => due.kind === "retry")?.at, retry.at);
 });
 
-test("the table is what working it out says, as of the last fact, whatever came after", () => {
+test("a tabela é o que calculá-la diz, até o último fato, não importa o que veio depois", () => {
   const hub = new Hub();
   const log: Fact[] = [];
   const act = (type: string, ...args: unknown[]) => {

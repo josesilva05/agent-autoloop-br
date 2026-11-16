@@ -1,5 +1,5 @@
-// What the kernel's doors need from this machine: the clock, a timer for the next deadline, long polls to wake, the
-// rules file to watch, the log as a stream and the webhook plugins.
+// O que as portas do kernel precisam desta máquina: o relógio, um temporizador para o próximo prazo, esperas longas a
+// acordar, o arquivo de regras a observar, o log como stream e os plugins de webhook.
 import { realpathSync, watch } from "node:fs";
 import { basename, dirname } from "node:path";
 import { RULES_FILE } from "./home.ts";
@@ -8,7 +8,7 @@ import * as hub from "./runtime.ts";
 import { AuthError, NotFound } from "../kernel/errors.ts";
 import { createHandler } from "../kernel/http.ts";
 
-/** Past this setTimeout fires at once. */
+/** Além disto, o setTimeout dispara imediatamente. */
 const LONGEST_TIMER = 2147483647;
 const TICK_RETRY = 5_000;
 
@@ -56,14 +56,14 @@ function logStream(after: number, signal: AbortSignal, key: string) {
 
 async function adaptWebhook(source: string, headers: Headers, body: string) {
   const adapter = hub.rules.sources[source]?.adapter;
-  if (!adapter || !/^[a-z][a-z0-9-]*$/.test(adapter)) throw new NotFound("这个来源不收 Webhook");
+  if (!adapter || !/^[a-z][a-z0-9-]*$/.test(adapter)) throw new NotFound("esta fonte não aceita Webhook");
   const translate = await loadPlugin(adapter, "source");
   const secret = process.env[`AGENT_AUTOLOOP_SECRET_${source.toUpperCase().replaceAll("-", "_")}`] ?? "";
   try {
     const events = translate({ headers: Object.fromEntries(headers), body, secret });
     return Array.isArray(events) ? events : [];
   } catch {
-    throw new AuthError("验签没过");
+    throw new AuthError("a verificação de assinatura falhou");
   }
 }
 
@@ -80,7 +80,8 @@ export function makeHandler(commit = "dev") {
       hub.tick();
       retryAt = undefined;
     } catch (error) {
-      // Another process holding the database too long, say. Nobody is there to catch it, and what it brought is still due.
+      // Por exemplo, outro processo segurando o banco por tempo demais. Não há ninguém para capturá-lo, e o que ele
+      // trouxe continua vencido.
       console.error(error);
       retryAt = Date.now() + TICK_RETRY;
     }
@@ -93,18 +94,19 @@ export function makeHandler(commit = "dev") {
     const due = hub.one<{ at: number }>(
       "SELECT MIN(json_extract(data, '$.at')) AS at FROM projections WHERE collection='due'",
     );
-    // Whatever the failed tick left is overdue, so it would go at once; and nothing else coming along may lose the retry.
+    // O que o tick que falhou deixou para trás já está atrasado, então sairia de imediato; e nada mais que apareça pode
+    // fazer a nova tentativa se perder.
     const next = retryAt ?? Math.min(due?.at ?? Infinity, ...[...waiting].map((waiter) => waiter.until));
     if (!Number.isFinite(next)) return;
     timer = setTimeout(fire, Math.max(0, Math.min(LONGEST_TIMER, next - Date.now())));
   };
   const unlisten = hub.onChange((type, facts) => {
-    // Being seen wakes nobody, unless it changed a card.
+    // Ser visto não acorda ninguém, a menos que tenha mudado um cartão.
     const justSeen = type === "heartbeat" || type === "channelSeen";
     if (!justSeen || facts.some((fact) => fact.changes.some((change) => change.table === "cards"))) wake();
     arm();
   });
-  // libuv 1.52 (Node 24.16+) on Windows asserts and exits on the first change in a folder named through an 8.3 short name.
+  // No Windows, o libuv 1.52 (Node 24.16+) falha numa asserção e sai na primeira mudança numa pasta nomeada por um nome curto 8.3.
   const watcher = watch(realpathSync.native(dirname(RULES_FILE)), (_event, file) => {
     if (file === basename(RULES_FILE)) fire();
   });

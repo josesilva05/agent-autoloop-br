@@ -1,14 +1,15 @@
-// Vendor message formats: links are listed in protocol.md so the fields can be checked against their owning APIs.
+// Formatos de mensagem dos fornecedores: os links estão listados no protocol.md para que os campos possam ser
+// conferidos contra as APIs a que pertencem.
 function wecomMarkdown(text: string) {
   return text.replace(/https?:\/\/[^\s；，。]+/g, (url, offset, source) =>
-    source.slice(Math.max(0, offset - 2), offset) === "](" ? url : `[打开链接](${url})`,
+    source.slice(Math.max(0, offset - 2), offset) === "](" ? url : `[Abrir link](${url})`,
   );
 }
 
 export function payload(platform: string, text: string): object {
-  if (platform === "discord" && [...text].length > 2000) throw new Error("Discord 消息超过 2000 个字，请缩短卡片");
+  if (platform === "discord" && [...text].length > 2000) throw new Error("Discord: cartão acima de 2000 caracteres");
   const markdown = platform === "wecom" ? wecomMarkdown(text) : "";
-  if (platform === "wecom" && Buffer.byteLength(markdown) > 2048) throw new Error("企微消息超过 2048 字节，请缩短卡片");
+  if (platform === "wecom" && Buffer.byteLength(markdown) > 2048) throw new Error("WeCom: cartão acima de 2048 bytes");
   switch (platform) {
     case "dingtalk":
       return { msgtype: "text", text: { content: text }, at: { isAtAll: false } };
@@ -19,14 +20,14 @@ export function payload(platform: string, text: string): object {
     case "discord":
       return { content: text, allowed_mentions: { parse: [] } };
     default:
-      throw new Error(`没有这个 Webhook 模板：${platform}`);
+      throw new Error(`não existe este modelo de Webhook: ${platform}`);
   }
 }
 
 export async function accepted(platform: string, response: Response) {
-  if (!response.ok) throw new Error(`返回 ${response.status}`);
+  if (!response.ok) throw new Error(`respondeu ${response.status}`);
   if (platform === "dingtalk" || platform === "wecom") {
     const result = await response.json();
-    if (result.errcode !== 0) throw new Error(`发送失败：${result.errmsg ?? result.errcode}`);
-  } else if (platform === "slack" && (await response.text()).trim() !== "ok") throw new Error("Slack 没有确认收到消息");
+    if (result.errcode !== 0) throw new Error(`falha no envio: ${result.errmsg ?? result.errcode}`);
+  } else if (platform === "slack" && (await response.text()).trim() !== "ok") throw new Error("o Slack não confirmou");
 }

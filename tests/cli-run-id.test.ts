@@ -1,6 +1,7 @@
-// Naming a run: `stop` and `why` with no number, or with a word that is not one, used to send /v1/runs/NaN to the hub and
-// print "没有这个地址", which reads like a broken hub rather than a mistyped command. Found here by running the real program in a home nothing is installed into: the usage must come before any hub is asked.
-// A hub that doesn't answer was said as a bare "fetch failed", with no word of which hub or what to do.
+// Nomear uma rodada: `stop` e `why` sem número, ou com uma palavra que não é um, costumavam enviar /v1/runs/NaN à central e
+// imprimir "não existe esse endereço", o que lê como uma central quebrada e não como um comando digitado errado. Descoberto
+// aqui rodando o programa real num home em que nada foi instalado: o uso tem de vir antes de qualquer pergunta à central.
+// Uma central que não responde era dita como um simples "fetch failed", sem palavra sobre qual central nem o que fazer.
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { once } from "node:events";
@@ -39,14 +40,14 @@ for (const args of [
   ["why", "--json"],
   ["why", "x"],
 ]) {
-  test(`${args.join(" ")} says how to name a run instead of asking the hub`, async () => {
+  test(`${args.join(" ")} diz como nomear uma rodada em vez de perguntar à central`, async () => {
     const ran = await run(args);
     assert.equal(ran.code, 1);
-    assert.match(ran.stderr, new RegExp(`用法：agent-autoloop ${args[0]} <第几轮>`));
+    assert.match(ran.stderr, new RegExp(`Uso: agent-autoloop ${args[0]} <nº da rodada>`));
   });
 }
 
-test("a real run number still goes on to the hub", async () => {
+test("um número de rodada de verdade ainda segue até a central", async () => {
   for (const args of [
     ["stop", "3"],
     ["why", "3", "--json"],
@@ -54,12 +55,12 @@ test("a real run number still goes on to the hub", async () => {
   ]) {
     const ran = await run(args);
     assert.equal(ran.code, 1);
-    assert.doesNotMatch(ran.stderr, /用法/);
-    assert.match(ran.stderr, /还没装好/);
+    assert.doesNotMatch(ran.stderr, /Uso/);
+    assert.match(ran.stderr, /ainda não está instalado/);
   }
 });
 
-test("a hub that doesn't answer is named, with what to do, not left as a bare fetch failed", async () => {
+test("uma central que não responde é nomeada, com o que fazer, em vez de um simples fetch failed", async () => {
   const probe = createServer().listen(0, "127.0.0.1");
   await once(probe, "listening");
   const { port } = probe.address() as AddressInfo;
@@ -69,6 +70,6 @@ test("a hub that doesn't answer is named, with what to do, not left as a bare fe
   writeFileSync(join(home, "config.json"), JSON.stringify({ url: `http://127.0.0.1:${port}`, owner: "k" }));
   const ran = await run(["status"], home);
   assert.equal(ran.code, 1);
-  assert.match(ran.stderr, new RegExp(`连不上中台 http://127\\.0\\.0\\.1:${port}`));
+  assert.match(ran.stderr, new RegExp(`Não foi possível conectar à central http://127\\.0\\.0\\.1:${port}`));
   assert.match(ran.stderr, /service install/);
 });

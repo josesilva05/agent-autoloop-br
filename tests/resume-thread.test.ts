@@ -1,10 +1,12 @@
-// A rule with resume takes a thread's next event on in the session its last round ended in. Failure cases: the next round
-// starts a new session anyway, or starts one again when its first answer got lost; a round queued while another runs misses
-// the session that round ended in; a round goes on in another subject's session; a rule without the option changes behaviour;
-// a session goes over to the agent the rule was moved to; an answer or a retry loses the session it carries to a newer one;
-// a round that is or may still be running has its session opened by a second process, by a new event, an answer or a due
-// check; one such round stops its thread resuming for ever; a session that keeps failing is gone back into by each new event,
-// ten tries each, though the card said it would start over; a due check hands the previous agent's session to a new agent.
+// Uma regra com resume pega o próximo evento de um assunto na sessão em que a última rodada dele terminou. Casos de falha:
+// a rodada seguinte abre uma sessão nova mesmo assim, ou abre de novo quando a primeira resposta se perdeu; uma rodada
+// enfileirada enquanto outra roda perde a sessão em que aquela terminou; uma rodada segue na sessão de outro objeto; uma
+// regra sem a opção muda de comportamento; uma sessão passa para o Agent para o qual a regra foi movida; uma resposta ou uma
+// nova tentativa perde a sessão que carrega para uma mais nova; uma rodada que está ou talvez ainda esteja em execução tem a
+// sessão aberta por um segundo processo, por um evento novo, uma resposta ou uma reverificação vencida; uma rodada assim
+// interrompe para sempre a retomada do assunto; uma sessão que não para de falhar é retomada a cada evento novo, dez
+// tentativas cada, embora o cartão dissesse que começaria do zero; uma reverificação vencida entrega a sessão do Agent
+// anterior a um Agent novo.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
@@ -20,7 +22,7 @@ const rules = parseRules(
     ...given,
     rules: given.rules
       .filter((rule: { when: { source?: string } }) => rule.when.source)
-      .map((rule: { name: string }) => (rule.name === "意见" ? { ...rule, resume: true } : rule)),
+      .map((rule: { name: string }) => (rule.name === "opiniões" ? { ...rule, resume: true } : rule)),
   }),
   0,
   "UTC",
@@ -42,14 +44,14 @@ function hub() {
   const message = (subject = "#1") => act("ingest", "app", { id: `e${++events}`, type: "feedback.new", subject });
   let claims = 0;
   const claim = () => act("claimNext", "w1", `c${++claims}`);
-  /** A round from its event to its end, as far as what the next round sees. */
+  /** Uma rodada do seu evento até o fim, até onde o que a rodada seguinte vê. */
   const round = (session: string | null, subject = "#1", outcome = "done") => {
     message(subject);
     const job = claim();
     act("finish", job.run, job.token, { outcome, ...(session && { session }) });
     return job;
   };
-  /** The worker keeps coming but stops mentioning what it has, until the hub can't say whether that's still running. */
+  /** O worker continua vindo mas para de mencionar o que tem em mãos, até a central não saber dizer se ainda está rodando. */
   const loseTrack = () => {
     for (let minute = 0; minute < 7; minute++) {
       now += MINUTE;
@@ -70,7 +72,7 @@ function hub() {
   };
 }
 
-test("a thread's next event goes on in the session its last round ended in, even if the claim's answer got lost", () => {
+test("o próximo evento de um assunto segue na sessão em que a última rodada dele terminou, mesmo se a resposta do claim se perdeu", () => {
   const it = hub();
   assert.equal(it.round("S").session, null);
   it.message();
@@ -80,14 +82,14 @@ test("a thread's next event goes on in the session its last round ended in, even
   it.check();
 });
 
-test("a round that found nothing to do has a session to go on in too", () => {
+test("uma rodada que não encontrou nada a fazer também tem uma sessão em que continuar", () => {
   const it = hub();
   it.round("S", "#1", "nothing");
   assert.equal(it.round("T").session, "S");
   assert.equal(it.round(null).session, "T");
 });
 
-test("what comes in while a round runs waits, and goes on in the session that round ends in", () => {
+test("o que chega enquanto uma rodada roda espera e segue na sessão em que aquela rodada termina", () => {
   const it = hub();
   it.message();
   const first = it.claim();
@@ -101,7 +103,7 @@ test("what comes in while a round runs waits, and goes on in the session that ro
   it.check();
 });
 
-test("another subject on the same rule has a session of its own", () => {
+test("outro objeto na mesma regra tem uma sessão só dele", () => {
   const it = hub();
   it.round("S", "#1");
   it.round("T", "#2");
@@ -110,7 +112,7 @@ test("another subject on the same rule has a session of its own", () => {
   assert.equal(it.round("S2", "#1").session, "S");
 });
 
-test("a rule without the option starts a new session each time", () => {
+test("uma regra sem a opção abre uma sessão nova a cada vez", () => {
   const it = hub();
   const alert = (id: string) => it.act("ingest", "ops", { id, type: "alert.raised", subject: "x" });
   for (const id of ["1", "2"]) {
@@ -123,43 +125,43 @@ test("a rule without the option starts a new session each time", () => {
   }
 });
 
-test("a session doesn't go over to the agent the rule was moved to, nor back to the first one after that", () => {
+test("uma sessão não passa para o Agent para o qual a regra foi movida, nem volta ao primeiro depois disso", () => {
   const it = hub();
   it.round("S");
   const moved = structuredClone(rules);
-  moved.rules.find((rule) => rule.name === "意见")!.to = "a3";
+  moved.rules.find((rule) => rule.name === "opiniões")!.to = "a3";
   it.act("rules", moved);
   assert.equal(it.round(null).session, null);
   it.act("rules", rules);
   assert.equal(it.round("T").session, null);
 });
 
-test("a due check retains its context but not another agent's session after reassignment", () => {
+test("uma reverificação vencida mantém o contexto, mas não a sessão de outro Agent depois da reatribuição", () => {
   const it = hub();
   it.message();
   const first = it.claim();
   it.act("finish", first.run, first.token, {
     outcome: "done",
     session: "claude-session",
-    later: [{ key: "复查", at: "2026-11-05T01:00:00Z", about: "核实上线" }],
+    later: [{ key: "reverificação", at: "2026-11-05T01:00:00Z", about: "verificar se foi para produção" }],
   });
   const moved = structuredClone(rules);
-  moved.rules.find((rule) => rule.name === "意见")!.to = "a2";
+  moved.rules.find((rule) => rule.name === "opiniões")!.to = "a2";
   it.act("rules", moved);
   it.pass(61);
   it.act("tick");
   const next = it.act("claimNext", "w2", "new-agent");
   assert.equal(next.agent.id, "a2");
   assert.equal(next.session, null);
-  assert.equal(next.context.timers[0].about, "核实上线");
+  assert.equal(next.context.timers[0].about, "verificar se foi para produção");
   it.check();
 });
 
-test("an answer goes back to the session it was asked in, not a newer one on the thread", () => {
+test("uma resposta volta à sessão em que foi perguntada, não a uma mais nova do assunto", () => {
   const it = hub();
   it.message();
   const asking = it.claim();
-  const ask = [{ title: "选哪个", text: "x", options: ["甲", "乙"] }];
+  const ask = [{ title: "qual escolher", text: "x", options: ["alfa", "beta"] }];
   it.act("finish", asking.run, asking.token, { outcome: "done", session: "S", ask });
   it.round("T");
   it.act("answer", it.cards().find((card) => card.kind === "ask")!.id, { choice: 0 });
@@ -169,20 +171,20 @@ test("an answer goes back to the session it was asked in, not a newer one on the
   it.check();
 });
 
-test("a round that goes wrong tries again in the session it went on in, whether or not it reported one", () => {
+test("uma rodada que dá errado tenta de novo na sessão em que seguia, tenha ou não reportado uma", () => {
   const it = hub();
   it.round("S");
   it.message();
   const first = it.claim();
   assert.equal(first.session, "S");
-  it.act("finish", first.run, first.token, { outcome: "failed", error: "没跑完" });
+  it.act("finish", first.run, first.token, { outcome: "failed", error: "não terminou" });
   it.pass(6);
   const second = it.claim();
   assert.equal(second.run, first.run);
   assert.equal(second.session, "S");
 });
 
-test("a session a round may still be running in isn't opened again; the thread goes on from the next round that ends", () => {
+test("uma sessão em que uma rodada talvez ainda esteja rodando não é aberta de novo; o assunto segue na próxima rodada que terminar", () => {
   const it = hub();
   it.round("S");
   it.message();
@@ -198,7 +200,7 @@ test("a session a round may still be running in isn't opened again; the thread g
   it.check();
 });
 
-test("a round it lost track of that moved to a session of its own leaves the old one free", () => {
+test("uma rodada perdida de vista que passou para uma sessão própria deixa a antiga livre", () => {
   const it = hub();
   it.round("S");
   it.message();
@@ -208,7 +210,7 @@ test("a round it lost track of that moved to a session of its own leaves the old
   assert.equal(it.round("U").session, "S");
 });
 
-test("a late result from a round it lost track of counts as how it ended", () => {
+test("um resultado atrasado de uma rodada perdida de vista conta como o jeito em que ela terminou", () => {
   const it = hub();
   it.round("S");
   it.message();
@@ -218,7 +220,7 @@ test("a late result from a round it lost track of counts as how it ended", () =>
   assert.equal(it.round("T").session, "S2");
 });
 
-test("a newer round ending in the session doesn't hide one that may still be running in it", () => {
+test("uma rodada mais nova terminando na sessão não esconde uma que talvez ainda esteja rodando nela", () => {
   const it = hub();
   it.round("S");
   it.message();
@@ -230,11 +232,11 @@ test("a newer round ending in the session doesn't hide one that may still be run
   assert.equal(it.round("T").session, null);
 });
 
-test("an answer doesn't open a session a round may still be running in, and still gets where it's going", () => {
+test("uma resposta não abre uma sessão em que uma rodada talvez ainda esteja rodando, e ainda chega aonde ia", () => {
   const it = hub();
   it.message();
   const asking = it.claim();
-  const ask = [{ title: "选哪个", text: "x", options: ["甲", "乙"] }];
+  const ask = [{ title: "qual escolher", text: "x", options: ["alfa", "beta"] }];
   it.act("finish", asking.run, asking.token, { outcome: "done", session: "S", ask });
   it.message();
   const lost = it.claim();
@@ -247,11 +249,11 @@ test("an answer doesn't open a session a round may still be running in, and stil
   it.check();
 });
 
-test("a due check doesn't open a session a round may still be running in, and still comes due", () => {
+test("uma reverificação vencida não abre uma sessão em que uma rodada talvez ainda esteja rodando, e ainda vence", () => {
   const it = hub();
   it.message();
   const asking = it.claim();
-  const later = [{ key: "复查", at: "2026-11-05T03:00:00.000Z", about: "看看好了没" }];
+  const later = [{ key: "reverificação", at: "2026-11-05T03:00:00.000Z", about: "ver se já terminou" }];
   it.act("finish", asking.run, asking.token, { outcome: "done", session: "S", later });
   it.message();
   const lost = it.claim();
@@ -265,14 +267,14 @@ test("a due check doesn't open a session a round may still be running in, and st
   it.check();
 });
 
-test("without the option, an answer doesn't open a session a round may still be running in either", () => {
+test("sem a opção, uma resposta também não abre uma sessão em que uma rodada talvez ainda esteja rodando", () => {
   const it = hub();
   const without = structuredClone(rules);
-  delete without.rules.find((rule) => rule.name === "意见")!.resume;
+  delete without.rules.find((rule) => rule.name === "opiniões")!.resume;
   it.act("rules", without);
   it.message();
   const asking = it.claim();
-  const ask = ["一", "二"].map((title) => ({ title, text: "x", options: ["甲", "乙"] }));
+  const ask = ["um", "dois"].map((title) => ({ title, text: "x", options: ["alfa", "beta"] }));
   it.act("finish", asking.run, asking.token, { outcome: "done", session: "S", ask });
   const [first, second] = it.cards().filter((card) => card.kind === "ask");
   it.act("answer", first.id, { choice: 0 });
@@ -284,20 +286,20 @@ test("without the option, an answer doesn't open a session a round may still be 
   assert.equal(it.claim().session, null);
 });
 
-test("a round still going keeps its session to itself when its rule's group changes under it", () => {
+test("uma rodada ainda em curso mantém a sessão para si quando o grupo da regra muda sob ela", () => {
   const it = hub();
   it.round("S");
   it.message();
   const going = it.claim();
   assert.equal(going.session, "S");
   const regrouped = structuredClone(rules);
-  regrouped.rules.find((rule) => rule.name === "意见")!.group = "新组";
+  regrouped.rules.find((rule) => rule.name === "opiniões")!.group = "grupo novo";
   it.act("rules", regrouped);
   it.message();
   assert.equal(it.claim().session, null);
 });
 
-test("a round stopped for failing too often starts its thread over, as the card says", () => {
+test("uma rodada interrompida por falhar vezes demais recomeça o assunto do zero, como o cartão diz", () => {
   const it = hub();
   it.round("S");
   it.message();
@@ -305,15 +307,15 @@ test("a round stopped for failing too often starts its thread over, as the card 
     it.pass(61);
     const job = it.claim();
     assert.equal(job.session, "S");
-    it.act("finish", job.run, job.token, { outcome: "failed", error: "太长了", session: "S" });
+    it.act("finish", job.run, job.token, { outcome: "failed", error: "longo demais", session: "S" });
   }
-  assert.ok(it.cards().some((card) => card.text.includes("从头开始")));
+  assert.ok(it.cards().some((card) => card.text.includes("começará do zero")));
   assert.equal(it.round("T").session, null);
   assert.equal(it.round("U").session, "T");
   it.check();
 });
 
-test("a round the owner stopped starts its thread over too", () => {
+test("uma rodada que o titular interrompeu também recomeça o assunto do zero", () => {
   const it = hub();
   it.round("S");
   it.message();

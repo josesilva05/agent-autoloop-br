@@ -1,10 +1,11 @@
-// The whole loop, with nothing faked but the agent: a real `agent-autoloop up` in its own process, from `init` on, through the
-// protocol as everything else speaks it. An event comes in; the agent runs and asks; the owner answers from the command line;
-// the agent goes on and finishes. Failure cases: init leaves something out; `up` doesn't start, or starts twice; the run isn't
-// started in its folder; the question doesn't reach the owner; `status` doesn't show what to do about it; the answer doesn't
-// wake the thread; the result isn't recorded; `try` hangs for an answer when nobody's at a terminal, as when an Agent runs it;
-// the user's Agents aren't told how to set it up, or something of the user's own is overwritten doing so, or a test install does it;
-// the question doesn't show on the desktop, shows again once answered, or a test run puts up a real notification.
+// O ciclo inteiro, sem nada falso além do Agent: um `agent-autoloop up` real em seu próprio processo, a partir do
+// `init`, pelo protocolo como tudo mais o fala. Um evento chega; o Agent roda e pergunta; o titular responde pela linha
+// de comando; o Agent segue em frente e termina. Casos de falha: o init deixa algo de fora; o `up` não inicia, ou inicia
+// duas vezes; a rodada não é iniciada na sua pasta; a pergunta não chega ao titular; o `status` não mostra o que fazer
+// sobre ela; a resposta não acorda o assunto; o resultado não é registrado; o `try` fica esperando uma resposta quando
+// não há ninguém num terminal, como quando um Agent o executa; os Agents do usuário não recebem as instruções de
+// configuração, ou algo do próprio usuário é sobrescrito ao fazê-lo, ou uma instalação de teste o faz; a pergunta não
+// aparece no desktop, aparece de novo depois de respondida, ou uma execução de teste dispara uma notificação real.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -26,7 +27,7 @@ import { after, test } from "node:test";
 
 const home = mkdtempSync(join(tmpdir(), "agent-autoloop-loop-"));
 const bin = join(import.meta.dirname, "..", "bin", "agent-autoloop.ts");
-// `init` turns on the desktop channel: these stand in for the commands that would really show something.
+// O `init` liga o canal de desktop: estes fazem o papel dos comandos que realmente mostrariam algo.
 const notifiers = join(home, "notifiers");
 const notified = join(home, "notified.txt");
 const notifications = () => (existsSync(notified) ? readFileSync(notified, "utf8").trim().split("\n") : []);
@@ -66,24 +67,24 @@ const script = join(home, "agent.sh");
 writeFileSync(
   script,
   `#!/bin/sh
-# Asks on its first go; with an answer in the context file, finishes. Asked to, it only says something.
+# Na primeira vez ele pergunta; com uma resposta no arquivo de contexto, ele conclui. Quando se pede, ele só diz alguma coisa.
 if grep -q 'card.answered' "$AGENT_AUTOLOOP_CONTEXT"; then
-  echo "你选了绿色，做完了"
+  echo "Você escolheu Verde, concluído"
 elif grep -q 'hello.notice' "$AGENT_AUTOLOOP_CONTEXT"; then
   cat <<'END'
-说了一声
+avisou
 
 ${fence}agent-autoloop
-{"notice":[{"title":"留意一下","text":"磁盘快满了","key":"disk"}]}
+{"notice":[{"title":"fique atento","text":"o disco está quase cheio","key":"disk"}]}
 ${fence}
 END
 else
   pwd > "${home}/where.txt"
   cat <<'END'
-问了一个问题
+fez uma pergunta
 
 ${fence}agent-autoloop
-{"ask":[{"title":"试跑：选一个颜色","text":"选哪个都行","options":["蓝色","绿色"],"recommend":1,"key":"color"}]}
+{"ask":[{"title":"Execução de teste: escolha uma cor","text":"tanto faz qual","options":["Azul","Verde"],"recommend":1,"key":"color"}]}
 ${fence}
 END
 fi
@@ -100,14 +101,14 @@ after(async () => {
   rmSync(home, { recursive: true, force: true });
 });
 
-test("one machine, one command: an event, a question, an answer, the work done", async () => {
+test("uma máquina, um comando: um evento, uma pergunta, uma resposta, o trabalho feito", async () => {
   const port = await freePort();
   const done = cli("init", "--no-service", "--command", script, "--port", String(port));
   assert.equal(done.status, 0, done.stderr);
-  assert.equal(statSync(join(home, "config.json")).mode & 0o777, 0o600, "its keys are private");
-  assert.equal(cli("init", "--no-service").status, 1, "a second init doesn't overwrite the first");
+  assert.equal(statSync(join(home, "config.json")).mode & 0o777, 0o600, "suas chaves são privadas");
+  assert.equal(cli("init", "--no-service").status, 1, "um segundo init não sobrescreve o primeiro");
   assert.equal(cli("check").status, 0);
-  // Point the starter rule at something this test owns.
+  // Aponte a regra inicial para algo que este teste controla.
   const rules = JSON.parse(readFileSync(join(home, "rules.json"), "utf8"));
   mkdirSync(join(home, "work"));
   rules.rules[0].cwd = join(home, "work");
@@ -116,8 +117,8 @@ test("one machine, one command: an event, a question, an answer, the work done",
 
   up = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "up"], { env, stdio: "ignore" });
   const url = `http://127.0.0.1:${port}`;
-  // `cli` holds up this process, so a connection kept open can time out at the hub unnoticed, and the next request on it
-  // is reset. Each request gets its own.
+  // O `cli` trava este processo, então uma conexão mantida aberta pode expirar na central sem que se note, e a próxima
+  // requisição nela é resetada. Cada requisição ganha a sua.
   const get = (path: string, headers: Record<string, string> = {}) =>
     fetch(`${url}${path}`, { headers: { connection: "close", ...headers } });
   for (let i = 0; i < 100; i++) {
@@ -133,11 +134,11 @@ test("one machine, one command: an event, a question, an answer, the work done",
   assert.equal((await (await get("/healthz")).json()).ok, true);
   const second = cli("up");
   assert.equal(second.status, 1);
-  assert.match(second.stderr, /已经在跑了/);
+  assert.match(second.stderr, /já está em execução/);
 
-  const emitted = cli("emit", "hello.world", "--subject", "x-1", "--summary", "你好");
+  const emitted = cli("emit", "hello.world", "--subject", "x-1", "--summary", "olá");
   assert.equal(emitted.status, 0, emitted.stderr);
-  assert.match(emitted.stdout, /交给了：试一下/);
+  assert.match(emitted.stdout, /Entregue a: experimente/);
 
   const config = JSON.parse(readFileSync(join(home, "config.json"), "utf8"));
   const state = async () => (await get("/v1/state", { authorization: `Bearer ${config.owner}` })).json();
@@ -147,67 +148,67 @@ test("one machine, one command: an event, a question, an answer, the work done",
       if (done(now)) return now;
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    assert.fail(`timed out: ${JSON.stringify((await state()).runs)}`);
+    assert.fail(`tempo esgotado: ${JSON.stringify((await state()).runs)}`);
   };
   const asking = await until((s) => s.cards.length === 1);
   const card = asking.cards[0];
-  assert.equal(card.title, "试跑：选一个颜色");
+  assert.equal(card.title, "Execução de teste: escolha uma cor");
   assert.ok(readFileSync(join(home, "where.txt"), "utf8").includes("work"));
   const waiting = cli("status");
-  assert.match(waiting.stdout, /等你 1/);
-  assert.match(waiting.stdout, new RegExp(`#${card.id} 试跑：选一个颜色`));
-  assert.match(waiting.stdout, /来源：试一下/);
-  assert.match(waiting.stdout, /2\. 绿色（推荐）/);
+  assert.match(waiting.stdout, /Aguardando você 1/);
+  assert.match(waiting.stdout, new RegExp(`#${card.id} Execução de teste: escolha uma cor`));
+  assert.match(waiting.stdout, /Fonte: experimente/);
+  assert.match(waiting.stdout, /2\. Verde \(recomendado\)/);
   assert.match(waiting.stdout, new RegExp(`agent-autoloop answer ${card.id} `));
 
-  // The notifier runs on its own, and a card answered before it gets there isn't shown at all.
+  // O notificador roda por conta própria, e um cartão respondido antes de ele chegar nem é mostrado.
   await until(() => notifications().length === 3);
-  assert.equal(cli("answer", String(card.id), "7").status, 1, "there's no seventh option");
+  assert.equal(cli("answer", String(card.id), "7").status, 1, "não existe uma sétima opção");
   const answered = cli("answer", String(card.id), "2");
   assert.equal(answered.status, 0, answered.stderr);
   const finished = await until((s) =>
-    s.runs.some((r: any) => r.summary === "你选了绿色，做完了" && r.state === "done"),
+    s.runs.some((r: any) => r.summary === "Você escolheu Verde, concluído" && r.state === "done"),
   );
   assert.equal(finished.cards.length, 0);
   assert.equal(finished.recentCards[0].state, "done");
-  assert.equal(finished.recentCards[0].result, "你选了绿色，做完了");
-  assert.equal(finished.recentCards[0].by, "本人");
+  assert.equal(finished.recentCards[0].result, "Você escolheu Verde, concluído");
+  assert.equal(finished.recentCards[0].by, "o titular");
   assert.deepEqual(
     notifications(),
-    ["试跑：选一个颜色", "来源：试一下", "运行 agent-autoloop status 查看"],
-    "once, saying which rule asked, and not for the answer",
+    ["Execução de teste: escolha uma cor", "Fonte: experimente", "Execute agent-autoloop status para ver"],
+    "uma vez só, dizendo que regra perguntou, e nenhuma para a resposta",
   );
-  assert.match(cli("answer", String(card.id), "1").stdout, /已经/);
+  assert.match(cli("answer", String(card.id), "1").stdout, /já foi tratado/);
 
   const status = cli("status");
-  assert.match(status.stdout, /等你 0 · 在跑 0 · 排队 0 · 今天做完 2/);
-  assert.match(status.stdout, /你选了绿色，做完了/);
+  assert.match(status.stdout, /Aguardando você 0 · Em execução 0 · Na fila 0 · Concluídas hoje 2/);
+  assert.match(status.stdout, /Você escolheu Verde, concluído/);
   const told = spawnSync(process.execPath, ["--disable-warning=ExperimentalWarning", bin, "tell", "note-1"], {
     env,
     encoding: "utf8",
-    input: "告诉你一声\n",
+    input: "Só para avisar\n",
   });
-  assert.match(told.stdout, /说了/);
-  assert.match(cli("status").stdout, /告诉你一声/);
+  assert.match(told.stdout, /Comunicado/);
+  assert.match(cli("status").stdout, /Só para avisar/);
   cli("emit", "hello.notice");
   const noticed = await until((s) => s.cards.some((c: any) => c.kind === "notice"));
   const notice = noticed.cards.find((c: any) => c.kind === "notice");
-  assert.match(cli("status").stdout, new RegExp(`处理完了：agent-autoloop answer ${notice.id}`));
-  assert.match(cli("answer", String(notice.id)).stdout, /结案了/);
+  assert.match(cli("status").stdout, new RegExp(`Resolvido: agent-autoloop answer ${notice.id}`));
+  assert.match(cli("answer", String(notice.id)).stdout, /Encerrado/);
 
-  // Nobody at a terminal, as when an Agent is installing it: `try` says what's being asked and how to answer, and doesn't wait.
+  // Ninguém num terminal, como quando um Agent está instalando: o `try` diz o que está sendo perguntado e como responder, e não espera.
   const tried = cli("try");
   assert.equal(tried.status, 0, tried.stderr);
-  assert.match(tried.stdout, /试跑：选一个颜色/);
+  assert.match(tried.stdout, /Execução de teste: escolha uma cor/);
   const id = /agent-autoloop answer (\d+) /.exec(tried.stdout)![1];
-  const resolved = cli("resolve", id, "不试了");
-  assert.match(resolved.stdout, /结案了/);
-  assert.equal((await state()).recentCards.find((c: any) => c.id === Number(id)).result, "不试了");
-  assert.equal(cli("resolve", id).status, 1, "a result has to be written");
+  const resolved = cli("resolve", id, "desisti de testar");
+  assert.match(resolved.stdout, /Encerrado/);
+  assert.equal((await state()).recentCards.find((c: any) => c.id === Number(id)).result, "desisti de testar");
+  assert.equal(cli("resolve", id).status, 1, "é preciso escrever um resultado");
   assert.equal((await get("/")).status, 404);
 });
 
-test("the user's Agents are shown how to set it up, when this is the install in its usual place, and nothing of theirs is touched", () => {
+test("os Agents do usuário recebem as instruções de configuração, quando esta é a instalação no lugar de costume, e nada deles é tocado", () => {
   const person = mkdtempSync(join(tmpdir(), "agent-autoloop-person-"));
   mkdirSync(join(person, ".claude"));
   mkdirSync(join(person, ".codex", "skills", "agent-autoloop"), { recursive: true });
@@ -228,5 +229,5 @@ test("the user's Agents are shown how to set it up, when this is the install in 
   assert.equal(readFileSync(join(person, ".codex", "skills", "agent-autoloop", "SKILL.md"), "utf8"), "their own");
   assert.ok(existsSync(join(person, ".agent-autoloop", "config.json")));
   rmSync(person, { recursive: true, force: true });
-  assert.ok(!existsSync(join(home, ".claude")), "an install somewhere else leaves the user's Agents alone");
+  assert.ok(!existsSync(join(home, ".claude")), "uma instalação em outro lugar deixa os Agents do usuário intactos");
 });

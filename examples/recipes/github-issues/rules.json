@@ -2,7 +2,7 @@
   "sources": { "github": { "name": "GitHub" } },
   "agents": {
     "watcher": {
-      "name": "看新 issue",
+      "name": "Ver novos issues",
       "worker": "mac-mini",
       "use": "command",
       "command": ["{cwd}/examples/watch-github-issues.sh", "owner/repo", "created:>=YYYY-MM-DDT00:00:00+08:00"]
@@ -11,7 +11,7 @@
   },
   "rules": [
     {
-      "name": "看新 issue",
+      "name": "Ver novos issues",
       "when": { "cron": "*/5 * * * *" },
       "to": "watcher",
       "cwd": "~/.agent-autoloop/app",
@@ -19,7 +19,7 @@
       "emits": { "source": "github", "types": ["issues.opened"] }
     },
     {
-      "name": "处理 issue",
+      "name": "Tratar issue",
       "when": { "source": "github", "types": ["issues.opened"] },
       "to": "agent",
       "cwd": "~/code/app",

@@ -1,10 +1,10 @@
-// What's different about ZCode. Failure cases: a level of access maps to the wrong permission mode, or a prompt runs in
-// yolo when the rule asked for read/edit; a resumed turn starts a new session instead of going on; the final JSON is
-// read line by line (it is one pretty-printed object) or a warning before it hides the answer; a still-running turn is
-// taken for an answer or a failure, or output cut off inside the object hangs the worker that reads it; an unknown
-// resumed session is retried in that same session forever instead of starting a new one; a run that exited without JSON
-// is taken for a success; the provider's tokens are dropped; a Windows .cjs bundle is run as if the platform could
-// execute it; the version check passes when the program is missing.
+// O que difere no ZCode. Casos de falha: um nível de acesso mapeia para o modo de permissão errado, ou um prompt roda em
+// yolo quando a regra pediu read/edit; uma rodada continuada abre uma sessão nova em vez de seguir; o JSON final é lido
+// linha a linha (ele é um objeto só, formatado) ou um aviso antes dele esconde a resposta; uma rodada ainda em andamento
+// é tomada por resposta ou por falha, ou uma saída cortada no meio do objeto trava o worker que a lê; uma sessão
+// continuada desconhecida é tentada de novo nessa mesma sessão para sempre em vez de abrir uma nova; uma execução que
+// saiu sem JSON é tomada por sucesso; os tokens do provedor são descartados; um bundle .cjs do Windows é rodado como se a
+// plataforma conseguisse executá-lo; o check de versão passa quando o programa está ausente.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +17,7 @@ const scratch = mkdtempSync(join(tmpdir(), "agent-autoloop-zcode-"));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const turn = {
-  prompt: "做这件事",
+  prompt: "faça isso",
   session: "new-id",
   resume: null,
   cwd: "/x",
@@ -27,7 +27,7 @@ const turn = {
 };
 const withProgram = (over: object = {}) => zcode.command({ ...turn, program: "/test/zcode", ...over });
 
-test("ZCode: access is its own mode, and a resumed turn goes on in its session", () => {
+test("ZCode: acesso é o modo dele próprio, e uma rodada continuada segue na sessão", () => {
   assert.deepEqual(withProgram(), [
     "/test/zcode",
     "--mode",
@@ -37,19 +37,19 @@ test("ZCode: access is its own mode, and a resumed turn goes on in its session",
     "--no-color",
     "--json",
     "-p",
-    "做这件事",
+    "faça isso",
   ]);
   assert.equal(withProgram({ access: "read" })[2], "plan");
   assert.equal(withProgram({ access: "full" })[2], "yolo");
-  assert.deepEqual(withProgram({ resume: "sess_1" }).slice(-4), ["--resume", "sess_1", "-p", "做这件事"]);
-  assert.ok(!withProgram().includes("--resume"), "a new session takes no id: ZCode makes its own and reports it");
+  assert.deepEqual(withProgram({ resume: "sess_1" }).slice(-4), ["--resume", "sess_1", "-p", "faça isso"]);
+  assert.ok(!withProgram().includes("--resume"), "uma sessão nova não recebe id: o ZCode cria o seu e o reporta");
   assert.ok(
     !withProgram({ model: "m", effort: "high" }).includes("m"),
-    "ZCode takes model and effort from its own settings",
+    "o ZCode tira modelo e esforço das próprias configurações",
   );
 });
 
-test("ZCode: a .cjs bundle is started by node, not executed as if the platform could", () => {
+test("ZCode: um bundle .cjs é iniciado pelo node, não executado como se a plataforma conseguisse", () => {
   assert.deepEqual(zcode.command({ ...turn, program: "/opt/zcode.cjs" }).slice(0, 2), [
     process.execPath,
     "/opt/zcode.cjs",
@@ -62,7 +62,7 @@ const answer = (over: object = {}) =>
       sessionId: "sess_1",
       traceId: "trace-1",
       turnId: "turn-1",
-      response: "好了",
+      response: "pronto",
       usage: {
         source: "provider",
         modelRequestCount: 1,
@@ -81,43 +81,43 @@ const answer = (over: object = {}) =>
     2,
   );
 
-test("ZCode: the final JSON's response is the answer, with the session and the provider's tokens", () => {
+test("ZCode: o response do JSON final é a resposta, com a sessão e os tokens do provedor", () => {
   assert.deepEqual(zcode.read(answer(), 0, ""), {
-    text: "好了",
+    text: "pronto",
     session: "sess_1",
     usage: { input: 10, output: 2, cached: 5 },
     started: true,
     finished: true,
   });
-  // A warning printed before the object must not hide it.
-  assert.equal(zcode.read(`warning: provider said something\n${answer()}`, 0, "").text, "好了");
+  // Um aviso impresso antes do objeto não pode escondê-lo.
+  assert.equal(zcode.read(`warning: provider said something\n${answer()}`, 0, "").text, "pronto");
 });
 
-test("ZCode: still running is not an answer and not a failure, and counts as started", () => {
+test("ZCode: ainda em andamento não é resposta nem falha, e conta como iniciado", () => {
   assert.deepEqual(zcode.read("", null, ""), { started: true });
   assert.deepEqual(zcode.read('{"sessionId":"sess_1"', null, ""), { started: true });
-  // Cut off after a brace inside the answer: no object yet, and reading it must return.
-  assert.deepEqual(zcode.read('{"sessionId":"sess_1","response":"用 {x} 写', null, ""), { started: true });
+  // Cortado depois de uma chave dentro da resposta: nenhum objeto ainda, e a leitura precisa retornar.
+  assert.deepEqual(zcode.read('{"sessionId":"sess_1","response":"escrevendo com {x}', null, ""), { started: true });
 });
 
-test("ZCode: an unknown resumed session may start a new one; another failure stays in this one", () => {
+test("ZCode: uma sessão continuada desconhecida pode abrir uma nova; outra falha fica nesta", () => {
   const missing = zcode.read("", 1, "Error: Session not found: sess_0 (traceId: x)\nstack");
   assert.equal(missing.started, false);
   assert.match(missing.error!, /Session not found/);
   assert.deepEqual(zcode.read("", 1, "boom"), { started: true, error: "boom" });
-  assert.deepEqual(zcode.read("", 0, ""), { started: true, error: "ZCode 没有完成并留下实际结果" });
+  assert.deepEqual(zcode.read("", 0, ""), { started: true, error: "o ZCode não concluiu nem deixou um resultado" });
 });
 
-test("ZCode: a finished run without a response is not a result", () => {
+test("ZCode: uma execução concluída sem response não é um resultado", () => {
   const reading = zcode.read(answer({ response: "  " }), 0, "");
   assert.equal(reading.text, undefined);
   assert.equal(reading.started, true);
-  assert.equal(reading.error, "ZCode 没有完成并留下实际结果");
+  assert.equal(reading.error, "o ZCode não concluiu nem deixou um resultado");
 });
 
-test("ZCode: check runs version, and says what to do when the program is missing", () => {
+test("ZCode: o check roda version, e diz o que fazer quando o programa está ausente", () => {
   const fake = join(scratch, "zcode.cjs");
   writeFileSync(fake, 'if (process.argv[2] === "version") console.log("0.17.1"); else process.exit(1);');
   assert.equal(zcode.check!(fake), null);
-  assert.match(zcode.check!(join(scratch, "missing.cjs"))!, /^ZCode 用不了：/);
+  assert.match(zcode.check!(join(scratch, "missing.cjs"))!, /^ZCode não está utilizável: /);
 });

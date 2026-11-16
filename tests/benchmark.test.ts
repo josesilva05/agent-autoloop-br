@@ -1,7 +1,7 @@
-// Failure modes: completed or keep-alive requests masquerade as concurrent long polls; a failed response counts as success;
-// cron work is claimed before the measured event, leaving the readiness wait stuck and invalidating dispatch timing;
-// a percentile off by one, so a slow outlier is hidden or a p99 from a few samples reads low; a slow case left with no
-// samples, or one that runs on past its budget and lets the polls it depends on lapse.
+// Modos de falha: requisições concluídas ou de keep-alive se passando por long polls concorrentes; resposta com falha contada
+// como sucesso; trabalho de cron reivindicado antes do evento medido, travando a espera de prontidão e invalidando a medição do
+// despacho; um percentil deslocado em um, escondendo um outlier lento ou fazendo um p99 de poucas amostras parecer baixo; um caso
+// lento sem nenhuma amostra, ou que roda além do orçamento e deixa expirar os polls de que depende.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -12,14 +12,14 @@ import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
 import { checkPolls, observe, dispatchLatency, percentile, timed } from "../scripts/metrics.ts";
 
-test("a thousand completed requests cannot stand in for a thousand waiting ones", () => {
+test("mil requisições concluídas não podem substituir mil requisições aguardando", () => {
   assert.throws(() => checkPolls({ active: 0, peak: 1 }, 1000), /1000/);
   assert.throws(() => checkPolls({ active: 999, peak: 999 }, 1000), /1000/);
   assert.throws(() => checkPolls({ active: 1000, peak: 1000 }, 999), /1000/);
   checkPolls({ active: 1000, peak: 1000 }, 1000);
 });
 
-test("a percentile is the sample that share stays at or under, and a few samples can't hide the slowest", () => {
+test("um percentil é a amostra até onde a parcela fica, e poucas amostras não escondem a mais lenta", () => {
   const hundred = Array.from({ length: 100 }, (_, i) => i + 1).reverse();
   assert.equal(percentile(hundred, 0.5), 50);
   assert.equal(percentile(hundred, 0.99), 99);
@@ -28,13 +28,13 @@ test("a percentile is the sample that share stays at or under, and a few samples
   assert.equal(percentile([7], 0.99), 7);
 });
 
-test("timing stops at the count or the budget, and always takes one sample", async () => {
+test("a medição para na contagem ou no orçamento, e sempre coleta uma amostra", async () => {
   const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const seen: number[] = [];
   assert.equal((await timed(3, 60_000, async (i) => void seen.push(i))).length, 3);
   assert.deepEqual(seen, [0, 1, 2]);
   assert.equal((await timed(100, 0, () => pause(1))).length, 1);
-  // A busy machine can stretch any pause past the whole budget, so how many fit says nothing. None may start past it.
+  // Uma máquina ocupada pode esticar qualquer pausa além do orçamento inteiro, então quantas cabem não diz nada. Nenhuma pode começar depois dele.
   const slow = await timed(1000, 30, () => pause(10));
   assert.ok(slow.length < 1000, `${slow.length}`);
   const beforeTheLast = slow.slice(0, -1).reduce((total, ms) => total + ms, 0);
@@ -42,14 +42,14 @@ test("timing stops at the count or the budget, and always takes one sample", asy
   assert.ok(slow.every((ms) => ms >= 5));
 });
 
-test("an early request rejection stays observable until the batch is consumed", async () => {
-  const failure = new Error("连接断了");
+test("uma rejeição antecipada de requisição continua observável até o lote ser consumido", async () => {
+  const failure = new Error("a conexão caiu");
   const pending = observe(Promise.reject(failure));
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(await pending, { status: "rejected", reason: failure });
 });
 
-test("dispatch latency includes waking an already waiting worker", async () => {
+test("a latência de despacho inclui acordar um worker que já estava aguardando", async () => {
   let waiting = false;
   let finish: (value: unknown) => void = () => {};
   const request = async (path: string) => {
@@ -68,7 +68,7 @@ test("dispatch latency includes waking an already waiting worker", async () => {
   assert.equal(measured.job.run, 1);
 });
 
-test("the benchmark server has no scheduled work competing with measured events", async () => {
+test("o servidor de benchmark não tem trabalho agendado concorrendo com os eventos medidos", async () => {
   const home = mkdtempSync(join(tmpdir(), "agent-autoloop-benchmark-setup-"));
   const child = spawn(
     process.execPath,
@@ -87,7 +87,7 @@ test("the benchmark server has no scheduled work competing with measured events"
     const db = new DatabaseSync(join(home, "hub.db"), { readOnly: true });
     try {
       const row = db.prepare("SELECT count(*) AS count FROM projections WHERE collection='schedules'").get()!;
-      assert.equal(row.count, 0, "a cron tick can finish a work poll before the timed event");
+      assert.equal(row.count, 0, "um tick de cron pode concluir um work poll antes do evento medido");
     } finally {
       db.close();
     }

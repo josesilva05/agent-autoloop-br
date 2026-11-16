@@ -1,5 +1,5 @@
-// `agent-autoloop uninstall`: takes away what the install put on this computer and nothing else. A link is ours only if it really
-// leads to this program: someone else's agent-autoloop, or a folder of their own by that name, stays where it is.
+// `agent-autoloop uninstall`: retira o que a instalação colocou neste computador e nada mais. Um link só é nosso se realmente
+// levar a este programa: o agent-autoloop de outra pessoa, ou uma pasta dela com esse nome, fica onde está.
 import { existsSync, lstatSync, realpathSync, rmSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
@@ -14,11 +14,11 @@ function removeLink(link: string, target: string) {
   try {
     if (realpathSync(link) !== realpathSync(target)) return;
   } catch {
-    return; // It leads nowhere, so not here.
+    return; // Não leva a lugar nenhum, então não veio daqui.
   }
-  // Not rmSync: Node 25.1 refuses it for a link that leads to a folder.
+  // Não é rmSync: o Node 25.1 o recusa para um link que leva a uma pasta.
   unlinkSync(link);
-  console.log(`删掉了 ${link}`);
+  console.log(`Removido: ${link}`);
 }
 
 function removeLinks() {
@@ -30,12 +30,15 @@ function removeLinks() {
   for (const agent of [".claude", ".codex"]) removeLink(path.join(homedir(), agent, "skills", "agent-autoloop"), skill);
 }
 
-/** Confirmation is about removing the program; data is never part of this command. */
+/** A confirmação é sobre remover o programa; os dados nunca fazem parte deste comando. */
 export async function uninstall(yes: boolean, ask: ((question: string) => Promise<string>) | null) {
   if (!yes) {
-    if (!ask) throw new Error("运行 agent-autoloop uninstall --yes 卸载程序，规则、密钥和记录会保留。");
-    if (!/^y(es)?$/i.test((await ask("卸载程序并保留数据？[y/N] ")).trim())) {
-      console.log("没有卸载。");
+    if (!ask)
+      throw new Error(
+        "Execute agent-autoloop uninstall --yes para desinstalar o programa; regras, chaves e registros serão preservados.",
+      );
+    if (!/^y(es)?$/i.test((await ask("Desinstalar o programa e preservar os dados? [y/N] ")).trim())) {
+      console.log("Nada foi desinstalado.");
       return;
     }
   }
@@ -51,5 +54,9 @@ export async function uninstall(yes: boolean, ask: ((question: string) => Promis
     }
     rmSync(installedApp, { recursive: true });
   }
-  console.log(existsSync(HOME) ? `卸载好了。规则、密钥和记录还留在 ${HOME}。` : "卸载好了。");
+  console.log(
+    existsSync(HOME)
+      ? `Desinstalação concluída. Regras, chaves e registros continuam em ${HOME}.`
+      : "Desinstalação concluída.",
+  );
 }

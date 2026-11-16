@@ -1,5 +1,5 @@
-// Homebrew keeps a version's files under `Cellar`, and deletes that directory at the next upgrade; `opt` beside it is
-// the link that follows. A program named by its Cellar path dies the next time the machine is upgraded.
+// O Homebrew guarda os arquivos de uma versão sob `Cellar` e apaga esse diretório na atualização seguinte; o `opt` ao
+// lado é o link que a acompanha. Um programa chamado pelo caminho do Cellar morre na próxima atualização da máquina.
 import { realpathSync } from "node:fs";
 
 const CELLARS = ["/opt/homebrew", "/usr/local"];
@@ -15,19 +15,19 @@ const resolve = (path: string) => {
 };
 
 /**
- * The path that keeps working across an upgrade: `opt` when it names this executable, and also when this executable's
- * own directory is already gone and `opt` still resolves. A long-running process outlives the version directory it
- * started from, so the children it starts need the link, not that path.
+ * O caminho que continua valendo depois de uma atualização: `opt` quando ele aponta para este executável, e também
+ * quando o diretório deste executável já sumiu e o `opt` ainda resolve. Um processo de vida longa sobrevive ao
+ * diretório de versão de onde partiu, então os filhos que ele inicia precisam do link, não daquele caminho.
  */
 export function stablePath(executable: string, cellars = CELLARS) {
   const cellar = new RegExp(`^(${cellars.map(escape).join("|")})/Cellar/([^/]+)/[^/]+/bin/([^/]+)$`).exec(executable);
   if (!cellar) return executable;
   const opt = `${cellar[1]}/opt/${cellar[2]}/bin/${cellar[3]}`;
   const linked = resolve(opt);
-  // No link, or one that goes nowhere: there is nothing better than what is already running.
+  // Sem link, ou um link que não leva a nada: não há opção melhor do que o que já está em execução.
   if (!linked) return executable;
   const current = resolve(executable);
-  // Deleted by an upgrade while this process kept running: only the link can start anything now.
+  // Apagado por uma atualização enquanto este processo continuava rodando: agora só o link consegue iniciar algo.
   if (!current) return opt;
   return current === linked ? opt : executable;
 }

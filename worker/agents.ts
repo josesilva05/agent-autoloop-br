@@ -1,7 +1,7 @@
-// An agent is a process: give it a prompt, read its last message from what it prints. An adapter is what's different
-// about one: its command line and how to read its output. `plugins/<use>/agent.ts`, in this install's folder first,
-// then the ones that ship. Anything with a print mode needs no file at all: `use: "command"` with a command line in
-// rules.json.
+// Um Agent é um processo: dê um prompt a ele e leia sua última mensagem no que ele imprime. Um adapter é o que difere
+// de um para outro: sua linha de comando e como ler a saída dele. `plugins/<use>/agent.ts`, primeiro na pasta desta
+// instalação e depois nos que já vêm com ela. Qualquer coisa com um modo de impressão não precisa de arquivo nenhum:
+// `use: "command"` com uma linha de comando no rules.json.
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { findOnPath } from "../host/command.ts";
@@ -10,7 +10,7 @@ import type { Usage } from "../protocol/validate.ts";
 
 export type { Usage } from "../protocol/validate.ts";
 export type Access = "read" | "edit" | "full";
-/** One launch of an agent. `resume` is the session to go on in, if any; otherwise `session` is a new id it may use. */
+/** Uma inicialização de um Agent. `resume` é a sessão na qual continuar, se houver; caso contrário `session` é um id novo que ele pode usar. */
 export type Turn = {
   prompt: string;
   session: string;
@@ -18,11 +18,11 @@ export type Turn = {
   cwd: string;
   model?: string;
   effort?: string;
-  /** The service tier to run at, in the agent program's own words; plugins whose program has none ignore it. */
+  /** A faixa de serviço em que rodar, com a denominação do próprio programa do Agent; plugins cujo programa não tem faixa a ignoram. */
   tier?: string;
   access: Access;
   command?: string[];
-  /** The program a built-in plugin starts instead of the one it finds: a wrapper that sets things up and runs it. */
+  /** O programa que um plugin integrado inicia no lugar do que ele encontra: um wrapper que prepara tudo e o executa. */
   program?: string;
   contextFile: string;
   folder: string;
@@ -30,24 +30,24 @@ export type Turn = {
 export type Reading = {
   text?: string;
   session?: string;
-  /** What this launch used. */
+  /** O que esta inicialização usou. */
   usage?: Usage;
-  /** What the session has used so far, for amounts the program only gives that way. */
+  /** O que a sessão usou até agora, para os valores que o programa só dá assim. */
   sessionUsage?: Usage;
   error?: string;
-  /** Its turn is over, though it may not have exited. */
+  /** O turno dele acabou, ainda que ele possa não ter saído. */
   finished?: boolean;
-  /** It has this turn's prompt, in a conversation that's there. From here on the work may be half done. */
+  /** Ele tem o prompt deste turno, numa conversa que existe. Daqui em diante o trabalho pode estar pela metade. */
   started?: boolean;
 };
 export type Adapter = {
-  /** Its command line for this turn. */
+  /** A linha de comando dele para este turno. */
   command(turn: Turn): string[];
-  /** What its output says so far. `code` is null while it's still running or when it died without saying. */
+  /** O que a saída dele diz até agora. `code` é null enquanto ele ainda roda, ou quando morreu sem dizer. */
   read(stdout: string, code: number | null, stderr: string): Reading;
-  /** Where a person can open this session. */
+  /** Onde uma pessoa pode abrir esta sessão. */
   link?(session: string): string;
-  /** Whether it's installed and signed in, as `program` if its rules name one: what's wrong, in words a person can act on, or nothing. */
+  /** Se está instalado e com login feito, como `program` se suas regras nomeiam um: o que há de errado, em palavras com que uma pessoa possa agir, ou nada. */
   check?(program?: string): string | null;
 };
 
@@ -61,11 +61,11 @@ export async function adapterFor(use: string): Promise<Adapter> {
   return adapter;
 }
 
-// Only hits are kept: an update can leave a program missing for a moment (`npm install -g` removes the old one
-// first), and a kept miss would fail every later run until the worker restarts.
+// Só os acertos são guardados: uma atualização pode deixar um programa ausente por um instante (`npm install -g` remove
+// primeiro o antigo), e um erro guardado faria toda rodada seguinte falhar até o worker reiniciar.
 const found = new Map<string, string>();
 
-/** Where a program is: on the login shell's PATH (launchd and systemd start with a bare one), or in one of these. */
+/** Onde um programa está: no PATH do shell de login (launchd e systemd começam com um PATH cru), ou em um destes. */
 export function findProgram(name: string, elsewhere: () => string[] = () => []) {
   let program = found.get(name);
   if (!program) {
@@ -82,11 +82,11 @@ export function findProgram(name: string, elsewhere: () => string[] = () => []) 
       } catch {}
     }
     program = onPath ?? elsewhere().find(existsSync);
-    if (!program) throw new Error(`找不到 ${name}：先装好并登录`);
+    if (!program) throw new Error(`Não encontrei ${name}: instale-o e faça login primeiro`);
     found.set(name, program);
   }
   return program;
 }
 
-/** The end of some output, for saying why something failed. */
+/** O fim de alguma saída, para dizer por que algo falhou. */
 export const tail = (text: string, length = 300) => text.trim().slice(-length);

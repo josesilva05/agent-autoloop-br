@@ -1,9 +1,9 @@
-// Failure modes: why omits the rule or answer; a stream drops facts at reconnect, exposes key hashes, or permits a source;
-// a receipt's rejected actions change on replay; a view write failing after append leaves a partial committed receipt.
-// Retrying after a rules edit must keep both versions visible in why.
-// Slow stream readers must not load or buffer the entire historical log.
-// An already open stream must stop on key revocation and detach its abort listener when cancelled.
-// Closing an offline card during heartbeat must wake a channel already polling for that update.
+// Modos de falha: why omite a regra ou a resposta; um stream perde fatos ao reconectar, expõe hashes de chave ou aceita
+// uma fonte; as ações rejeitadas de um recibo mudam na reexecução; uma escrita de view que falha depois do acréscimo
+// deixa um recibo commitado só em parte. Tentar de novo após editar as regras deve manter as duas versões visíveis em why.
+// Leitores lentos de stream não devem carregar nem bufferizar o log histórico inteiro.
+// Um stream já aberto deve parar na revogação da chave e desanexar seu listener de aborto ao ser cancelado.
+// Fechar um cartão offline durante o heartbeat deve acordar um canal que já consulta por essa atualização.
 import assert from "node:assert/strict";
 import { rows, snapshot } from "../kernel/evolve.ts";
 import { after, test } from "node:test";
@@ -23,20 +23,20 @@ const call = (path: string, key = owner, body?: unknown) =>
     }),
   );
 
-test("web-standard handler streams facts with cursors and traces an entire run", async () => {
+test("handler no padrão web transmite fatos com cursores e rastreia uma rodada inteira", async () => {
   assert.equal((await call("/v1/stream", source)).status, 401);
   const before = hub.getView().seq;
   hub.ingest("app", { id: "trace", type: "feedback.new" });
   const job = hub.claimNext("w1", "trace")!;
   const result = {
     outcome: "done",
-    resolve: [{ card: 999, reason: "越界" }],
-    ask: [{ title: "选一个", text: "内容", options: ["甲", "乙"] }],
+    resolve: [{ card: 999, reason: "fora dos limites" }],
+    ask: [{ title: "escolha uma", text: "conteúdo", options: ["alfa", "beta"] }],
   };
   const first = hub.finish(job.run, job.token, result);
   assert.deepEqual(hub.finish(job.run, job.token, result).rejected, first.rejected);
   const card = rows(hub.getView(), "cards").find((c) => c.run_id === job.run)!;
-  hub.answer(card.id, { choice: 0, by: "本人" });
+  hub.answer(card.id, { choice: 0, by: "titular" });
   const facts = await (await call(`/v1/runs/${job.run}/why`)).json();
   for (const type of ["rules", "ingest", "claimNext", "finish", "answer"])
     assert.ok(
@@ -52,7 +52,7 @@ test("web-standard handler streams facts with cursors and traces an entire run",
   await reader.cancel();
   assert.equal((await call("/v1/stream?after=-1")).status, 400);
 });
-test("a projection failure rolls back both the receipt and the log", () => {
+test("uma falha de projeção reverte tanto o recibo quanto o log", () => {
   hub.ingest("app", { id: "atomic", type: "feedback.new", subject: "atomic" });
   const job = hub.claimNext("w1", "atomic")!;
   const before = snapshot(hub.getView());
@@ -60,7 +60,7 @@ test("a projection failure rolls back both the receipt and the log", () => {
     "CREATE TEMP TRIGGER reject_card BEFORE INSERT ON projections WHEN NEW.collection='cards' BEGIN SELECT RAISE(ABORT,'disk failure'); END;",
   );
   assert.throws(
-    () => hub.finish(job.run, job.token, { outcome: "done", notice: [{ title: "通知", text: "内容" }] }),
+    () => hub.finish(job.run, job.token, { outcome: "done", notice: [{ title: "Notificação", text: "conteúdo" }] }),
     /disk failure/,
   );
   hub.db.exec("DROP TRIGGER reject_card");
@@ -68,14 +68,14 @@ test("a projection failure rolls back both the receipt and the log", () => {
   assert.equal(hub.getView().get("runs", job.run)!.state, "claimed");
 });
 
-test("why retains each rules version across failed and retried attempts", () => {
+test("why retém cada versão das regras entre tentativas que falharam e as repetidas", () => {
   const before = hub.rules;
   const now = Date.now();
   hub.ingest("ops", { id: "versions", type: "alert.raised" }, now);
   const first = hub.claimNext("w2", "versions", now)!;
   hub.finish(first.run, first.token, { outcome: "failed" }, now + 1);
   const changed = structuredClone(before);
-  changed.rules[1].prompt = "变更后的规则";
+  changed.rules[1].prompt = "regra alterada";
   hub.execute("rules", [changed], now + 2);
   const second = hub.claimNext("w2", "retried", now + 300001)!;
   assert.equal(second.run, first.run);
@@ -84,7 +84,7 @@ test("why retains each rules version across failed and retried attempts", () => 
   hub.execute("rules", [before], now + 300002);
 });
 
-test("revoking an owner key closes its active stream before sending another fact", async () => {
+test("revogar uma chave do titular fecha o seu stream ativo antes de enviar outro fato", async () => {
   const key = hub.addKey("owner", "temporary");
   const response = await call(`/v1/stream?after=${hub.getView().seq}`, key);
   const reader = response.body!.getReader();
@@ -93,7 +93,7 @@ test("revoking an owner key closes its active stream before sending another fact
   await reader.cancel();
 });
 
-test("cancelling a stream detaches the request abort listener", async () => {
+test("cancelar um stream desanexa o listener de aborto da requisição", async () => {
   const abort = new AbortController();
   const response = await runtime.handle(
     new Request(`http://local/v1/stream?after=${hub.getView().seq}`, {
@@ -106,9 +106,9 @@ test("cancelling a stream detaches the request abort listener", async () => {
   await new Promise((resolve) => setImmediate(resolve));
 });
 
-test("heartbeat card changes wake pending channel polls", async () => {
+test("mudanças de cartão no heartbeat acordam consultas de canal pendentes", async () => {
   const channel = hub.addKey("channel", "chat");
-  const id = hub.createCard({ key: "worker:w2:offline:test", kind: "notice", title: "离线", text: "内容" }).card;
+  const id = hub.createCard({ key: "worker:w2:offline:test", kind: "notice", title: "Offline", text: "conteúdo" }).card;
   for (;;) {
     const card = hub.nextCard("chat");
     if (!card) break;
@@ -133,7 +133,7 @@ test("heartbeat card changes wake pending channel polls", async () => {
   }
 });
 
-test("a slow subscriber reads only the next fact, not the entire history", async () => {
+test("um assinante lento lê só o próximo fato, não o histórico inteiro", async () => {
   const before = hub.getView().seq;
   for (let n = 0; n < 100; n++) hub.ingest("app", { id: `stream-bounded-${n}`, type: "unmatched" });
   const prepare = hub.db.prepare.bind(hub.db);
@@ -165,7 +165,7 @@ test("a slow subscriber reads only the next fact, not the entire history", async
   try {
     response = await call(`/v1/stream?after=${before}`);
     await new Promise((resolve) => setImmediate(resolve));
-    assert.ok(read <= 2, `buffered ${read} facts before the subscriber read any`);
+    assert.ok(read <= 2, `bufferizou ${read} fatos antes de o assinante ler qualquer um`);
     const reader = response.body!.getReader();
     assert.match(new TextDecoder().decode((await reader.read()).value), new RegExp(`id: ${before + 1}\\n`));
     await reader.cancel();

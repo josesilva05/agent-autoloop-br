@@ -1,6 +1,6 @@
-// GitLab webhooks, checked against the project's secret token and turned into events: `merge_request.open`,
-// `issue.close`, `push`, `note` and so on, the object's number as the subject. In rules.json:
-//   "sources": { "gitlab": { "name": "GitLab", "adapter": "gitlab" } }, and AGENT_AUTOLOOP_SECRET_GITLAB in secrets.env.
+// Webhooks do GitLab, conferidos contra o token de segredo do projeto e convertidos em eventos: `merge_request.open`,
+// `issue.close`, `push`, `note` e assim por diante, com o número do objeto como subject. No rules.json:
+//   "sources": { "gitlab": { "name": "GitLab", "adapter": "gitlab" } }, e AGENT_AUTOLOOP_SECRET_GITLAB no secrets.env.
 import { createHash, timingSafeEqual } from "node:crypto";
 
 type Input = { headers: Record<string, string | string[] | undefined>; body: string; secret: string };
@@ -19,7 +19,7 @@ export default function gitlab({ headers, body, secret }: Input) {
   const number = object.iid ? `#${object.iid}` : "";
   return [
     {
-      // GitLab before 17.4 has no such header. The body is the same on a retry and differs between events.
+      // O GitLab anterior ao 17.4 não tem este cabeçalho. O corpo é o mesmo numa nova tentativa e difere entre eventos.
       id: String(headers["idempotency-key"] ?? createHash("sha256").update(body).digest("hex")),
       type,
       subject: `${repo}${number}`.replace(/[^A-Za-z0-9#._:/@-]/g, "-").slice(0, 100),

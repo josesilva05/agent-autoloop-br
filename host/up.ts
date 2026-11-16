@@ -1,6 +1,6 @@
-// Everything this machine does, in one process: the hub, the worker and its channels, whichever config.json says. They
-// speak the same protocol to each other here as they would across the world. A stop leaves agents running: they're
-// detached, and the worker finds them again when it's back.
+// Tudo o que esta máquina faz, num processo só: a central, o worker e seus canais, conforme o config.json diga. Aqui eles
+// falam entre si o mesmo protocolo que falariam através do mundo. Parar deixa os Agents em execução: eles são desanexados,
+// e o worker os encontra de novo quando voltar.
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { loadChannel } from "./channels.ts";
@@ -13,11 +13,11 @@ import { createWorker } from "../worker/worker.ts";
 
 const log = (who: string) => (line: string) => console.log(`${new Date().toISOString()} [${who}] ${line}`);
 
-/** Only one of these per install: a second would take work beside the first. */
+/** Só um destes por instalação: um segundo pegaria trabalho ao lado do primeiro. */
 function lock() {
   const running = runningUp();
-  // Its own number is what was left behind: pid 1 every time in a container, and a matter of luck after a restart.
-  if (running !== null && running !== process.pid) throw new Error(`已经在跑了（进程 ${running}）`);
+  // O próprio número é o que ficou para trás: pid 1 toda vez num contêiner, e uma questão de sorte depois de reiniciar.
+  if (running !== null && running !== process.pid) throw new Error(`já está em execução (processo ${running})`);
   const file = path.join(HOME, "up.pid");
   writeFileSync(file, String(process.pid));
   return () => {
@@ -27,21 +27,21 @@ function lock() {
   };
 }
 
-/** secrets.env: what an adapter needs to check a webhook, kept out of rules.json. */
+/** secrets.env: o que um adaptador precisa para conferir um webhook, mantido fora do rules.json. */
 function loadSecrets() {
   const file = path.join(HOME, "secrets.env");
   if (existsSync(file)) process.loadEnvFile(file);
 }
 
-/** What runs beside the hub is started again however it stops, after a pause: one that returned at once would hog it. */
+/** O que roda ao lado da central é iniciado de novo seja como for que pare, depois de uma pausa: um que retornasse na hora a monopolizaria. */
 async function keepRunning(say: (line: string) => void, run: () => Promise<unknown>, signal: AbortSignal) {
   while (!signal.aborted) {
     try {
       await run();
       if (signal.aborted) return;
-      say("stopped; starting again in 30 seconds");
+      say("parou; iniciando de novo em 30 segundos");
     } catch (error) {
-      say(`stopped: ${error}; starting again in 30 seconds`);
+      say(`parou: ${error}; iniciando de novo em 30 segundos`);
     }
     await new Promise((resolve) => setTimeout(resolve, 30_000));
   }
@@ -63,12 +63,12 @@ export async function up() {
   const config = readConfig();
   mkdirSync(HOME, { recursive: true, mode: 0o700 });
   const unlock = lock();
-  // Plugins run in this process, and an `error` event or a promise nobody handled is theirs to answer for, not the hub's.
-  // Everything that matters is in transactions, so the rest can carry on.
+  // Os plugins rodam neste processo, e um evento `error` ou uma promise que ninguém tratou são responsabilidade deles,
+  // não da central. Tudo o que importa está em transações, então o resto pode continuar.
   const stray = log("up");
-  process.on("uncaughtException", (error) => stray(`stray error: ${error?.stack ?? error}`));
-  process.on("unhandledRejection", (error) => stray(`stray error: ${(error as Error)?.stack ?? error}`));
-  // Except losing where the log goes: writing that down fails the same way, for ever. It stops, and a service brings it back.
+  process.on("uncaughtException", (error) => stray(`erro desgarrado: ${error?.stack ?? error}`));
+  process.on("unhandledRejection", (error) => stray(`erro desgarrado: ${(error as Error)?.stack ?? error}`));
+  // Exceto perder o destino do log: registrar isso falha do mesmo jeito, para sempre. Ele para, e um serviço o traz de volta.
   for (const output of [process.stdout, process.stderr]) output.on("error", () => process.exit(1));
   const stop = new AbortController();
   const jobs: Promise<unknown>[] = [];
@@ -80,10 +80,12 @@ export async function up() {
     const { serve } = await import("./http.ts");
     const say = log("hub");
     if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
-      say(`${host} 不是本机回环地址，中台会向这个地址所在的网络开放；前面要有 HTTPS 反向代理`);
+      say(
+        `${host} não é um endereço de loopback local: a central ficará aberta para a rede desse endereço. É preciso ter um proxy reverso HTTPS na frente`,
+      );
     }
     const server = serve(port, host, { commit: commitOf() });
-    server.on("listening", () => say(`listening on ${config.hub!.listen}`));
+    server.on("listening", () => say(`escutando em ${config.hub!.listen}`));
     server.on("error", (error) => {
       say(cantListen(error));
       process.exit(1);

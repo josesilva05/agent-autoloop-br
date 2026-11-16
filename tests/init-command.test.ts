@@ -1,7 +1,7 @@
-// `init --command` turning what a person typed into the command line in rules.json. Failure modes: a quoted path with a
-// space in it is cut at the space, quotes and all, and installs without a word, to fail only when a rule first runs; a quote
-// left open is taken as part of a word; a program that isn't there installs as if it were, and every run of every rule then
-// fails. Run the real program in a home of its own; no service, hub or Agent is started.
+// `init --command` transformando o que uma pessoa digitou na linha de comando do rules.json. Modos de falha: um caminho entre
+// aspas com um espaço é cortado no espaço, aspas e tudo, e instala sem dizer nada, para falhar só quando uma regra roda pela
+// primeira vez; uma aspa deixada aberta é tomada como parte de uma palavra; um programa que não existe instala como se
+// existisse, e daí cada rodada de cada regra falha. Roda o programa real num home próprio; nenhum serviço, central ou Agent é iniciado.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -24,7 +24,7 @@ function init(command: string) {
   return { code: ran.status, stderr: ran.stderr, home };
 }
 
-test("a quoted path with a space in it stays one word, without its quotes", () => {
+test("um caminho entre aspas com um espaço continua sendo uma palavra só, sem as aspas", () => {
   const folder = join(dir, "a folder with a space");
   mkdirSync(folder);
   const script = join(folder, "agent.mjs");
@@ -35,18 +35,18 @@ test("a quoted path with a space in it stays one word, without its quotes", () =
   assert.deepEqual(rules.agents.agent.command, ["node", script, "{prompt}"]);
 });
 
-test("a quote left open stops it and installs nothing", () => {
+test("uma aspa deixada aberta o interrompe e não instala nada", () => {
   const ran = init(`node "/somewhere/agent.mjs {prompt}`);
   assert.equal(ran.code, 1);
-  assert.match(ran.stderr, /引号/);
+  assert.match(ran.stderr, /aspas/);
   assert.equal(existsSync(join(ran.home, "config.json")), false);
 });
 
-test("a program that isn't there stops it and installs nothing", () => {
+test("um programa que não existe o interrompe e não instala nada", () => {
   for (const missing of ["definitely-not-a-program-xyz {prompt}", `"${join(dir, "nowhere", "agent")}" {prompt}`]) {
     const ran = init(missing);
     assert.equal(ran.code, 1);
-    assert.match(ran.stderr, /找不到/);
+    assert.match(ran.stderr, /Não foi possível encontrar/);
     assert.equal(existsSync(join(ran.home, "config.json")), false);
     assert.equal(existsSync(join(ran.home, "rules.json")), false);
   }

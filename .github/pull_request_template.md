@@ -1,11 +1,11 @@
-## 解决什么问题
+## Que problema resolve
 
-<!-- 描述具体问题和改动后的行为；有关联 Issue 时写 Fixes #编号 或 Refs #编号。 -->
+<!-- Descreva o problema concreto e o comportamento após a mudança; quando houver Issue relacionada, escreva Fixes #número ou Refs #número. -->
 
-## 如何验证
+## Como verificar
 
-<!-- 写明实际执行的检查和结果，未运行的检查说明原因。涉及安装、后台服务或接外部程序时，写明真机环境、走过的步骤和结果。维护者将独立审查的提交号和结论记在这里。不要上传真实配置、密钥或业务资料。 -->
+<!-- Informe as verificações realmente executadas e os resultados e explique o motivo das que não rodaram. Quando envolver instalação, serviço em segundo plano ou conexão com programas externos, informe o ambiente em máquina real, os passos percorridos e os resultados. Os mantenedores registram aqui o número do commit e a conclusão da revisão independente. Não envie configurações reais, chaves nem materiais de negócio. -->
 
-## 兼容与使用影响
+## Compatibilidade e impacto de uso
 
-<!-- 是否影响协议、插件、规则、安装或升级？相关中英文文档和示例是否已同步？没有可写“无”。 -->
+<!-- Afeta protocolo, plugins, regras, instalação ou atualização? A documentação e os exemplos relacionados foram sincronizados? Se não houver, escreva "nenhum". -->

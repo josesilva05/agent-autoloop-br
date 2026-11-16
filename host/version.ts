@@ -1,16 +1,17 @@
-// Which code this is: the release tag on its commit, if any, and the commit. The tag is the one place a version number is
-// written: a number in a file still names the last release on every commit after it, and goes stale wherever it's copied.
+// Que código é este: a tag de release no seu commit, se houver, e o commit. A tag é o único lugar onde um número de
+// versão é escrito: um número guardado num arquivo continua apontando o último release em todo commit posterior a ele
+// e fica defasado onde quer que seja copiado.
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
 const ROOT = path.join(import.meta.dirname, "..");
 
-/** What was deployed, or the checkout's commit. Git says: after a gc a branch's ref is no longer a file of its own. */
+/** O que foi implantado, ou o commit do checkout. É o git quem diz: depois de um gc, a ref de um branch deixa de ser um arquivo próprio. */
 export function commitOf(root = ROOT) {
   if (process.env.AGENT_AUTOLOOP_COMMIT) return process.env.AGENT_AUTOLOOP_COMMIT;
   try {
-    // Only a checkout has its own .git entry; unpacked copies must not inherit a parent repository's commit.
+    // Só um checkout tem sua própria entrada .git; cópias extraídas não devem herdar o commit de um repositório pai.
     if (!existsSync(path.join(root, ".git"))) return "dev";
     const args = ["-C", root, "rev-parse", "HEAD"];
     return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -19,7 +20,7 @@ export function commitOf(root = ROOT) {
   }
 }
 
-/** The release this commit is, if it is one. A try-out tag left on the same commit gives way to the release it became. */
+/** O release deste commit, se ele for um. Uma tag de teste deixada no mesmo commit cede lugar ao release em que ela se tornou. */
 export function releaseOf(root = ROOT) {
   try {
     if (!existsSync(path.join(root, ".git"))) return null;
@@ -31,11 +32,11 @@ export function releaseOf(root = ROOT) {
   }
 }
 
-/** What other programs are told this is. */
+/** O que os outros programas recebem como identificação desta versão. */
 export function versionName(root = ROOT) {
   return releaseOf(root) ?? commitOf(root).slice(0, 12);
 }
 
 export function versionLine(root = ROOT) {
-  return `agent-autoloop ${releaseOf(root) ?? "未发布"}（提交 ${commitOf(root).slice(0, 12)}）`;
+  return `agent-autoloop ${releaseOf(root) ?? "não publicada"} (commit ${commitOf(root).slice(0, 12)})`;
 }

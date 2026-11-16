@@ -1,5 +1,5 @@
-// Failure modes: a command writing to the database (`key new`) while the hub is writing fails with "the log has changed",
-// or makes one of the hub's own writes fail, which in a timer would take the hub down.
+// Modos de falha: um comando que escreve no banco (`key new`) enquanto a central escreve falha com "o log mudou", ou faz
+// uma das escritas da própria central falhar, o que num temporizador derrubaria a central.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
@@ -22,7 +22,7 @@ function keyNew(name: string) {
   return new Promise<string>((resolve) => child.on("exit", (code) => resolve(code ? said : "")));
 }
 
-test("commands and the hub can write at the same time", async () => {
+test("comandos e a central podem escrever ao mesmo tempo", async () => {
   let running = true;
   const failures: string[] = [];
   const commands = Promise.all(Array.from({ length: 12 }, (_, i) => keyNew(`from-command-${i}`))).finally(() => {
@@ -35,10 +35,11 @@ test("commands and the hub can write at the same time", async () => {
     } catch (error) {
       failures.push(String(error));
     }
-    // Not flat out: no real hub writes without a break, and on a slow disk that starves a waiting command past its 5 seconds.
+    // Não sem pausa: nenhuma central real escreve sem intervalo, e num disco lento isso mata de fome um comando em espera
+    // além dos seus 5 segundos.
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
-  assert.deepEqual(failures, [], "the hub's own writes");
-  assert.deepEqual((await commands).filter(Boolean), [], "the commands' writes");
-  assert.ok(written > 12, `the writes overlapped: ${written}`);
+  assert.deepEqual(failures, [], "as escritas da própria central");
+  assert.deepEqual((await commands).filter(Boolean), [], "as escritas dos comandos");
+  assert.ok(written > 12, `as escritas se sobrepuseram: ${written}`);
 });

@@ -1,5 +1,6 @@
-// Failure modes: a task becomes shell syntax; a follow-up creates another browser session; an invalid URL or session
-// reaches the browser; a failed bridge is reported as success or retried; the recipe works only inside this repository.
+// Modos de falha: uma tarefa vira sintaxe de shell; uma continuação cria outra sessão de navegador; uma URL ou sessão
+// inválida chega ao navegador; uma ponte que falhou é reportada como sucesso ou é tentada de novo; a receita só funciona
+// dentro deste repositório.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -20,17 +21,17 @@ function fixture() {
     `#!${process.execPath}
 import fs from 'node:fs';
 fs.appendFileSync('called.jsonl', JSON.stringify(process.argv.slice(2))+'\\n');
-console.log('页面证据：示例页面标题');
-console.log('[Codex 会话 ID：${session}]');
+console.log('Evidência da página: título da página de exemplo');
+console.log('[ID de sessão do Codex: ${session}]');
 process.exit(Number(process.env.BRIDGE_EXIT || 0));
 `,
     { mode: 0o755 },
   );
   const task = {
     command: [command],
-    url: "https://example.com/页面",
-    checks: ["核实标题", "保留字面量 $(touch SHOULD_NOT_EXIST) 和 `echo x`"],
-    allowedActions: ["只读页面", "仅关闭本次新建的标签"],
+    url: "https://example.com/página",
+    checks: ["Verificar o título", "Preservar os literais $(touch SHOULD_NOT_EXIST) e `echo x`"],
+    allowedActions: ["Somente leitura da página", "Fechar apenas as abas abertas nesta execução"],
   };
   writeFileSync(join(dir, "browser.json"), JSON.stringify(task));
   const run = (args: string[] = [], code = 0) =>
@@ -42,11 +43,11 @@ process.exit(Number(process.env.BRIDGE_EXIT || 0));
   return { dir, task, run };
 }
 
-test("the standalone launcher passes one literal task, preserves evidence and resumes the supplied session", () => {
+test("o launcher independente passa uma tarefa literal, preserva as evidências e retoma a sessão fornecida", () => {
   const { dir, run } = fixture();
   const first = run();
   assert.equal(first.status, 0, first.stderr);
-  assert.match(first.stdout, /页面证据/);
+  assert.match(first.stdout, /Evidência da página/);
   assert.ok(first.stdout.includes(session));
   assert.equal(existsSync(join(dir, "SHOULD_NOT_EXIST")), false);
   const again = run(["--resume", session]);
@@ -57,12 +58,12 @@ test("the standalone launcher passes one literal task, preserves evidence and re
     .map((line) => JSON.parse(line));
   assert.equal(calls[0].length, 1);
   assert.ok(calls[0][0].includes("$(touch SHOULD_NOT_EXIST)"));
-  assert.ok(calls[0][0].includes(new URL("https://example.com/页面").href));
+  assert.ok(calls[0][0].includes(new URL("https://example.com/página").href));
   assert.deepEqual(calls[1].slice(0, 2), ["--resume", session]);
   assert.equal(calls[1].length, 3);
 });
 
-test("invalid scope or resume arguments do not launch a browser", () => {
+test("argumentos de escopo ou de retomada inválidos não iniciam um navegador", () => {
   const { dir, task, run } = fixture();
   assert.notEqual(run(["--resume", "bad; command"]).status, 0);
   assert.notEqual(run(["--resume"]).status, 0);
@@ -72,10 +73,10 @@ test("invalid scope or resume arguments do not launch a browser", () => {
   assert.equal(existsSync(join(dir, "called.jsonl")), false);
 });
 
-test("a failed bridge keeps its evidence and exit code, with no retry", () => {
+test("uma ponte que falhou mantém as evidências e o código de saída, sem nova tentativa", () => {
   const { dir, run } = fixture();
   const failed = run([], 23);
   assert.equal(failed.status, 23);
-  assert.match(failed.stdout, /页面证据/);
+  assert.match(failed.stdout, /Evidência da página/);
   assert.equal(readFileSync(join(dir, "called.jsonl"), "utf8").trim().split("\n").length, 1);
 });

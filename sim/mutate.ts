@@ -69,7 +69,7 @@ const tests = [
 export function mutate() {
   const root = join(import.meta.dirname, "..");
   const folder = mkdtempSync(join(tmpdir(), "agent-autoloop-mutation-"));
-  // An inherited test-runner context bypasses the child CLI's test selection.
+  // Um contexto de test-runner herdado faz a CLI filha ignorar a própria seleção de testes.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
   const run = () =>
@@ -80,19 +80,22 @@ export function mutate() {
       timeout: 30000,
     });
   try {
-    // All of it: a test that reads a folder left out here fails the baseline here and nowhere else (#119, then #128).
+    // Copiar tudo: um teste que lê uma pasta omitida aqui só reprova na linha de base deste teste (#119, depois #128).
     for (const name of readdirSync(root).filter((name) => ![".git", ".claude", "node_modules"].includes(name)))
       cpSync(join(root, name), join(folder, name), { recursive: true });
     symlinkSync(join(root, "node_modules"), join(folder, "node_modules"));
     const baseline = run();
     assert.equal(baseline.status, 0, baseline.stdout + baseline.stderr);
-    assert.ok(Number(/# tests (\d+)/.exec(baseline.stdout)?.[1]) > 50, "基线必须确实执行行为测试");
+    assert.ok(
+      Number(/# tests (\d+)/.exec(baseline.stdout)?.[1]) > 50,
+      "a linha de base precisa de fato executar testes de comportamento",
+    );
     const mutations = edits.map(([name, file, before, after]) => ({
       name,
       file,
       change: (text: string) => {
         assert.ok(text.includes(before), name);
-        // Everywhere: a guard that's written twice, as the store's transaction is, stands if only one is taken away.
+        // Em todo lugar: uma guarda escrita duas vezes, como a transação do store, segue de pé se só uma for removida.
         return text.replaceAll(before, after);
       },
     }));
@@ -115,7 +118,7 @@ export function mutate() {
           assert.ok(!result.error, `${mutation.name}: ${result.error}`);
           killed++;
         }
-        console.log(`${mutation.name}: ${result.status === 0 ? "漏过" : "抓到"}`);
+        console.log(`${mutation.name}: ${result.status === 0 ? "deixada passar" : "detectada"}`);
       } finally {
         writeFileSync(file, original);
       }

@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: check-${{ github.event.pull_request.number || github.ref }}
-  # A newer push to a PR makes its run pointless. On main a run covers everything before it, so it finishes.
+  # Um push mais recente num PR torna a execução anterior inútil. No main, uma execução cobre tudo que veio antes, então ela termina.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      # These jobs stay required on main, so a docs change runs them too and they pass without doing anything.
+      # Estes jobs continuam obrigatórios no main, então uma mudança só de documentação também os executa e eles passam sem fazer nada.
       - id: scope
         shell: bash
         run: sh scripts/ci-scope.sh >> "$GITHUB_OUTPUT"

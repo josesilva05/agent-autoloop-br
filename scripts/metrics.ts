@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
 
-// Attach the rejection handler before starting the next batch; otherwise Node exits before cleanup.
+// Anexe o manipulador de rejeição antes de iniciar o próximo lote; senão o Node encerra antes da limpeza.
 export const observe = <T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> =>
   promise.then(
     (value) => ({ status: "fulfilled", value }),
@@ -33,13 +33,13 @@ export async function dispatchLatency(
   return { job: result.value.job, ms: performance.now() - at };
 }
 
-/** The value this share of the samples stays at or under; with too few samples, the nearest one above it. */
+/** O valor no qual, ou abaixo do qual, esta parcela das amostras fica; com amostras de menos, a mais próxima acima dele. */
 export function percentile(values: number[], share: number) {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.max(0, Math.ceil(sorted.length * share) - 1)];
 }
 
-/** Runs an action up to count times, or until it has used its time, and how long each took. Never fewer than once. */
+/** Executa uma ação até count vezes, ou até esgotar o tempo, e mede quanto cada uma levou. Nunca menos de uma vez. */
 export async function timed(count: number, budgetMs: number, action: (index: number) => Promise<unknown>) {
   const took: number[] = [];
   const start = performance.now();
@@ -52,6 +52,6 @@ export async function timed(count: number, budgetMs: number, action: (index: num
 }
 
 export function checkPolls(count: { active: number; peak: number }, completed: number) {
-  assert.equal(count.active, 1000, "必须同时有 1000 个长轮询正在等待");
-  assert.equal(completed, 1000, "必须有 1000 个成功响应");
+  assert.equal(count.active, 1000, "precisa haver 1000 long polls aguardando ao mesmo tempo");
+  assert.equal(completed, 1000, "precisa haver 1000 respostas bem-sucedidas");
 }

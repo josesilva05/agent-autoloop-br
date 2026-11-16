@@ -1,12 +1,13 @@
-// Anything with a print mode: its command line in rules.json, its last message on stdout. A script is an agent too, and
-// a plain command needn't take the prompt at all: it finds what it needs through the environment (AGENT_AUTOLOOP_CONTEXT).
+// Qualquer coisa com um modo de impressão: a linha de comando no rules.json, a última mensagem no stdout. Um script
+// também é um Agent, e um comando simples pode nem receber o prompt: ele acha o que precisa pelo ambiente
+// (AGENT_AUTOLOOP_CONTEXT).
 import { tail, type Adapter } from "../../worker/agents.ts";
 
 const PLACEHOLDER = /\{(prompt|model|effort|cwd|context)\}/g;
 
 export default {
-  // One pass, with a function: the prompt is what someone asked for, so a {cwd} or a $& inside those words is not a
-  // placeholder of its own and must arrive as written.
+  // Uma passada só, com uma função: o prompt é o que alguém pediu, então um {cwd} ou um $& dentro dessas palavras não é
+  // um placeholder delas e precisa chegar exatamente como foi escrito.
   command: (turn) => {
     const values: Record<string, string> = {
       prompt: turn.prompt,
@@ -19,7 +20,7 @@ export default {
   },
   read(stdout, code, stderr) {
     if (code === null) return {};
-    if (code !== 0) return { error: `退出码 ${code}：${tail(stderr || stdout) || "没留下原因"}` };
+    if (code !== 0) return { error: `código de saída ${code}: ${tail(stderr || stdout) || "não deixou motivo"}` };
     return { text: stdout };
   },
 } satisfies Adapter;

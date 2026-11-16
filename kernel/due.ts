@@ -1,25 +1,27 @@
-// The next moment each thing needs the clock: schedules, reviews, retries, card resends, a worker gone quiet, a lease
-// run out. The shell keeps one timer, for the earliest of them, so nothing has to poll.
+// O próximo instante em que cada coisa precisa do relógio: agendamentos, reverificações, novas tentativas, reenvios de
+// cartão, um worker que silenciou, um lease que expirou. O host mantém um timer só, o mais cedo deles: nada consulta.
 import { rows, type Row, type View } from "./evolve.ts";
 import { configuration, waitingOn, workers } from "./query.ts";
 
 export const MINUTE = 60_000;
-/** A worker seen this recently is really there, so a run it has stopped mentioning has really gone quiet. */
+/** Um worker visto há tão pouco tempo está mesmo lá, então uma rodada que ele parou de mencionar silenciou mesmo. */
 export const WORKER_FRESH = 2 * MINUTE;
-/** How long a claimed run can go unmentioned by its worker before it's in doubt. */
+/** Por quanto tempo uma rodada assumida pode ficar sem ser mencionada pelo seu worker antes de entrar em dúvida. */
 export const RUN_LEASE = 5 * MINUTE;
-/** How long work can wait on a worker that doesn't come before the owner hears. */
+/** Por quanto tempo o trabalho pode esperar por um worker que não aparece antes de o titular ficar sabendo. */
 export const OFFLINE_AFTER = 10 * MINUTE;
 /**
- * How often being seen goes in the log. A worker asks every second with work in hand and a fact is a disk sync, so a stamp
- * can be behind the last contact by this much. It has to stay under what reads it: with the 50 seconds between idle polls,
- * under WORKER_FRESH; and under RUN_LEASE - WORKER_FRESH, or a run could look quiet while its worker still looks there.
+ * Com que frequência o "foi visto" entra no registro. Um worker pede a cada segundo com trabalho em mãos e um fato é
+ * uma sincronização de disco, então uma marcação pode ficar atrás do último contato por até isso. Ela tem que ficar
+ * abaixo do que a lê: com os 50 segundos entre consultas ociosas, abaixo de WORKER_FRESH; e abaixo de
+ * RUN_LEASE - WORKER_FRESH, senão uma rodada pode parecer silenciada enquanto o worker dela ainda parece estar lá.
  */
 export const SEEN_EVERY = MINUTE;
 
 /**
- * The card about a worker gone away, and whether it has said all there is to say: it's still open, or the owner closed it
- * after everything now waiting had come in. Anything newer is news, or one closed card would hide it until the worker's back.
+ * O cartão sobre um worker que sumiu, e se ele já disse tudo o que havia para dizer: ainda está aberto, ou o titular
+ * o fechou depois que tudo o que espera agora já chegou. O que é mais novo é novidade, senão um cartão fechado o
+ * esconderia até o worker voltar.
  */
 export function offlineCard(view: View, worker: string, waiting: Row[]) {
   const seen = view.get("seen", `worker:${worker}`);
@@ -55,7 +57,7 @@ export function deadlines(view: View, now: number) {
     const seen = view.get("seen", `worker:${worker}`);
     const waiting = waitingOn(view, worker, now);
     if (!waiting.length) continue;
-    // The sweep acts strictly after each limit, hence the extra millisecond.
+    // A varredura age estritamente depois de cada limite, daí o milissegundo extra.
     if (!offlineCard(view, worker, waiting).told) {
       add("offline", worker, Math.max(now, Date.parse(seen?.seen_at ?? waiting[0].created_at) + OFFLINE_AFTER + 1));
     }

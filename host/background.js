@@ -1,6 +1,7 @@
-// The Windows login task runs this with wscript, which has no console, so the hub's own console stays hidden. A hub that
-// stops is started again after ten seconds, as launchd and systemd do. WSH reads this file in the system code page, so it
-// stays ASCII; the paths come in as arguments, which keep every character.
+// A tarefa de login do Windows roda isto com wscript, que nao tem console, entao o console da propria central fica
+// oculto. Uma central que para e iniciada de novo depois de dez segundos, como fazem launchd e systemd. O WSH le este
+// arquivo na pagina de codigo do sistema, por isso ele permanece em ASCII; os caminhos chegam como argumentos, que
+// preservam qualquer caractere.
 var shell = new ActiveXObject("WScript.Shell");
 var words = [];
 for (var i = 0; i < WScript.Arguments.length; i++) {

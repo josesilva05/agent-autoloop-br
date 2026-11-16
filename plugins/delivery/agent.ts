@@ -1,4 +1,4 @@
-// The delivery as an agent: its process is run.ts, and what it prints is read the way any plain command's output is.
+// A entrega como um Agent: seu processo é o run.ts, e o que ele imprime é lido do mesmo jeito que a saída de qualquer comando comum.
 import { join } from "node:path";
 import { stablePath } from "../../host/node-path.ts";
 import command from "../command/agent.ts";

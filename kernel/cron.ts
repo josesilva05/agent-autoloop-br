@@ -1,13 +1,13 @@
-// Five-field cron in the rules' time zone: when the next one comes. As in cron, a day of the month and a day of the
-// week both given take either, but when either starts with * a day must match both; 0 and 7 are Sunday. A wall-clock
-// moment that doesn't exist (clocks going forward) is skipped, and one that happens twice (clocks going back) counts
-// the first time, so a schedule fires at most once per wall-clock moment.
+// Cron de cinco campos no fuso horário das regras: quando vem a próxima. Como no cron, um dia do mês e um dia da semana
+// dados ao mesmo tempo aceitam qualquer um dos dois, mas quando um deles começa com * o dia precisa casar com ambos;
+// 0 e 7 são domingo. Um instante de relógio que não existe (relógios adiantando) é pulado, e um que acontece duas vezes
+// (relógios atrasando) conta na primeira, então um agendamento dispara no máximo uma vez por instante de relógio.
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-/** Far enough for a leap day; a schedule with nothing in it never comes. */
+/** Longo o bastante para caber um dia bissexto; um agendamento sem nenhuma ocorrência nunca chega. */
 const HORIZON = 8 * 366;
-/** What each of the five fields may hold. */
+/** O que cada um dos cinco campos pode conter. */
 const LOWEST = [0, 0, 1, 1, 0];
 const HIGHEST = [59, 23, 31, 12, 7];
 
@@ -52,13 +52,13 @@ function wallClock(ms: number, zone: string) {
   return Object.fromEntries(format.formatToParts(ms).map((part) => [part.type, Number(part.value)]));
 }
 
-/** How far the zone's clock is ahead of UTC at this moment. */
+/** O quanto o relógio do fuso está adiantado em relação ao UTC neste instante. */
 function offset(ms: number, zone: string) {
   const clock = wallClock(ms, zone);
   return Date.UTC(clock.year, clock.month - 1, clock.day, clock.hour, clock.minute) - Math.floor(ms / MINUTE) * MINUTE;
 }
 
-/** The first moment this zone's clock reads this, or null if it never does. */
+/** O primeiro instante em que o relógio deste fuso marca isso, ou null se ele nunca chegar a marcar. */
 function moment(year: number, month: number, day: number, hour: number, minute: number, zone: string) {
   const guess = Date.UTC(year, month - 1, day, hour, minute);
   const tries = [...new Set([guess - offset(guess - DAY, zone), guess - offset(guess + DAY, zone)])];
@@ -69,7 +69,7 @@ function moment(year: number, month: number, day: number, hour: number, minute: 
   return tries.sort((a, b) => a - b).find(matches) ?? null;
 }
 
-/** The first minute strictly after `after` that the schedule names, or null if it never comes. */
+/** O primeiro minuto estritamente depois de `after` que o agendamento nomeia, ou null se ele nunca chegar. */
 export function nextRun(cron: Cron, after: number, zone: string): number | null {
   const start = wallClock(after, zone);
   const first = Date.UTC(start.year, start.month - 1, start.day);
@@ -82,7 +82,7 @@ export function nextRun(cron: Cron, after: number, zone: string): number | null 
     for (const hour of cron.hours) {
       if (dayIndex === 0 && hour < start.hour) continue;
       for (const minute of cron.minutes) {
-        // Earlier on the first day has already happened: a moment counts the first time the clock reads it.
+        // O que é mais cedo no primeiro dia já aconteceu: um instante conta na primeira vez em que o relógio o marca.
         if (dayIndex === 0 && hour === start.hour && minute < start.minute) continue;
         const at = moment(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), hour, minute, zone);
         if (at !== null && at > after) return at;
@@ -92,9 +92,9 @@ export function nextRun(cron: Cron, after: number, zone: string): number | null 
   return null;
 }
 
-/** The last time due at or before `now`, given that `due` was due: what a hub asleep for a while still owes, once. */
+/** A última vencida em ou antes de `now`, dado que `due` venceu: o que uma central adormecida ainda deve, uma vez só. */
 export function latestBefore(cron: Cron, due: number, now: number, zone: string) {
-  // Looks back over ever wider windows, so a minutely schedule after a year asleep doesn't walk the year.
+  // Olha para trás em janelas cada vez mais largas: um agendamento por minuto após um ano dormindo não percorre o ano.
   for (const window of [HOUR, DAY, 32 * DAY, 400 * DAY, Infinity]) {
     let latest: number | null = null;
     let at: number | null = window === Infinity || now - window < due ? due : nextRun(cron, now - window, zone);
@@ -112,19 +112,20 @@ export function dayStart(now: number, zone: string) {
   return moment(clock.year, clock.month, clock.day, 0, 0, zone) ?? now;
 }
 
-// With the rest of the cron and not with the status summary: a client's own page can import this file, which needs nothing
-// of Node.
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六", "日"];
+// Junto com o resto do cron e não com o resumo do status: a página de um cliente pode importar este arquivo, que não
+// precisa de nada do Node.
+const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
 
-/** A common schedule in plain words (每天 18:00, 每周日 06:00, 工作日 09:00, 每月 1 日 04:00); any other as written. */
+/** Um agendamento comum em palavras (todos os dias 18:00, todo dom 06:00, dias úteis 09:00, dia 1 de cada mês 04:00);
+ * qualquer outro, como foi escrito. */
 export function describeCron(text: string) {
   const [minute, hour, day, month, weekday] = text.trim().split(/\s+/);
   const number = /^\d+$/;
   if (!number.test(minute) || !number.test(hour) || month !== "*" || !parseCron(text)) return text;
   const at = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  if (day === "*" && weekday === "*") return `每天 ${at}`;
-  if (day === "*" && number.test(weekday)) return `每周${WEEKDAYS[Number(weekday)]} ${at}`;
-  if (day === "*" && weekday === "1-5") return `工作日 ${at}`;
-  if (number.test(day) && weekday === "*") return `每月 ${Number(day)} 日 ${at}`;
+  if (day === "*" && weekday === "*") return `todos os dias ${at}`;
+  if (day === "*" && number.test(weekday)) return `todo ${WEEKDAYS[Number(weekday)]} ${at}`;
+  if (day === "*" && weekday === "1-5") return `dias úteis ${at}`;
+  if (number.test(day) && weekday === "*") return `dia ${Number(day)} de cada mês ${at}`;
   return text;
 }

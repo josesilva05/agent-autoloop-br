@@ -1,5 +1,6 @@
-// A channel is a program that comes to the hub for cards and makes a chat app match them: `plugins/<use>/channel.ts`,
-// in this install's folder first, then the ones that ship. A channel in another language needs only the protocol.
+// Um canal é um programa que vem até a central buscar cartões e faz um aplicativo de chat corresponder a eles:
+// `plugins/<use>/channel.ts`, primeiro na pasta desta instalação e depois nos que já vêm com ela. Um canal em outra
+// linguagem precisa apenas do protocolo.
 import type { Hub } from "../protocol/client.ts";
 import { loadPlugin } from "./plugins.ts";
 

@@ -15,16 +15,17 @@ export default {
       try {
         reading = { ...reading, ...JSON.parse(line) };
       } catch {
-        /* A partial final line is read again after the next poll. */
+        /* Uma linha final incompleta é lida de novo depois da próxima consulta. */
       }
     }
-    // Taken back by the bridge when the agent refused the session it was to go on in.
+    // O bridge desfaz isto quando o Agent recusa a sessão na qual deveria continuar.
     if (!reading.started) delete reading.started;
     if (code !== null && (code !== 0 || !reading.finished || reading.error)) {
-      // What the agent itself said, then why it failed. The bridge says that last, unless the agent went on talking.
+      // Primeiro o que o próprio Agent disse, depois o motivo da falha. O bridge diz isso por último, a menos que o
+      // Agent tenha continuado falando.
       const said = tail(stderr);
       const error = said.endsWith(reading.error ?? "") ? said : tail(`${said}\n${reading.error}`);
-      return { session: reading.session, started: reading.started, error: error || "ACP 没有完成这一轮" };
+      return { session: reading.session, started: reading.started, error: error || "O ACP não concluiu esta rodada" };
     }
     return reading;
   },

@@ -1,17 +1,17 @@
 ---
 name: morning-brief
-description: 写今天的早报：看当前目录最近的笔记和提交，写成一个文件。中台定时派活时用。
+description: Escreva o briefing de hoje: leia as notas e os commits recentes do diretório atual e produza um arquivo. Use quando a central despachar a tarefa agendada.
 ---
 
-# 写早报
+# Escrever o briefing
 
-只用当前目录里的东西，不联网，不编造。
+Use apenas o que existe no diretório atual, sem internet e sem inventar nada.
 
-1. 今天的早报是 `briefs/YYYY-MM-DD.md`。这个文件已经有了就不重写：第一行写“没事可做：今天的早报已经写过了”，结束。
-2. 看最近三天改过的文件：`find . -type f -mtime -3 -not -path './.git/*' -not -path './briefs/*'`。目录是 git 仓库就再看 `git log --since=3.days --oneline`。
-3. 什么新东西都没有：第一行写“没事可做：最近三天没有新内容”，结束，不写文件。
-4. 写早报，三段，每段最多五条，每条一句话，写不出来的段就省略：
-   - 最近发生了什么
-   - 今天该做什么
-   - 要留意什么
-5. 最后一条消息的第一行写今天最重要的一件事，一句话，后面跟文件路径。这一行会发给用户，不要附回执。
+1. O briefing de hoje é `briefs/YYYY-MM-DD.md`. Se esse arquivo já existir, não o reescreva: escreva na primeira linha "NADA A FAZER: o briefing de hoje já foi escrito" e encerre.
+2. Veja os arquivos alterados nos últimos três dias: `find . -type f -mtime -3 -not -path './.git/*' -not -path './briefs/*'`. Se o diretório for um repositório git, veja também `git log --since=3.days --oneline`.
+3. Se não houver nada de novo: escreva na primeira linha "NADA A FAZER: não há conteúdo novo nos últimos três dias", encerre e não escreva nenhum arquivo.
+4. Escreva o briefing em três seções, com no máximo cinco itens cada e uma frase por item; omita a seção que você não conseguir preencher:
+   - O que aconteceu recentemente
+   - O que fazer hoje
+   - O que merece atenção
+5. Na primeira linha da última mensagem, escreva em uma frase a coisa mais importante de hoje, seguida do caminho do arquivo. Essa linha é enviada ao usuário; não anexe recibo.

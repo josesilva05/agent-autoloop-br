@@ -1,6 +1,6 @@
-// The one page there is: a card at its own link, for channels that can only send words. A plain form, so it needs no
-// script, no sign-in and nothing else from the hub. An Agent wrote what it shows after reading other people's words:
-// all of it is escaped, and the only thing the page may load is its own style.
+// A única página que existe: um cartão no seu próprio link, para canais que só conseguem enviar palavras. Um formulário
+// simples, então não precisa de script, de login nem de nada mais da central. Foi um Agent que escreveu o que ela mostra
+// depois de ler palavras de outras pessoas: tudo está escapado, e a única coisa que a página pode carregar é o seu estilo.
 import { createHash } from "node:crypto";
 import type { cardView } from "./query.ts";
 
@@ -32,14 +32,14 @@ const ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;
 const escaped = (words: string) => words.replace(/[&<>"']/g, (char) => ENTITIES[char]);
 
 const shell = (title: string, content: string) =>
-  `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">` +
+  `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">` +
   `<meta name="viewport" content="width=device-width,initial-scale=1"><title>${escaped(title)}</title>` +
   `<style>${STYLE}</style></head><body>${content}</body></html>`;
 
 export const wordsPage = (words: string) => shell(words, `<p>${escaped(words)}</p>`);
 
 export function cardPage(card: ReturnType<typeof cardView>) {
-  const from = card.rule && card.rule !== card.title ? `<p class="from">来源：${escaped(card.rule)}</p>` : "";
+  const from = card.rule && card.rule !== card.title ? `<p class="from">Fonte: ${escaped(card.rule)}</p>` : "";
   const words = `<h1>${escaped(card.title)}</h1>${from}${card.text ? `<p>${escaped(card.text)}</p>` : ""}`;
   if (card.state === "open") {
     const focused = card.recommend ?? 0;
@@ -48,17 +48,17 @@ export function cardPage(card: ReturnType<typeof cardView>) {
       const focus = index === focused ? " autofocus" : "";
       return `<button name="choice" value="${index}"${best}${focus}>${escaped(option)}</button>`;
     };
-    // Its own form: Enter in the box mustn't press the first option.
-    // A notice can take a line on how it was handled: optional, and kept with the closing.
+    // Formulário próprio: o Enter na caixa não pode acionar a primeira opção.
+    // Um aviso pode receber uma linha sobre como foi tratado: opcional, e guardada junto com o encerramento.
     const notice = card.kind === "notice";
     const box = notice
-      ? `<input name="text" placeholder="我实际怎么处理的（可不填）" aria-label="处理说明">`
-      : `<input name="text" placeholder="别的想法" aria-label="别的想法" required>`;
-    const other = `<form method="post">${box}<button>${notice ? "记录并结案" : "发送"}</button></form>`;
+      ? `<input name="text" placeholder="Como eu realmente tratei (opcional)" aria-label="Nota de tratamento">`
+      : `<input name="text" placeholder="Outra ideia" aria-label="Outra ideia" required>`;
+    const other = `<form method="post">${box}<button>${notice ? "Registrar e encerrar" : "Enviar"}</button></form>`;
     return shell(card.title, `${words}<form method="post">${card.options.map(button).join("")}</form>${other}`);
   }
   const chosen = card.kind === "ask" ? (card.choice !== null ? card.options[card.choice] : card.answer) : null;
-  const outcome = [chosen ? `你选了「${chosen}」` : "", card.result ?? ""].filter(Boolean).join("。");
-  const settled = card.kind === "notice" && card.answer ? `<p>处理说明：${escaped(card.answer)}</p>` : "";
+  const outcome = [chosen ? `Você escolheu “${chosen}”` : "", card.result ?? ""].filter(Boolean).join(". ");
+  const settled = card.kind === "notice" && card.answer ? `<p>Nota de tratamento: ${escaped(card.answer)}</p>` : "";
   return shell(card.title, `${words}${outcome ? `<p>${escaped(outcome)}</p>` : ""}${settled}`);
 }

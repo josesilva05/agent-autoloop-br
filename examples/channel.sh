@@ -1,5 +1,5 @@
 #!/bin/sh
-# stdout is the delivery destination. A chat integration replaces this print with its own HTTP send.
+# A saída padrão é o destino da entrega. Uma integração de chat substitui esta impressão pelo próprio envio HTTP.
 set -eu
 : "${AGENT_AUTOLOOP_URL:?}" "${AGENT_AUTOLOOP_KEY:?}"
 while :; do

@@ -1,5 +1,5 @@
-// The Ship step's question, as a GitHub Action: does this commit need releasing, and has main already moved past it?
-// Runs from a copy in the project, so it imports nothing beyond this folder's project.ts.
+// A pergunta do passo Ship, como uma GitHub Action: este commit precisa ser publicado, e a main já passou dele?
+// Roda a partir de uma cópia dentro do projeto, então não importa nada além do project.ts desta pasta.
 import { appendFileSync } from "node:fs";
 import { git, liveRelease, readMainSettings, releaseRequired, type Live } from "./project.ts";
 
@@ -15,7 +15,7 @@ export function decideShip(
 if (import.meta.main) {
   const root = process.cwd();
   const target = process.env.INPUT_TARGET || process.env.GITHUB_SHA;
-  if (!target || !/^[a-f0-9]{40}$/.test(target)) throw new Error("发布目标要是完整提交编号");
+  if (!target || !/^[a-f0-9]{40}$/.test(target)) throw new Error("O alvo da publicação deve ser um hash completo");
   git(root, "fetch", "origin", "main");
   const main = git(root, "rev-parse", "origin/main");
   const config = readMainSettings(root, process.env.INPUT_TEST_LOCAL_HEALTH === "true", target);

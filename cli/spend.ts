@@ -1,26 +1,27 @@
-// The cost lines in `agent-autoloop status`, from /v1/state's completion-time totals. Agents report usage for themselves, or
-// don't: a plain command says nothing, and some give tokens but no price. So every figure says how many rounds it leaves out.
+// As linhas de custo do `agent-autoloop status`, a partir dos totais por hora de conclusão do /v1/state. Os Agents relatam o
+// próprio uso, ou não: um comando simples não diz nada, e alguns dão tokens mas nenhum preço. Por isso cada número diz quantas
+// rodadas ficaram de fora.
 import type { Spending } from "../host/state.ts";
-const count = new Intl.NumberFormat("zh-CN", { notation: "compact", maximumFractionDigits: 1 });
-/** To two places, a day on a cheap model would read as nothing at all. */
+const count = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+/** Com duas casas, um dia num modelo barato não leria nada de nada. */
 const dollars = (amount: number) => (amount > 0 && amount < 0.01 ? "<$0.01" : `$${amount.toFixed(2)}`);
 
 function tally(label: string, { rounds, tokens, cached, cost, missingTokens, missingCost }: Spending) {
-  if (!rounds) return `${label} 0 轮`;
-  const notes = (...said: string[]) => (said.some(Boolean) ? `（${said.filter(Boolean).join("；")}）` : "");
-  const missing = (silent: number) => (silent ? `${silent} 轮没上报` : "");
-  // Read from a cache, a token costs a fraction of the price, so a total mostly made of them overstates the bill.
-  // Rounds recorded before Claude's input took in its cache can make the share more than all of it; those say nothing.
-  const fromCache = cached > 0 && cached <= tokens ? `其中缓存 ${Math.round((cached / tokens) * 100)}%` : "";
+  if (!rounds) return `${label} 0 rodadas`;
+  const notes = (...said: string[]) => (said.some(Boolean) ? ` (${said.filter(Boolean).join("; ")})` : "");
+  const missing = (silent: number) => (silent ? `${silent} ${silent === 1 ? "rodada" : "rodadas"} sem relatório` : "");
+  // Lido de um cache, um token custa uma fração do preço, então um total feito sobretudo deles exagera a conta.
+  // Rodadas registradas antes de o input do Claude passar a incluir o cache podem dar uma parcela maior que o todo; essas não dizem nada.
+  const fromCache = cached > 0 && cached <= tokens ? `${Math.round((cached / tokens) * 100)}% em cache` : "";
   const shownTokens =
     missingTokens === rounds
-      ? "Token 没上报"
-      : `${count.format(tokens).replace(/(万|亿)/, " $1")} Token${notes(fromCache, missing(missingTokens))}`;
-  const shownCost = missingCost === rounds ? "费用没上报" : `${dollars(cost)}${notes(missing(missingCost))}`;
-  return `${label} ${rounds} 轮 · ${shownTokens} · ${shownCost}`;
+      ? "Tokens sem relatório"
+      : `${count.format(tokens).replace(/\u00a0/g, " ")} Tokens${notes(fromCache, missing(missingTokens))}`;
+  const shownCost = missingCost === rounds ? "Custo sem relatório" : `${dollars(cost)}${notes(missing(missingCost))}`;
+  return `${label} ${rounds} ${rounds === 1 ? "rodada" : "rodadas"} · ${shownTokens} · ${shownCost}`;
 }
 
-/** Two lines, labels padded to the same terminal width so the figures line up. */
+/** Duas linhas, com os rótulos preenchidos até a mesma largura de terminal para os números ficarem alinhados. */
 export function spendLines(spending: { today: Spending; week: Spending }) {
-  return [tally("今天     ", spending.today), tally("最近 7 天", spending.week)];
+  return [tally("Hoje          ", spending.today), tally("Últimos 7 dias", spending.week)];
 }

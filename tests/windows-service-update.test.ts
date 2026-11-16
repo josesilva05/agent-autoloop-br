@@ -1,6 +1,7 @@
-// Updating the Windows login task must not take down a hub that works. Failure mode: the old task is unregistered and the
-// running hub stopped before the new task is registered, so a registration Windows refuses leaves no hub at all.
-// A fake PowerShell stands in for Windows; nothing real is installed.
+// Atualizar a tarefa de login do Windows não pode derrubar uma central que funciona. Modo de falha: a tarefa antiga é
+// removida e a central em execução é parada antes de a nova tarefa ser registrada, então um registro que o Windows
+// recusa não deixa central nenhuma.
+// Um PowerShell falso faz o papel do Windows; nada real é instalado.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,8 +15,8 @@ const calls = join(home, "calls.jsonl");
 const refuse = join(home, "refuse");
 mkdirSync(join(root, "System32", "WindowsPowerShell", "v1.0"), { recursive: true });
 process.env.SystemRoot = root;
-// It answers the scripts by what they do: the task is ours, the process in up.pid is the hub, and registering fails
-// while `refuse` exists.
+// Ele responde aos scripts pelo que eles fazem: a tarefa é nossa, o processo no up.pid é a central, e o registro falha
+// enquanto `refuse` existir.
 writeFileSync(
   join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
   `#!${process.execPath}
@@ -23,7 +24,7 @@ const { appendFileSync, existsSync } = require("node:fs");
 const script = Buffer.from(process.argv[process.argv.indexOf("-EncodedCommand") + 1], "base64").toString("utf16le");
 appendFileSync(${JSON.stringify(calls)}, JSON.stringify(script) + "\\n");
 if (script.includes("Register-ScheduledTask") && existsSync(${JSON.stringify(refuse)})) {
-  process.stderr.write("Register-ScheduledTask : 参数错误。(0x80070057)");
+  process.stderr.write("Register-ScheduledTask : Parâmetro incorreto. (0x80070057)");
   process.exit(1);
 }
 if (script.includes("Unregister-ScheduledTask")) process.stdout.write("removed");
@@ -34,8 +35,8 @@ chmodSync(join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
 Object.defineProperty(process, "platform", { value: "win32" });
 const { installService } = await import("../host/service.ts");
 
-/** A process standing in for the running hub, its number left in up.pid as `up` leaves it. Not a child of this one, so
- * once stopped it is gone rather than left unreaped. */
+/** Um processo no lugar da central em execução, com seu número deixado no up.pid como `up` o deixa. Não é filho deste,
+ * então, uma vez parado, ele some em vez de ficar sem reaproveitamento. */
 function runningHub() {
   const pid = Number(spawnSync("sh", ["-c", "sleep 60 >/dev/null 2>&1 & echo $!"], { encoding: "utf8" }).stdout);
   writeFileSync(join(home, "up.pid"), String(pid));
@@ -57,16 +58,16 @@ const scripts = (): string[] =>
         .map((line) => JSON.parse(line))
     : [];
 
-test("a login task Windows won't register leaves the old task and the running hub alone", () => {
+test("uma tarefa de login que o Windows não registra deixa a tarefa antiga e a central em execução intactas", () => {
   const hub = runningHub();
   rmSync(calls, { force: true });
   writeFileSync(refuse, "");
   try {
     assert.throws(() => installService(), /0x80070057/);
-    assert.ok(alive(hub), "the hub that was working was stopped");
+    assert.ok(alive(hub), "a central que estava funcionando foi parada");
     assert.ok(
       !scripts().some((script) => /Unregister-ScheduledTask|Stop-ScheduledTask/.test(script)),
-      "the old task was taken away",
+      "a tarefa antiga foi removida",
     );
   } finally {
     rmSync(refuse, { force: true });
@@ -74,16 +75,16 @@ test("a login task Windows won't register leaves the old task and the running hu
   }
 });
 
-test("once the new task is registered, the old hub is stopped and the task started again", () => {
+test("depois que a nova tarefa é registrada, a central antiga é parada e a tarefa é iniciada de novo", () => {
   const hub = runningHub();
   rmSync(calls, { force: true });
   try {
     installService();
-    assert.equal(alive(hub), false, "the old hub kept running beside the new one");
+    assert.equal(alive(hub), false, "a central antiga continuou rodando ao lado da nova");
     const done = scripts();
     const registered = done.findIndex((script) => script.includes("Register-ScheduledTask"));
     const started = done.findLastIndex((script) => script.includes("Start-ScheduledTask"));
-    assert.ok(registered >= 0 && started >= registered, "the task wasn't started after it was registered");
+    assert.ok(registered >= 0 && started >= registered, "a tarefa não foi iniciada depois de ser registrada");
   } finally {
     if (alive(hub)) process.kill(hub);
   }

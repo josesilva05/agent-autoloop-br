@@ -1,22 +1,24 @@
-// What's different about each agent. Failure cases: a level of access maps to the wrong flag, full access is given unasked,
-// a retry starts a new conversation instead of going on, an error or a turn that never finished counts as an answer, a
-// reconnect Codex announced and got over before its turn finished fails the finished run, a program's warning is taken
-// for its answer, a finished Claude run printed as one JSON array is read as a failure, the
-// session isn't picked out, a command line's placeholder isn't filled in, or a background Codex run assumes it inherited
-// an application's browser connection. A turn that got going and then broke, or was killed before it finished, doesn't
-// say it started, so the worker runs its prompt again; one that never got going says it did, so the worker doesn't start a
-// new session for it; what Claude said before a background task ended is taken for its answer, or starts the wait for a
-// turn that won't exit; the raw messages of a broken Claude run become the reason it failed. A receipt an Agent wrote
-// and then lost because a background task called it back for another turn is dropped, so the card it asked for never
-// exists and the work looks untouched; or, carried along, it replaces one the last turn wrote wrongly, so a cancelled
-// review comes back. Claude's tokens leave out what it read from its cache while the others' count it, so the same
-// work reads as a fraction of Codex's. A line of output that's JSON
-// but no message, like `null`, stops a plugin reading anything. A command line's placeholder pass rewrites the prompt
-// itself — a `{cwd}` or a `$&` the person wrote arrives as the folder or as `{prompt}` — so the program is asked
-// something other than what the event said. A built-in agent starts the program it finds, not the one its rules name,
-// so a wrapper that sends Claude Code to another service is never run. A service tier the rules name for Codex never
-// reaches its command line, so the run takes whatever tier the machine's own Codex config has that day. A program
-// missing for a moment, as while an update reinstalls it, stays missing until the worker restarts.
+// O que difere em cada Agent. Casos de falha: um nível de acesso mapeia para a flag errada, acesso total é dado sem
+// ninguém pedir, uma nova tentativa começa outra conversa em vez de continuar, um erro ou uma rodada que nunca terminou
+// conta como resposta, uma reconexão que o Codex anunciou e superou antes de a rodada terminar faz a execução concluída
+// falhar, um aviso do programa é tomado pela resposta dele, uma execução concluída do Claude impressa como um array JSON
+// só é lida como falha, a sessão não é identificada, um placeholder da linha de comando não é preenchido, ou uma execução
+// do Codex em segundo plano presume que herdou a conexão de navegador de um aplicativo. Uma rodada que começou e então
+// quebrou, ou foi morta antes de terminar, não diz que começou, então o worker roda o prompt dela de novo; uma que nunca
+// chegou a começar diz que começou, então o worker não abre uma sessão nova para ela; o que o Claude disse antes de uma
+// tarefa em segundo plano terminar é tomado como resposta dele, ou inicia a espera por uma rodada que não vai sair; as
+// mensagens brutas de uma execução quebrada do Claude viram o motivo da falha. Um recibo que um Agent escreveu e depois
+// perdeu porque uma tarefa em segundo plano o chamou de volta para outra rodada é descartado, então o cartão que ele pediu
+// nunca existe e o trabalho parece intocado; ou, vindo junto, substitui um que a última rodada escreveu errado, e uma
+// revisão cancelada volta. Os tokens do Claude deixam de fora o que ele leu do próprio cache enquanto os dos outros contam,
+// então o mesmo trabalho aparece como uma fração do Codex. Uma linha de saída que é JSON mas não é mensagem, como `null`,
+// impede um plugin de ler qualquer coisa. A passada de placeholders da linha de comando reescreve o próprio prompt — um
+// `{cwd}` ou um `$&` que a pessoa escreveu chega como a pasta ou como `{prompt}` —, então se pede ao programa algo
+// diferente do que o evento disse. Um Agent embutido inicia o programa que encontra, não o que suas regras nomeiam, então
+// um wrapper que manda o Claude Code para outro serviço nunca roda. Um tier de serviço que as regras nomeiam para o Codex
+// nunca chega à linha de comando dele, então a execução usa o tier que a configuração de Codex da máquina tiver naquele
+// dia. Um programa que some por um momento, como enquanto uma atualização o reinstala, continua sumido até o worker
+// reiniciar.
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,7 +28,7 @@ import { readMessage, resultFrom } from "../worker/contract.ts";
 
 process.env.PATH = `/nonexistent:${process.env.PATH}`;
 const { findProgram } = await import("../worker/agents.ts");
-// Command construction must also run on CI machines without Codex installed.
+// A construção da linha de comando também precisa rodar em máquinas de CI sem o Codex instalado.
 const shell = process.env.SHELL;
 const lookup = join(setup("adapters"), "lookup.sh");
 writeFileSync(lookup, '#!/bin/sh\nprintf "%s\\n" /test/codex\n', { mode: 0o755 });
@@ -42,7 +44,7 @@ const dsh: Adapter = (await import("../plugins/dsh/agent.ts")).default;
 const zcode: Adapter = (await import("../plugins/zcode/agent.ts")).default;
 
 const turn = {
-  prompt: "做这件事",
+  prompt: "faça isso",
   session: "new-id",
   resume: null,
   cwd: "/x",
@@ -55,7 +57,7 @@ const has = (argv: string[], ...parts: string[]) => {
   return at >= 0 && parts.every((part, i) => argv[at + i] === part);
 };
 
-// The program itself is looked up once: these only care about what follows it.
+// O programa em si é buscado uma vez só: estes só se importam com o que vem depois dele.
 const stubbed = (adapter: Adapter, t: object) => {
   try {
     return adapter.command({ ...turn, ...t });
@@ -64,22 +66,22 @@ const stubbed = (adapter: Adapter, t: object) => {
   }
 };
 
-test("a built-in agent starts the program its rules name, with its own arguments after it", () => {
+test("um Agent embutido inicia o programa que suas regras nomeiam, com os argumentos dele depois", () => {
   for (const adapter of [claude, codex, dsh, zcode]) {
     const argv = adapter.command({ ...turn, program: "/opt/bin/via-gateway" });
     assert.equal(argv[0], "/opt/bin/via-gateway");
-    assert.ok(argv.includes("做这件事") || argv.some((part) => part.includes("做这件事")), "the prompt still goes in");
+    assert.ok(argv.includes("faça isso") || argv.some((part) => part.includes("faça isso")), "o prompt ainda entra");
   }
 });
 
-test("Claude Code: access, new and going on, model", { skip: !stubbed(claude, {}) }, () => {
+test("Claude Code: acesso, sessão nova e continuada, modelo", { skip: !stubbed(claude, {}) }, () => {
   const argv = stubbed(claude, {})!;
-  assert.ok(has(argv, "-p", "做这件事"));
+  assert.ok(has(argv, "-p", "faça isso"));
   assert.ok(has(argv, "--session-id", "new-id"));
   assert.ok(has(argv, "--permission-mode", "acceptEdits"));
-  // It has to print as it goes: run as "json" it prints nothing until the end, and one cut short leaves no trace.
+  // Tem que imprimir conforme avança: como "json" nada sai até o fim, e uma interrompida não deixa rastro.
   assert.ok(has(argv, "--output-format", "stream-json"));
-  assert.ok(argv.includes("--verbose"), "Claude Code refuses stream-json in print mode without it");
+  assert.ok(argv.includes("--verbose"), "o Claude Code recusa stream-json no modo de impressão sem ele");
   assert.ok(!argv.includes("--model"));
   assert.ok(has(stubbed(claude, { access: "read" })!, "--permission-mode", "plan"));
   assert.ok(has(stubbed(claude, { access: "full" })!, "--permission-mode", "bypassPermissions"));
@@ -90,20 +92,20 @@ test("Claude Code: access, new and going on, model", { skip: !stubbed(claude, {}
   assert.ok(has(again, "--effort", "high"));
 });
 
-test("Claude Code: reading its result", () => {
+test("Claude Code: lendo o resultado dele", () => {
   const line = (over: object) =>
     JSON.stringify({
       type: "result",
       subtype: "success",
       is_error: false,
-      result: "好了",
+      result: "pronto",
       session_id: "s",
       total_cost_usd: 0.5,
       usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 5, cache_creation_input_tokens: 1 },
       ...over,
     });
   assert.deepEqual(claude.read(`noise\n${line({})}\n`, 0, ""), {
-    text: "好了",
+    text: "pronto",
     session: "s",
     usage: { input: 16, output: 2, cached: 5 },
     sessionUsage: { cost: 0.5 },
@@ -115,22 +117,22 @@ test("Claude Code: reading its result", () => {
   );
   assert.equal(claude.read(line({ is_error: true, result: "x" }), 1, "").session, "s");
   assert.equal(claude.read(line({ subtype: "error_max_turns", result: undefined }), 1, "").error, "error_max_turns");
-  // With verbose on, Claude Code prints every message as one JSON array on a single line.
+  // Com verbose ligado, o Claude Code imprime cada mensagem como um array JSON numa linha só.
   const array = `[{"type":"system","subtype":"init"},{"type":"assistant"},${line({})}]\n`;
-  assert.equal(claude.read(array, 0, "").text, "好了");
-  assert.deepEqual(claude.read("", null, ""), {}, "still going");
+  assert.equal(claude.read(array, 0, "").text, "pronto");
+  assert.deepEqual(claude.read("", null, ""), {}, "ainda em andamento");
   assert.equal(claude.read("", 1, "boom").error, "boom");
-  assert.equal(claude.read("", 0, "").error, "没留下结果");
+  assert.equal(claude.read("", 0, "").error, "não deixou resultado");
   assert.equal(claude.link!("s"), "claude://resume?session=s");
 });
 
-// What `claude -p --output-format stream-json --verbose` really prints, cut down to what's read.
+// O que `claude -p --output-format stream-json --verbose` realmente imprime, reduzido ao que é lido.
 const stream = (...messages: object[]) => `${messages.map((message) => JSON.stringify(message)).join("\n")}\n`;
 const init = { type: "system", subtype: "init", session_id: "s" };
 const hook = { type: "system", subtype: "hook_started", session_id: "s" };
 const thinking = { type: "assistant", session_id: "s", message: { content: [{ type: "thinking" }] } };
 const tool = { type: "assistant", session_id: "s", message: { content: [{ type: "tool_use", name: "Bash" }] } };
-const toolResult = { type: "user", session_id: "s", message: { content: [{ type: "tool_result", content: "机密" }] } };
+const toolResult = { type: "user", session_id: "s", message: { content: [{ type: "tool_result", content: "senha" }] } };
 const said = (result: string, num_turns = 1) => ({
   type: "result",
   subtype: "success",
@@ -146,21 +148,21 @@ const tasks = (...running: string[]) => ({
   session_id: "s",
 });
 
-test("Claude Code: a turn that got going says so, however it ended", () => {
+test("Claude Code: uma rodada que começou diz isso, seja como for que terminou", () => {
   const cut = stream(hook, init, tool, toolResult);
-  assert.deepEqual(claude.read(cut, null, ""), { session: "s", started: true }, "still going, or vanished");
+  assert.deepEqual(claude.read(cut, null, ""), { session: "s", started: true }, "ainda em andamento, ou sumiu");
   const killed = claude.read(cut, 143, "");
   assert.equal(killed.session, "s");
   assert.equal(killed.started, true);
-  assert.equal(killed.error, "没留下结果");
-  assert.equal(claude.read(stream(init), null, "").started, true, "it has the prompt, in a conversation that's there");
+  assert.equal(killed.error, "não deixou resultado");
+  assert.equal(claude.read(stream(init), null, "").started, true, "ele tem o prompt, numa conversa que existe");
   const failed = { ...said("API Error: 500"), is_error: true };
   assert.equal(claude.read(stream(init, thinking, failed), 1, "").started, true);
-  assert.equal(claude.read(stream(failed), 1, "").started, true, "only the last line, it took a turn");
-  assert.equal(claude.read(stream(init, tool, said("好了", 2)), 0, "").text, "好了");
+  assert.equal(claude.read(stream(failed), 1, "").started, true, "só a última linha, e ele fez uma rodada");
+  assert.equal(claude.read(stream(init, tool, said("pronto", 2)), 0, "").text, "pronto");
 });
 
-test("Claude Code: a resume that never got going doesn't say it started, and says why", () => {
+test("Claude Code: um resume que nunca começou não diz que começou, e diz o porquê", () => {
   const missing = {
     type: "result",
     subtype: "error_during_execution",
@@ -172,103 +174,103 @@ test("Claude Code: a resume that never got going doesn't say it started, and say
   const reading = claude.read(stream(missing), 1, "No conversation found with session ID: old");
   assert.equal(reading.started, undefined);
   assert.equal(reading.error, "No conversation found with session ID: old");
-  assert.equal(claude.read("", 1, "No conversation found").started, undefined, "printed as json: nothing on stdout");
-  assert.equal(claude.read(stream(hook), 1, "boom").started, undefined, "a hook runs before it has the prompt");
+  assert.equal(claude.read("", 1, "No conversation found").started, undefined, "impresso como json: nada no stdout");
+  assert.equal(claude.read(stream(hook), 1, "boom").started, undefined, "um hook roda antes de ele ter o prompt");
   assert.deepEqual(claude.read(stream(hook), null, ""), { session: "s" });
 });
 
-test("Claude Code: the raw messages of a broken run aren't the reason it failed", () => {
-  assert.equal(claude.read(stream(init, tool, toolResult), 1, "连接断了").error, "连接断了");
-  assert.doesNotMatch(claude.read(stream(init, tool, toolResult), 1, "").error!, /机密|tool_result/);
+test("Claude Code: as mensagens brutas de uma execução quebrada não são o motivo da falha", () => {
+  assert.equal(claude.read(stream(init, tool, toolResult), 1, "a conexão caiu").error, "a conexão caiu");
+  assert.doesNotMatch(claude.read(stream(init, tool, toolResult), 1, "").error!, /senha|tool_result/);
   assert.equal(
     claude.read("Invalid API key\n", 1, "").error,
     "Invalid API key",
-    "its complaint on stdout still counts",
+    "a reclamação dele no stdout também conta",
   );
 });
 
-test("Claude Code: what it said before a background task ended isn't its answer", () => {
-  const waiting = stream(init, tool, tasks("t1"), toolResult, said("已启动", 2));
-  assert.deepEqual(claude.read(waiting, null, ""), { session: "s", started: true }, "still going, so not over");
-  assert.equal(claude.read(waiting, 137, "").text, undefined, "killed while waiting: it never got to its answer");
-  assert.equal(claude.read(waiting, 137, "").error, "没留下结果");
-  assert.equal(claude.read(waiting, 0, "").text, "已启动", "it ended by itself: that was its last word");
-  const ended = stream(init, tool, tasks("t1"), toolResult, said("已启动", 2), tasks());
-  assert.equal(claude.read(ended, null, "").finished, true, "nothing left to come back for");
-  assert.equal(claude.read(ended, null, "").text, "已启动");
+test("Claude Code: o que ele disse antes de uma tarefa em segundo plano terminar não é a resposta", () => {
+  const waiting = stream(init, tool, tasks("t1"), toolResult, said("iniciado", 2));
+  assert.deepEqual(claude.read(waiting, null, ""), { session: "s", started: true }, "ainda rodando, não acabou");
+  assert.equal(claude.read(waiting, 137, "").text, undefined, "morto enquanto esperava: nunca chegou à resposta");
+  assert.equal(claude.read(waiting, 137, "").error, "não deixou resultado");
+  assert.equal(claude.read(waiting, 0, "").text, "iniciado", "terminou por conta própria: foi a última palavra dele");
+  const ended = stream(init, tool, tasks("t1"), toolResult, said("iniciado", 2), tasks());
+  assert.equal(claude.read(ended, null, "").finished, true, "não sobrou nada que o faça voltar");
+  assert.equal(claude.read(ended, null, "").text, "iniciado");
   for (const next of [init, thinking, toolResult]) {
-    const going = stream(init, tool, tasks("t1"), toolResult, said("已启动", 2), tasks(), next);
-    assert.deepEqual(claude.read(going, null, ""), { session: "s", started: true }, "a later turn is going");
-    assert.equal(claude.read(going, 1, "").error, "没留下结果", "and it broke");
+    const going = stream(init, tool, tasks("t1"), toolResult, said("iniciado", 2), tasks(), next);
+    assert.deepEqual(claude.read(going, null, ""), { session: "s", started: true }, "outra rodada em andamento");
+    assert.equal(claude.read(going, 1, "").error, "não deixou resultado", "e ela quebrou");
   }
-  const done = stream(init, tool, tasks("t1"), said("已启动", 2), tasks(), init, thinking, said("结束了"));
+  const done = stream(init, tool, tasks("t1"), said("iniciado", 2), tasks(), init, thinking, said("terminou"));
   assert.equal(claude.read(done, null, "").finished, true);
-  assert.equal(claude.read(done, 0, "").text, "结束了");
+  assert.equal(claude.read(done, 0, "").text, "terminou");
 });
 
-test("Claude Code: a receipt it wrote isn't lost when a background task calls it back", () => {
+test("Claude Code: um recibo escrito não se perde quando uma tarefa em segundo plano o chama de volta", () => {
   const block = (receipt: object) => "```agent-autoloop\n" + JSON.stringify(receipt) + "\n```";
-  const ask = { title: "要不要修", text: "这个缺陷要不要修", options: ["修", "不修"], recommend: 0, key: "k" };
-  // The task ends after the answer, so Claude Code is called back for another turn that says nothing about the ask.
+  const ask = { title: "corrigir?", text: "corrige este defeito?", options: ["sim", "não"], recommend: 0, key: "k" };
+  // A tarefa termina depois da resposta, então o Claude Code é chamado de volta para outra rodada que não fala do ask.
   const called = stream(
     init,
     tool,
     tasks("t1"),
     toolResult,
-    said(`查清楚了，等你决定。\n\n${block({ ask: [ask] })}`, 30),
+    said(`verifiquei; aguardando a sua decisão.\n\n${block({ ask: [ask] })}`, 30),
     tasks(),
     init,
     tool,
-    said("没事可做：已经发过卡了"),
+    said("NADA A FAZER: o cartão já foi enviado"),
   );
   const read = claude.read(called, 0, "");
-  assert.ok(read.text!.startsWith("没事可做：已经发过卡了"), "the last turn's word is still the answer");
+  assert.ok(read.text!.startsWith("NADA A FAZER: o cartão já foi enviado"), "a última rodada ainda é a resposta");
   const handed = resultFrom(readMessage(read.text!), {});
-  assert.equal(handed.problem, undefined, "and it is handed in as a receipt the hub can read");
+  assert.equal(handed.problem, undefined, "e é entregue como um recibo que a central consegue ler");
   assert.deepEqual(handed.result.ask, [ask]);
-  assert.equal(handed.result.outcome, "nothing", "the last turn's own words decide the outcome");
-  // Called back more than once, the latest receipt it wrote is the one that still counts.
+  assert.equal(handed.result.outcome, "nothing", "as palavras da própria última rodada decidem o resultado");
+  // Chamado de volta mais de uma vez, o último recibo que ele escreveu é o que ainda conta.
   const twice = stream(
     init,
-    said(`第一次\n\n${block({ notice: [{ title: "旧的", text: "旧的通知" }] })}`),
+    said(`primeira\n\n${block({ notice: [{ title: "aviso antigo", text: "notificação antiga" }] })}`),
     init,
-    said(`第二次\n\n${block({ notice: [{ title: "新的", text: "新的通知" }] })}`),
+    said(`segunda\n\n${block({ notice: [{ title: "aviso novo", text: "notificação nova" }] })}`),
     init,
-    said("没事可做：都发过了"),
+    said("NADA A FAZER: todos já foram enviados"),
   );
   const notices = (text: string) => readMessage(text).receipt?.notice as { title: string; text: string }[] | undefined;
-  assert.equal(notices(claude.read(twice, 0, "").text!)?.[0].title, "新的");
-  // Its own receipt is not replaced by an older one, and with none before it nothing is invented.
+  assert.equal(notices(claude.read(twice, 0, "").text!)?.[0].title, "aviso novo");
+  // O recibo dele próprio não é substituído por um mais antigo, e sem nenhum antes nada é inventado.
   const own = stream(
     init,
-    said(`先说一句\n\n${block({ notice: [{ title: "旧的", text: "旧的通知" }] })}`),
+    said(`primeira\n\n${block({ notice: [{ title: "aviso antigo", text: "notificação antiga" }] })}`),
     init,
-    said(`最后\n\n${block({ later: [{ key: "c", at: "2026-11-08T09:00:00+08:00", about: "复查" }] })}`),
+    said(`última\n\n${block({ later: [{ key: "c", at: "2026-11-08T09:00:00+08:00", about: "reverificação" }] })}`),
   );
   const kept = readMessage(claude.read(own, 0, "").text!).receipt as {
     notice?: unknown;
     later?: { key: string }[];
   };
-  assert.equal(kept.later?.[0].key, "c", "it keeps the receipt of its own last turn");
-  assert.equal(kept.notice, undefined, "and no older one is added beside it");
-  assert.equal(claude.read(stream(init, said("先说一句"), init, said("最后一句")), 0, "").text, "最后一句");
-  // A last turn that wrote a receipt wrongly is asked to write it again, not handed an older one in its place.
+  assert.equal(kept.later?.[0].key, "c", "ele mantém o recibo da própria última rodada");
+  assert.equal(kept.notice, undefined, "e nenhum mais antigo é acrescentado ao lado");
+  assert.equal(claude.read(stream(init, said("primeira"), init, said("última")), 0, "").text, "última");
+  // Uma última rodada que escreveu um recibo errado é chamada a escrevê-lo de novo, não recebe um antigo no lugar.
   const earlier = said(
-    `先说一句\n\n${block({ later: [{ key: "c", at: "2026-11-08T09:00:00+08:00", about: "复查" }] })}`,
+    `primeira\n\n${block({ later: [{ key: "c", at: "2026-11-08T09:00:00+08:00", about: "reverificação" }] })}`,
   );
-  const mislabelled = "最后\n\n```json\n" + JSON.stringify({ later: [{ key: "c", cancel: true }] }) + "\n```";
-  const unclosed = "最后\n\n```agent-autoloop\n" + JSON.stringify({ later: [{ key: "c", cancel: true }] }) + "```";
+  const mislabelled = "última\n\n```json\n" + JSON.stringify({ later: [{ key: "c", cancel: true }] }) + "\n```";
+  const unclosed = "última\n\n```agent-autoloop\n" + JSON.stringify({ later: [{ key: "c", cancel: true }] }) + "```";
   for (const last of [mislabelled, unclosed]) {
     const message = readMessage(claude.read(stream(init, earlier, init, said(last)), 0, "").text!);
-    assert.equal(message.receipt, undefined, "the older receipt stands in for the one it got wrong");
-    assert.ok(message.problem, "and it isn't asked to write its own again");
+    assert.equal(message.receipt, undefined, "o recibo mais antigo fica no lugar do que ele errou");
+    assert.ok(message.problem, "e não lhe é pedido que escreva o próprio de novo");
   }
 });
 
-test("Codex: access, new and going on", { skip: !stubbed(codex, {}) }, () => {
+test("Codex: acesso, sessão nova e continuada", { skip: !stubbed(codex, {}) }, () => {
   const argv = stubbed(codex, {})!;
   assert.deepEqual(argv.slice(1, 4), ["exec", "--json", "--skip-git-repo-check"]);
-  assert.ok(argv.at(-1)!.endsWith("做这件事"));
+  assert.ok(argv.at(-1)!.endsWith("faça isso"));
   assert.ok(argv.includes('sandbox_mode="workspace-write"'));
   assert.ok(argv.includes('approval_policy="never"'));
   assert.ok(stubbed(codex, { access: "read" })!.includes('sandbox_mode="read-only"'));
@@ -280,121 +282,124 @@ test("Codex: access, new and going on", { skip: !stubbed(codex, {}) }, () => {
   assert.ok(has(again, "-m", "m"));
   assert.ok(again.includes('model_reasoning_effort="xhigh"'));
   assert.ok(again.includes('service_tier="priority"'));
-  assert.ok(stubbed(codex, { tier: "priority" })!.includes('service_tier="priority"'), "a new run gets it too");
-  assert.ok(!argv.some((part) => part.startsWith("service_tier")), "left to Codex's own config unless the rules say");
+  assert.ok(stubbed(codex, { tier: "priority" })!.includes('service_tier="priority"'), "nova execução também recebe");
+  assert.ok(!argv.some((part) => part.startsWith("service_tier")), "fica com a configuração do Codex, salvo regra");
 });
 
-test("Codex: new and resumed runs use only browser access configured for the background task", () => {
+test("Codex: execuções novas e continuadas usam só o navegador configurado para a tarefa em segundo plano", () => {
   for (const resume of [null, "thread-1"]) {
     const prompt = codex.command({ ...turn, resume }).at(-1)!;
-    assert.match(prompt, /后台 codex exec/);
-    assert.match(prompt, /本轮实际可用的浏览器工具/);
-    assert.match(prompt, /规则或 Skill.*浏览器入口/);
-    assert.match(prompt, /桌面应用.*浏览器连接/);
-    assert.match(prompt, /业务.*回执.*本轮/);
+    assert.match(prompt, /codex exec em segundo plano/);
+    assert.match(prompt, /ferramentas de navegador realmente disponíveis nesta rodada/);
+    assert.match(prompt, /entrada de navegador.*na regra ou no Skill/);
+    assert.match(prompt, /aplicativo desktop.*conexão de navegador/);
+    assert.match(prompt, /negócio.*recibo.*rodada/);
     assert.ok(prompt.endsWith(turn.prompt));
     assert.doesNotMatch(prompt, /~\/\.local\/bin\/|\/Users\//);
   }
 });
 
-test("Codex: only a finished turn's last message is its answer", () => {
+test("Codex: só a última mensagem de uma rodada concluída é a resposta", () => {
   const lines = (...events: object[]) => events.map((e) => JSON.stringify(e)).join("\n");
   const started = { type: "thread.started", thread_id: "t" };
   const warning = { type: "item.completed", item: { type: "error", message: "under development" } };
   const said = (text: string) => ({ type: "item.completed", item: { type: "agent_message", text } });
   const ended = { type: "turn.completed", usage: { input_tokens: 9, cached_input_tokens: 3, output_tokens: 1 } };
-  assert.deepEqual(codex.read(lines(started, warning, said("中途"), said("好了"), ended), 0, ""), {
+  assert.deepEqual(codex.read(lines(started, warning, said("parcial"), said("pronto"), ended), 0, ""), {
     session: "t",
-    text: "好了",
+    text: "pronto",
     finished: true,
     sessionUsage: { input: 9, output: 1, cached: 3 },
   });
-  // A reconnect Codex announced and then got over (it fell back to another transport and carried on) is not how the
-  // turn ended: twelve finished runs with receipts were thrown away and redone over one of these.
+  // Uma reconexão que o Codex anunciou e então superou (ele caiu para outro transporte e seguiu adiante) não é como a
+  // rodada terminou: doze execuções concluídas com recibos foram descartadas e refeitas por causa de uma dessas.
   const reconnect = { type: "error", message: "Reconnecting... 5/5 (request timed out)" };
-  assert.deepEqual(codex.read(lines(started, reconnect, said("好了"), ended), 0, ""), {
+  assert.deepEqual(codex.read(lines(started, reconnect, said("pronto"), ended), 0, ""), {
     session: "t",
-    text: "好了",
+    text: "pronto",
     finished: true,
     sessionUsage: { input: 9, output: 1, cached: 3 },
   });
   assert.deepEqual(
-    codex.read(lines(started, said("中途")), null, ""),
+    codex.read(lines(started, said("parcial")), null, ""),
     { session: "t" },
-    "still going: only the session so far",
+    "ainda em andamento: só a sessão até aqui",
   );
-  assert.equal(codex.read(lines(started, said("中途")), 1, "").error, "Codex 没有完成并留下实际结果");
+  assert.equal(
+    codex.read(lines(started, said("parcial")), 1, "").error,
+    "o Codex não concluiu nem deixou um resultado",
+  );
   assert.equal(
     codex.read(lines(started, ended), 0, "").error,
-    "Codex 没有完成并留下实际结果",
-    "finished with nothing to say",
+    "o Codex não concluiu nem deixou um resultado",
+    "terminou sem nada a dizer",
   );
-  assert.deepEqual(codex.read(lines(started, { type: "turn.failed", error: { message: "额度用完了" } }), 1, ""), {
+  assert.deepEqual(codex.read(lines(started, { type: "turn.failed", error: { message: "a cota acabou" } }), 1, ""), {
     session: "t",
     finished: true,
-    error: "额度用完了",
+    error: "a cota acabou",
   });
   assert.equal(codex.read("", 1, "cannot resume: active writer").error, "cannot resume: active writer");
   assert.equal(codex.link!("t"), "codex://threads/t");
 });
 
-test("Codex: a turn that got going says so, however it ended; one that never did doesn't", () => {
+test("Codex: uma rodada que começou diz isso, seja como for que terminou; uma que nunca começou não diz", () => {
   const lines = (...events: object[]) => events.map((event) => JSON.stringify(event)).join("\n");
   const thread = { type: "thread.started", thread_id: "t" };
   const warning = { type: "item.completed", item: { type: "error", message: "under development" } };
   const turn = { type: "turn.started" };
   const running = { type: "item.started", item: { type: "command_execution" } };
   const cut = lines(thread, warning, turn, running);
-  assert.deepEqual(codex.read(cut, null, ""), { session: "t", started: true }, "still going, or vanished");
+  assert.deepEqual(codex.read(cut, null, ""), { session: "t", started: true }, "ainda em andamento, ou sumiu");
   assert.deepEqual(codex.read(cut, 143, ""), {
     session: "t",
     started: true,
-    error: "Codex 没有完成并留下实际结果",
+    error: "o Codex não concluiu nem deixou um resultado",
   });
   assert.equal(codex.read(lines(thread, turn, { type: "turn.failed" }), 1, "").started, true);
-  assert.equal(codex.read(lines(thread, warning), 1, "boom").started, undefined, "a warning isn't the turn");
+  assert.equal(codex.read(lines(thread, warning), 1, "boom").started, undefined, "um aviso não é a rodada");
   const missing = "Error: thread/resume: thread/resume failed: no rollout found for thread id x (code -32600)";
   assert.equal(codex.read("", 1, missing).started, undefined);
   assert.equal(codex.read("", 1, "cannot resume: active writer").started, undefined);
 });
 
-test("a plain command: placeholders filled in, stdout is its last message, a bad exit code is a failure", () => {
+test("um comando simples: placeholders preenchidos, stdout é a última mensagem, saída ruim é falha", () => {
   const argv = command.command({
     ...turn,
     model: "m",
     command: ["tool", "--model={model}", "-p", "{prompt}", "--ctx", "{context}"],
   });
-  assert.deepEqual(argv, ["tool", "--model=m", "-p", "做这件事", "--ctx", "/ctx.json"]);
-  assert.deepEqual(command.read("好了\n", 0, ""), { text: "好了\n" });
-  assert.deepEqual(command.read("中途", null, ""), {});
-  assert.match(command.read("", 3, "boom").error!, /退出码 3：boom/);
-  assert.equal(command.link, undefined, "it has no session to go on in");
+  assert.deepEqual(argv, ["tool", "--model=m", "-p", "faça isso", "--ctx", "/ctx.json"]);
+  assert.deepEqual(command.read("pronto\n", 0, ""), { text: "pronto\n" });
+  assert.deepEqual(command.read("parcial", null, ""), {});
+  assert.match(command.read("", 3, "boom").error!, /código de saída 3: boom/);
+  assert.equal(command.link, undefined, "ele não tem sessão em que continuar");
 });
 
-test("a plain command's prompt reaches the program as it was written, whatever it contains", () => {
-  // The prompt is what someone asked for; the placeholders belong to the command line, not to the words put in it.
+test("o prompt de um comando simples chega ao programa como foi escrito, seja o que contiver", () => {
+  // O prompt é o que alguém pediu; os placeholders são da linha de comando, não das palavras colocadas nela.
   const written = [
-    "把 {cwd} 这个词原样打印出来",
-    "价格是 $& 元",
-    "路径 $` 和 $' 也要留下",
-    "{context} 和 {prompt} 都是字面",
+    "imprima a palavra {cwd} exatamente assim",
+    "o preço é $& reais",
+    "os caminhos $` e $' também precisam ficar",
+    "{context} e {prompt} são ambos literais",
   ];
   for (const prompt of written) {
     const argv = command.command({ ...turn, prompt, command: ["tool", "-p", "{prompt}"] });
-    assert.deepEqual(argv, ["tool", "-p", prompt], `${prompt} 传到程序时被改写了`);
+    assert.deepEqual(argv, ["tool", "-p", prompt], `${prompt} foi reescrito ao chegar ao programa`);
   }
-  // The command line itself still fills in, and one that names the prompt twice gets it twice.
+  // A linha de comando em si ainda é preenchida, e uma que nomeia o prompt duas vezes o recebe duas vezes.
   const both = command.command({ ...turn, model: "m", command: ["tool", "{prompt}", "{model}"] });
-  assert.deepEqual(both, ["tool", "做这件事", "m"]);
+  assert.deepEqual(both, ["tool", "faça isso", "m"]);
 });
 
-test("a program that isn't there says so", () => {
-  assert.throws(() => findProgram("surely-not-installed-anywhere"), /找不到 surely-not-installed-anywhere/);
+test("um programa que não está lá diz isso", () => {
+  assert.throws(() => findProgram("surely-not-installed-anywhere"), /surely-not-installed-anywhere/);
 });
 
-test("a program missing at one lookup is found at the next once it's back", () => {
+test("um programa que falta numa busca é achado na seguinte assim que volta", () => {
   const program = join(setup("adapters-reinstall"), "reinstalled-agent");
-  assert.throws(() => findProgram("reinstalled-agent", () => [program]), /找不到 reinstalled-agent/);
+  assert.throws(() => findProgram("reinstalled-agent", () => [program]), /reinstalled-agent/);
   writeFileSync(program, "", { mode: 0o755 });
   assert.equal(
     findProgram("reinstalled-agent", () => [program]),
@@ -402,7 +407,7 @@ test("a program missing at one lookup is found at the next once it's back", () =
   );
 });
 
-test("a line of output that's JSON but no message is noise to every plugin", () => {
+test("uma linha de saída que é JSON mas não é mensagem é ruído para todo plugin", () => {
   const noise = 'null\n42\n"words"\n[]\n';
   for (const adapter of [claude, codex, command, dsh, zcode]) {
     assert.doesNotThrow(() => adapter.read(noise, null, ""));

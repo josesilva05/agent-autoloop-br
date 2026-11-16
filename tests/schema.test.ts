@@ -1,14 +1,15 @@
-// Failure modes: published schemas accept an impersonated source, malformed receipts, or credentials in event data;
-// the wire contract drifts from the validators, and conformance accepts a server that opens the wrong door.
-// Required job structure and inherited object names must not bypass schema checks; Unicode limits count code points.
-// FYI notices must accept only an optional boolean without weakening notice limits or changing question receipts.
+// Modos de falha: schemas publicados aceitam uma fonte que se passa por outra, recibos malformados ou credenciais nos
+// dados do evento; o contrato de protocolo se distancia dos validadores, e a conformidade aceita um servidor que abre
+// a porta errada. A estrutura obrigatória do job e nomes herdados de objetos não podem escapar das verificações de
+// schema; os limites Unicode contam pontos de código. Um notice fyi deve aceitar só um booleano opcional, sem afrouxar
+// os limites do notice nem mudar os recibos de pergunta.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkSchema } from "../protocol/schema.ts";
 import { parseEvent, parseResult } from "../protocol/validate.ts";
 
-test("notice receipts accept an optional boolean fyi and keep all other boundaries", () => {
-  const notice = { title: "已设好", text: "每天九点检查", key: "daily-check" };
+test("recibos de notice aceitam um booleano opcional fyi e mantêm todos os outros limites", () => {
+  const notice = { title: "Já configurado", text: "verificar todos os dias às nove", key: "daily-check" };
   for (const item of [notice, { ...notice, fyi: true }, { ...notice, fyi: false }]) {
     const result = { outcome: "done", notice: [item] };
     assert.deepEqual(parseResult(result), result);
@@ -30,12 +31,12 @@ test("notice receipts accept an optional boolean fyi and keep all other boundari
   const tooMany = { outcome: "done", notice: Array(11).fill({ ...notice, fyi: true }) };
   assert.throws(() => parseResult(tooMany), /notice/);
   assert.ok(checkSchema("result", tooMany).length);
-  const ask = { outcome: "done", ask: [{ ...notice, options: ["继续", "暂停"], fyi: true }] };
+  const ask = { outcome: "done", ask: [{ ...notice, options: ["continuar", "pausar"], fyi: true }] };
   assert.throws(() => parseResult(ask), /ask/);
   assert.ok(checkSchema("result", ask).length);
 });
 
-test("wire schemas agree with event and receipt boundaries", () => {
+test("os schemas de protocolo concordam com os limites de eventos e recibos", () => {
   for (const input of [
     { id: "one", type: "app.changed" },
     { id: " ", type: "app.changed", summary: null },
@@ -55,9 +56,9 @@ test("wire schemas agree with event and receipt boundaries", () => {
     { outcome: "done" },
     { outcome: "done", events: [{ id: "x", type: "app.changed" }] },
     { outcome: "unknown" },
-    { outcome: "done", ask: [{ title: "选", text: "内容", options: ["一"] }] },
-    { outcome: "done", ask: [{ title: "选", text: "内容", options: ["一", "二"], recommend: 2 }] },
-    { outcome: "done", later: [{ key: "k", at: "badZ", about: "后来" }] },
+    { outcome: "done", ask: [{ title: "escolha", text: "conteúdo", options: ["um"] }] },
+    { outcome: "done", ask: [{ title: "escolha", text: "conteúdo", options: ["um", "dois"], recommend: 2 }] },
+    { outcome: "done", later: [{ key: "k", at: "badZ", about: "depois" }] },
   ]) {
     let accepted = true;
     try {
@@ -69,17 +70,24 @@ test("wire schemas agree with event and receipt boundaries", () => {
   }
 });
 
-test("schema checks reject inherited names and incomplete tasks or question cards", () => {
+test("as verificações de schema rejeitam nomes herdados e jobs ou cartões de pergunta incompletos", () => {
   assert.ok(checkSchema("event", { id: "x", type: "one", constructor: "unexpected" }).length);
   assert.ok(checkSchema("job", { run: 1, token: "t", rule: {}, agent: {}, context: {} }).length);
   assert.ok(
-    checkSchema("card", { id: 1, version: 1, kind: "ask", state: "open", title: "选", text: "内容", options: [] })
-      .length,
+    checkSchema("card", {
+      id: 1,
+      version: 1,
+      kind: "ask",
+      state: "open",
+      title: "escolha",
+      text: "conteúdo",
+      options: [],
+    }).length,
   );
   assert.throws(() => checkSchema("constructor", {}));
 });
 
-test("published text limits count Unicode characters, including astral code points", () => {
+test("os limites de texto publicados contam caracteres Unicode, incluindo pontos de código astrais", () => {
   const event = { id: "x", type: "one", summary: "😀".repeat(200) };
   assert.deepEqual(checkSchema("event", event), []);
   assert.equal(parseEvent(event).summary, event.summary);
@@ -89,20 +97,20 @@ test("published text limits count Unicode characters, including astral code poin
   assert.equal(parseResult(receipt).summary, receipt.summary);
 });
 
-test("usage must be an object of finite nonnegative amounts", () => {
+test("usage deve ser um objeto de valores finitos e não negativos", () => {
   for (const usage of [[1], { cost: -1 }, { cost: Infinity }, { input: NaN }]) {
     assert.throws(() => parseResult({ outcome: "done", usage }));
     assert.ok(checkSchema("result", { outcome: "done", usage }).length);
   }
 });
 
-test("timer timestamps are real calendar dates in the documented ISO format", () => {
+test("os horários dos timers são datas de calendário reais no formato ISO documentado", () => {
   for (const at of ["2000Z", "2026-02-30T10:00:00Z", "2026-01-01T25:00:00Z"]) {
-    const result = { outcome: "done", later: [{ key: "later", at, about: "再查" }] };
+    const result = { outcome: "done", later: [{ key: "later", at, about: "reverificar" }] };
     assert.throws(() => parseResult(result));
     assert.ok(checkSchema("result", result).length);
   }
-  const result = { outcome: "done", later: [{ key: "later", at: "2028-02-29T10:00:00+08:00", about: "再查" }] };
+  const result = { outcome: "done", later: [{ key: "later", at: "2028-02-29T10:00:00+08:00", about: "reverificar" }] };
   assert.doesNotThrow(() => parseResult(result));
   assert.deepEqual(checkSchema("result", result), []);
 });

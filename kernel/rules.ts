@@ -1,5 +1,5 @@
-// What the kernel reads in rules: their shape and which events a rule takes. The rules file is checked before it gets
-// here, in protocol/rules.ts.
+// O que o kernel lê nas regras: o formato delas e quais eventos uma regra pega. O arquivo de regras é conferido antes de
+// chegar aqui, em protocol/rules.ts.
 export type Access = "read" | "edit" | "full";
 export type Source = { name: string; adapter?: string };
 type AgentOptions = {
@@ -16,7 +16,7 @@ export type Tell = "always" | "needed" | "never";
 type EventFilter = { source: string; types: string[] };
 type When = EventFilter | { cron: string };
 type RuleWords = { skill?: string; prompt?: string };
-/** A session's name for clients that take it from the first line: {subject} and {id} filled in by the worker. */
+/** O nome de uma sessão para clientes que o pegam da primeira linha: {subject} e {id} preenchidos pelo worker. */
 type RuleOptions = RuleWords & {
   title?: string;
   parallel?: number;
@@ -24,20 +24,20 @@ type RuleOptions = RuleWords & {
   resume?: boolean;
   emits?: EventFilter;
 };
-/** Without channels a rule's cards reach the default ones, or every channel if there are none; with them, only those. */
+/** Sem channels, os cartões de uma regra chegam aos padrões, ou a todo canal se não houver nenhum; com eles, só àqueles. */
 type Reach = { channels?: string[] };
-/** Without parallel a rule's group runs one at a time; with it, each subject is its own thread, that many at once. */
+/** Sem parallel, o grupo de uma regra roda um de cada vez; com ele, cada objeto é seu próprio assunto, tantos por vez. */
 export type Rule = RuleOptions &
   Reach & { name: string; when: When; to: string; cwd: string; group: string; tell: Tell };
-/** A scheduled task that runs elsewhere (say, in the Claude app): the hub neither starts nor records it. With a cwd it can
- * also ask, and your answer goes on there like a round of a rule. */
+/** Uma tarefa agendada que roda em outro lugar (digamos, no app do Claude): a central não a inicia nem a registra. Com um
+ * cwd ela também pode perguntar, e a sua resposta segue para lá como uma rodada de uma regra. */
 export type Elsewhere = RuleWords & {
   name: string;
   source: string;
   to: string;
   cron: string;
   where: string;
-  /** What its app runs it on, only to be shown: the hub starts nothing with them. */
+  /** Com o que o aplicativo dele a roda, só para exibição: a central não inicia nada com eles. */
   model?: string;
   effort?: string;
   cwd?: string;
@@ -46,13 +46,13 @@ type Registered = { sources: Record<string, Source>; agents: Record<string, Agen
 export type Rules = Registered & {
   timezone: string;
   askFirst: string[];
-  /** Where a card that names no channels of its own goes: a tell, the hub's own alerts, a rule without a list. */
+  /** Para onde vai um cartão que não nomeia canais próprios: um tell, os alertas da própria central, uma regra sem lista. */
   defaultChannels?: string[];
   rules: Rule[];
   elsewhere: Elsewhere[];
 };
 
-/** The source of what the clock makes happen. */
+/** A fonte daquilo que o relógio faz acontecer. */
 export const SCHEDULE = "schedule";
 
 function typeMatch(pattern: string, type: string) {
@@ -62,13 +62,13 @@ export const typeMatches = (patterns: string[], type: string) => patterns.some((
 export const eventRule = (rule: Rule): rule is Rule & { when: EventFilter } => "source" in rule.when;
 export const cronOf = (rule: Rule) => (rule.when as { cron: string }).cron;
 
-/** The rule a run, card or timer names: a rule's own, or a task elsewhere's, which only your answers to it start. */
+/** A regra que uma rodada, cartão ou reverificação nomeia: uma regra, ou uma tarefa de outro lugar, que só as suas respostas iniciam. */
 export function ruleOf(rules: Rules, name: string): Rule | undefined {
   const rule = rules.rules.find((rule) => rule.name === name);
   if (rule) return rule;
   const task = rules.elsewhere.find((task) => task.name === name);
   if (!task?.cwd) return undefined;
   const { source, to, cwd, skill, prompt } = task;
-  // No event type matches none: nothing that comes in starts it.
+  // Nenhum tipo de evento casa com uma lista vazia: nada que chega a inicia.
   return { name, when: { source, types: [] }, to, cwd, skill, prompt, group: name, tell: "needed" };
 }

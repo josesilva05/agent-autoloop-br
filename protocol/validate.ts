@@ -1,20 +1,20 @@
-// The protocol's own checks, with no state behind them: the hub applies them at its door, and a worker applies them to
-// an Agent's receipt before handing it in, while the Agent can still be asked to write it again.
+// As verificações do próprio protocolo, sem nenhum estado por trás delas: a central as aplica na porta de entrada, e um
+// worker as aplica ao recibo de um Agent antes de entregá-lo, enquanto ainda dá para pedir que ele o escreva de novo.
 import { InputError } from "../kernel/errors.ts";
 
 export const EVENT_TYPE = /^[a-z][a-z0-9_.-]{0,63}$/;
-/** What the protocol allows a card answer to carry: the schema says so, and the hub keeps it. */
+/** O que o protocolo permite que a resposta a um cartão carregue: o schema diz, e a central guarda. */
 export const ANSWER_TEXT = 4000;
 export const ANSWER_BY = 500;
 export const ANSWER_REF = 500;
-/** A channel's own reference to the message it sent. */
+/** A referência que o próprio canal dá à mensagem que enviou. */
 export const DELIVERY_REF = 500;
 export type Later = { key: string; at?: string; about?: string; cancel?: boolean };
 export type Ask = { title: string; text: string; options: string[]; recommend?: number; about?: string; key?: string };
 export type Notice = { title: string; text: string; key?: string; fyi?: boolean };
 export type Usage = { input?: number; output?: number; cached?: number; cost?: number };
 
-/** Missing figures stay missing: zero is a price or token count that was actually reported. */
+/** Números que faltam continuam faltando: zero é um preço ou uma contagem de tokens que foi de fato informada. */
 export function addUsage(total: Usage | undefined, more: Usage | undefined): Usage | undefined {
   if (!more) return total;
   const result = { ...total };
@@ -51,19 +51,22 @@ const FIELDS = ["id", "type", "subject", "summary", "detail", "link", "hops"];
 
 export function parseEvent(input: unknown): EventInput {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new InputError("事件要是一个 JSON 对象");
+    throw new InputError("o evento deve ser um objeto JSON");
   }
   const given = input as Record<string, unknown>;
-  for (const name of Object.keys(given)) if (!FIELDS.includes(name)) throw new InputError(`不认识的字段：${name}`);
+  for (const name of Object.keys(given))
+    if (!FIELDS.includes(name)) throw new InputError(`campo desconhecido: ${name}`);
   const field = (name: keyof typeof LIMITS | "type", required = false) => {
     const value = given[name] ?? "";
-    if (typeof value !== "string") throw new InputError(`${name} 要是文字`);
-    if (required && !value) throw new InputError(`缺少 ${name}`);
-    if (name !== "type" && [...value].length > LIMITS[name]) throw new InputError(`${name} 最多 ${LIMITS[name]} 个字`);
+    if (typeof value !== "string") throw new InputError(`${name} deve ser um texto`);
+    if (required && !value) throw new InputError(`falta ${name}`);
+    if (name !== "type" && [...value].length > LIMITS[name])
+      throw new InputError(`${name} tem no máximo ${LIMITS[name]} caracteres`);
     return value;
   };
   const hops = given.hops === undefined ? 0 : given.hops;
-  if (!Number.isSafeInteger(hops) || (hops as number) < 0) throw new InputError("hops 要是非负整数");
+  if (!Number.isSafeInteger(hops) || (hops as number) < 0)
+    throw new InputError("hops deve ser um inteiro não negativo");
   const event = {
     id: field("id", true),
     type: field("type", true),
@@ -73,14 +76,16 @@ export function parseEvent(input: unknown): EventInput {
     link: field("link"),
     hops: hops as number,
   };
-  // Half a Unicode character is stored and looked up as different bytes, so the same id would never be recognised again.
-  if (!event.id.isWellFormed()) throw new InputError("id 里有不完整的字符");
-  if (!EVENT_TYPE.test(event.type)) throw new InputError("type 只能用小写字母、数字和 . _ -，以字母开头");
-  // The subject and link go into the Agent's prompt, so neither may carry words: a subject is an identifier, a link a
-  // web address in plain ASCII (anything else percent-encoded).
-  if (!/^[A-Za-z0-9#._:\/@-]*$/.test(event.subject)) throw new InputError("subject 只能用字母、数字和 # . _ : / @ -");
+  // Meio caractere Unicode é guardado e buscado como bytes diferentes, então o mesmo id nunca mais seria reconhecido.
+  if (!event.id.isWellFormed()) throw new InputError("o id tem um caractere incompleto");
+  if (!EVENT_TYPE.test(event.type))
+    throw new InputError("type só pode ter letras minúsculas, números e . _ -, e começar com uma letra");
+  // O subject e o link vão para o prompt do Agent, então nenhum dos dois pode carregar palavras: um subject é um
+  // identificador, e um link é um endereço web em ASCII puro (qualquer outra coisa, codificado em porcentagem).
+  if (!/^[A-Za-z0-9#._:\/@-]*$/.test(event.subject))
+    throw new InputError("subject só pode ter letras, números e # . _ : / @ -");
   if (event.link && !/^https?:\/\/[\x21-\x7e]+$/.test(event.link)) {
-    throw new InputError("link 要是网址，非 ASCII 的字要先编码");
+    throw new InputError("link deve ser um endereço web; caracteres não ASCII precisam ser codificados antes");
   }
   return event;
 }
@@ -95,7 +100,7 @@ const only = (item: object, names: string[]) => Object.keys(item).every((name) =
 const isItem = (value: unknown) => typeof value === "object" && value !== null && !Array.isArray(value);
 const items = (value: unknown, limit: number): value is Item[] =>
   value === undefined || (Array.isArray(value) && value.length <= limit && value.every(isItem));
-/** A list of at most `limit` objects that each pass, or no list at all. */
+/** Uma lista de no máximo `limit` objetos, cada um aprovado, ou lista nenhuma. */
 const listOf = (value: unknown, limit: number, valid: (item: Item) => boolean) =>
   items(value, limit) && (value === undefined || value.every(valid));
 
@@ -124,7 +129,7 @@ const validAsk = (ask: Item) =>
       (ask.recommend as number) >= 0 &&
       (ask.recommend as number) < ask.options.length));
 
-/** A question as a receipt asks it, here asked by a task elsewhere. */
+/** Uma pergunta como o recibo a faz, aqui feita por uma tarefa de outro lugar. */
 export const isAsk = (value: unknown) => isItem(value) && validAsk(value as Item);
 
 const validNotice = (notice: Item) =>
@@ -154,33 +159,40 @@ const validUsage = (usage: unknown) =>
 
 export function parseResult(input: unknown): Result {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    throw new InputError("结果要是一个 JSON 对象");
+    throw new InputError("o resultado deve ser um objeto JSON");
   }
   const result = { ...input } as Item;
   if (
     !only(result, ["outcome", "summary", "error", "session", "usage", "ask", "notice", "resolve", "later", "events"])
   ) {
-    throw new InputError("结果里有不认识的字段");
+    throw new InputError("o resultado tem um campo desconhecido");
   }
   if (!["done", "nothing", "failed", "cancelled"].includes(result.outcome as string)) {
-    throw new InputError("outcome 只能是 done、nothing、failed、cancelled");
+    throw new InputError("outcome só pode ser done, nothing, failed ou cancelled");
   }
   if (!optional(result.summary, 500) || !optional(result.error, 500) || !optional(result.session, 500)) {
-    throw new InputError("summary、error、session 最多 500 字");
+    throw new InputError("summary, error e session têm no máximo 500 caracteres");
   }
-  if (!validUsage(result.usage)) throw new InputError("usage 要是对象，里面要是有限的非负数字");
+  if (!validUsage(result.usage)) throw new InputError("usage deve ser um objeto com números finitos e não negativos");
   if (!listOf(result.ask, 5, validAsk)) {
-    throw new InputError("ask 每一项要有 title、text 和 2 到 5 个 options，recommend 是其中一个的序号，最多 5 项");
+    throw new InputError(
+      "cada item de ask precisa de title, text e 2 a 5 options; recommend é o índice de uma; no máximo 5 itens",
+    );
   }
-  if (!listOf(result.notice, 10, validNotice)) throw new InputError("notice 每一项要有 title 和 text，最多 10 项");
+  if (!listOf(result.notice, 10, validNotice))
+    throw new InputError("cada item de notice precisa de title e text; no máximo 10 itens");
   if (!listOf(result.resolve, 50, validResolve)) {
-    throw new InputError("resolve 每一项要有卡片编号和 1000 字以内的核实依据，最多 50 项");
+    throw new InputError(
+      "cada item de resolve precisa do cartão e da evidência verificada, até 1000 caracteres; no máximo 50 itens",
+    );
   }
   if (!listOf(result.later, 10, validLater)) {
-    throw new InputError("later 每一项要有 key，以及带时区的 at 和 about，或者 cancel: true，最多 10 项");
+    throw new InputError(
+      "cada item de later precisa de key e de at com fuso horário e about, ou de cancel: true; no máximo 10 itens",
+    );
   }
   if (result.events !== undefined) {
-    if (!items(result.events, 100)) throw new InputError("events 最多 100 项");
+    if (!items(result.events, 100)) throw new InputError("events tem no máximo 100 itens");
     result.events = result.events.map(parseEvent);
   }
   return result as Result;

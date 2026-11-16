@@ -1,4 +1,4 @@
-// Where this install keeps its things: rules.json, config.json, secrets.env, hub.db and the worker's runs.
+// Onde esta instalação guarda suas coisas: rules.json, config.json, secrets.env, hub.db e as rodadas do worker.
 import { homedir } from "node:os";
 import path from "node:path";
 

@@ -1,9 +1,9 @@
-// Failure modes from Ship: a later docs-only commit suppresses a queued code release; an unhealthy endpoint authorizes
-// skipping release; the action imports a project's mutable copy of the engine or accepts a non-commit target.
+// Modos de falha do Ship: um commit posterior, só de documentos, suprime uma publicação de código já na fila; um endpoint
+// fora de saúde autoriza pular a publicação; a action importa uma cópia mutável do motor feita pelo projeto ou aceita um alvo que não é um commit.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decideShip } from "../plugins/delivery/action.ts";
-test("Ship compares live to target and only runtime changes can supersede", async () => {
+test("o Ship compara a versão em produção com o alvo, e só mudanças de runtime podem substituí-la", async () => {
   const calls: any[] = [];
   const required = (a: string, b: string) => {
     calls.push([a, b]);

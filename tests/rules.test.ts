@@ -1,19 +1,23 @@
-// The rules file is what the owner changes by asking an Agent, so a mistake must be caught, say which rule and what is
-// wrong, and leave the old rules running. Failure cases: a rule naming a source or agent that isn't there; two rules with
-// one name; a rule matching no event or with both a source and a schedule; a schedule that is malformed or never comes; an
-// unknown way of telling; an agent without a worker, with an unknown access level, a program to start that isn't one
-// path, a service tier that isn't a word, or a command without a command line; a
-// rule that sends its work to an ACP agent with no command line, which only shows when it runs and then fails ten times, or
-// an ACP agent like that which no rule uses and which never hurt anyone being refused; a rule with neither a skill nor a
-// prompt, or without a folder; a misspelt field taken silently; a rule running more than one at a time without saying how many, or
-// rules in one group disagreeing on it; an emit naming a source that isn't there; a rule's channels naming one that isn't there, or none at all; defaultChannels naming one that isn't there, or none at all; a scheduled task shown on the page naming a source or agent that isn't there or a malformed schedule, or saying how its answers go on without where (cwd), or where without how; a time zone
-// that doesn't exist; a session title with a space, which a client taking the first word would cut, with a placeholder
-// it doesn't know, which would reach the Agent as written, or not starting with a letter or digit, so a subject from
-// outside can lead the prompt and be read by the Agent's command line as an option (-x) or a command (/x); the reserved source redefined; a null rule crashes reload instead of keeping the old rules;
-// a task elsewhere that can't say which model its app runs it on, so a client showing it borrows the Agent's, or one that says so with an empty word.
-// A good file changing on disk takes effect; a bad one doesn't, and says why. A file that is gone or can't be read
-// crashes the hub, at reload or at restart, instead of keeping the rules it had. A file broken while the hub was down
-// is never told, because nothing about it changes after startup has read it.
+// O arquivo de regras é o que o titular muda pedindo a um Agent, então um erro precisa ser pego, dizer qual regra e o que está
+// errado, e deixar as regras antigas rodando. Casos de falha: uma regra nomeando uma fonte ou Agent que não existe; duas regras
+// com o mesmo nome; uma regra que não casa com nenhum evento ou com uma fonte e um agendamento ao mesmo tempo; um agendamento
+// malformado ou que nunca chega; um modo desconhecido de notificar; um Agent sem worker, com um nível de acesso desconhecido,
+// com um programa a iniciar que não é um caminho só, com um tier de serviço que não é uma palavra, ou com um comando sem linha
+// de comando; uma regra que manda o trabalho para um Agent ACP sem linha de comando, o que só aparece quando roda e então falha
+// dez vezes, ou um Agent ACP assim que nenhuma regra usa e que nunca prejudicou ninguém sendo recusado; uma regra sem skill nem
+// prompt, ou sem pasta; um campo escrito errado aceito em silêncio; uma regra rodando mais de uma por vez sem dizer quantas, ou
+// regras de um grupo discordando nisso; um emits nomeando uma fonte que não existe; os channels de uma regra nomeando um que não
+// existe, ou nenhum; defaultChannels nomeando um que não existe, ou nenhum; uma tarefa agendada mostrada na página nomeando uma
+// fonte ou Agent que não existe ou um agendamento malformado, ou dizendo como as respostas dela continuam sem dizer onde (cwd),
+// ou onde sem como; um fuso horário que não existe; um título de sessão com um espaço, que um cliente que pega a primeira palavra
+// cortaria, com um placeholder que ele não conhece, que chegaria ao Agent como escrito, ou não começando com letra ou dígito, de
+// modo que um objeto vindo de fora pode liderar o prompt e ser lido pela linha de comando do Agent como uma opção (-x) ou um
+// comando (/x); a fonte reservada redefinida; uma regra nula quebra o reload em vez de manter as regras antigas; uma tarefa em
+// outro lugar que não consegue dizer em qual modelo o aplicativo dela a roda, então um cliente que a exibe toma emprestado o do
+// Agent, ou uma que diz isso com uma palavra vazia.
+// Um arquivo bom mudando no disco passa a valer; um ruim não, e diz o porquê. Um arquivo que sumiu ou que não pode ser lido
+// quebra a central, no reload ou na reinicialização, em vez de manter as regras que ela tinha. Um arquivo quebrado enquanto a
+// central estava fora do ar nunca é avisado, porque nada nele muda depois que a inicialização o leu.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -39,20 +43,20 @@ const problem = (change: (r: any) => void, words: RegExp) => {
   );
 };
 
-test("a task elsewhere may say which model and effort its app runs it on", () => {
+test("uma tarefa em outro lugar pode dizer em qual modelo e esforço o aplicativo dela a roda", () => {
   const told = good();
   Object.assign(told.elsewhere[0], { model: "some-model", effort: "high" });
   const [task] = parseRules(JSON.stringify(told)).elsewhere;
   assert.deepEqual([task.model, task.effort], ["some-model", "high"]);
 });
 
-test("the fixture loads, with defaults filled in", () => {
+test("o fixture carrega, com os padrões preenchidos", () => {
   const r = parseRules(JSON.stringify(good()));
   assert.equal(r.rules[0].tell, "needed");
-  assert.equal(r.rules[2].group, "告警也记一笔", "a rule's group defaults to its own name");
-  assert.ok(r.askFirst.includes("删数据"));
-  assert.equal(r.sources.schedule.name, "定时");
-  assert.equal(r.agents.a1.access, "edit", "the safe level unless the rule's author asks otherwise");
+  assert.equal(r.rules[2].group, "alerta também registra", "o grupo de uma regra é por padrão o próprio nome dela");
+  assert.ok(r.askFirst.includes("apagar dados"));
+  assert.equal(r.sources.schedule.name, "agendamento");
+  assert.equal(r.agents.a1.access, "edit", "o nível seguro a menos que o autor da regra peça outro");
   assert.equal(r.agents.a2.access, "full");
   const wrapped = good();
   wrapped.agents.a1.program = "/opt/bin/claude-via-gateway";
@@ -63,19 +67,19 @@ test("the fixture loads, with defaults filled in", () => {
   assert.equal(limited.agents.a1.maxActive, 3);
   assert.equal(limited.rules[0].maxActive, 1);
   assert.equal(r.rules[0].title, "note-{id}");
-  assert.equal(r.rules[1].title, undefined, "no title unless the rule gives one");
+  assert.equal(r.rules[1].title, undefined, "nenhum título a menos que a regra dê um");
 });
 
-test("a mistake says which rule and what is wrong", () => {
+test("um erro diz qual regra e o que está errado", () => {
   problem((r) => {
     r.rules[0].to = "nobody";
-  }, /规则「意见」.*to.*不是已登记的 Agent：nobody/);
+  }, /a regra "opiniões".*to.*não é um Agent registrado: nobody/);
   problem((r) => {
     r.rules[0].channels = ["chat", "nowhere"];
-  }, /规则「意见」.*channels.*nowhere/);
+  }, /a regra "opiniões".*channels.*nowhere/);
   problem((r) => {
     r.rules[0].channels = [];
-  }, /规则「意见」.*channels/);
+  }, /a regra "opiniões".*channels/);
   problem((r) => {
     r.defaultChannels = ["nowhere"];
   }, /defaultChannels.*nowhere/);
@@ -84,135 +88,135 @@ test("a mistake says which rule and what is wrong", () => {
   }, /defaultChannels/);
   problem((r) => {
     r.rules[0].when.source = "nowhere";
-  }, /规则「意见」.*来源.*nowhere/);
+  }, /a regra "opiniões".*fonte.*nowhere/);
   problem((r) => {
-    r.rules[1].name = "意见";
-  }, /规则名「意见」重复了/);
+    r.rules[1].name = "opiniões";
+  }, /o nome de regra "opiniões" está duplicado/);
   problem((r) => {
     r.rules[0].when.types = [];
-  }, /规则「意见」.*types/);
+  }, /a regra "opiniões".*types/);
   problem((r) => {
     r.rules[0].when.cron = "0 9 * * *";
-  }, /规则「意见」.*when/);
+  }, /a regra "opiniões".*when/);
   problem((r) => {
     r.rules[3].when.cron = "99 * * * *";
-  }, /规则「早报」.*cron/);
+  }, /a regra "briefing matinal".*cron/);
   problem((r) => {
     r.rules[3].when.cron = "0 0 30 2 *";
-  }, /规则「早报」.*不会到来/);
+  }, /a regra "briefing matinal".*nunca chega/);
   problem((r) => {
     r.rules[0].tell = "sometimes";
-  }, /规则「意见」.*tell/);
+  }, /a regra "opiniões".*tell/);
   problem((r) => {
     delete r.rules[0].cwd;
-  }, /规则「意见」缺少 cwd/);
+  }, /a regra "opiniões".*está sem cwd/);
   problem((r) => {
     r.rules[0].cwd = "relative/path";
-  }, /规则「意见」.*cwd/);
+  }, /a regra "opiniões".*cwd/);
   problem((r) => {
     delete r.rules[1].prompt;
-  }, /规则「告警」.*skill.*prompt/);
+  }, /a regra "alerta".*skill.*prompt/);
   problem((r) => {
     r.rules[0].oops = 1;
-  }, /规则「意见」有不认识的字段 oops/);
+  }, /a regra "opiniões".*tem o campo desconhecido oops/);
   problem((r) => {
     delete r.rules[0].parallel;
     r.rules[1].group = "notes";
     r.rules[1].parallel = 2;
-  }, /组「notes」.*parallel/);
+  }, /as regras do grupo "notes" precisam ter o mesmo parallel/);
   problem((r) => {
     r.rules[0].parallel = 0;
-  }, /规则「意见」.*parallel/);
+  }, /a regra "opiniões".*parallel/);
   problem((r) => {
     r.rules[0].maxActive = 0;
-  }, /规则「意见」.*maxActive/);
+  }, /a regra "opiniões".*maxActive/);
   problem((r) => {
     r.agents.a1.maxActive = 1.5;
-  }, /Agent a1.*maxActive/);
+  }, /o Agent a1.*maxActive/);
   problem((r) => {
     r.rules[0].resume = "thread";
-  }, /规则「意见」.*resume/);
+  }, /a regra "opiniões".*resume/);
   problem((r) => {
     r.rules[0].title = "";
-  }, /规则「意见」.*title/);
+  }, /a regra "opiniões".*title/);
   problem((r) => {
     r.rules[0].title = "note {id}";
-  }, /规则「意见」.*title.*不含空白/);
+  }, /a regra "opiniões".*title.*sem espaços/);
   problem((r) => {
     r.rules[0].title = "note-{ID}";
-  }, /规则「意见」.*title.*\{id\}、\{subject\}/);
+  }, /a regra "opiniões".*title.*\{id\} e \{subject\}/);
   for (const title of ["{id}-note", "-note", "/note", "note-{{id}}", "note-{id"]) {
     problem((r) => {
       r.rules[0].title = title;
-    }, /规则「意见」.*title.*字母或数字开头/);
+    }, /a regra "opiniões".*title.*começando com letra ou número/);
   }
   problem((r) => {
     r.rules[4].emits.source = "nowhere";
-  }, /规则「巡检」.*emits/);
+  }, /a regra "inspeção".*emits/);
   problem((r) => {
     delete r.agents.a1.worker;
-  }, /Agent a1 缺少 worker/);
+  }, /o Agent a1.*está sem worker/);
   problem((r) => {
     r.agents.a1.access = "root";
-  }, /Agent a1.*access/);
+  }, /o Agent a1.*access/);
   problem((r) => {
     r.agents.a1.program = ["/opt/bin/claude"];
-  }, /Agent a1.*program/);
+  }, /o Agent a1.*program/);
   problem((r) => {
     r.agents.a2.tier = "";
-  }, /Agent a2 的 tier/);
+  }, /o Agent a2.*o campo tier/);
   problem((r) => {
     delete r.agents.a3.command;
-  }, /Agent a3.*command/);
+  }, /o Agent a3.*command/);
   problem((r) => {
     r.agents.a1.oops = 1;
-  }, /Agent a1 有不认识的字段 oops/);
+  }, /o Agent a1.*tem o campo desconhecido oops/);
   problem((r) => {
     r.sources.schedule = { name: "x" };
-  }, /schedule.*保留/);
+  }, /a fonte schedule é reservada/);
   problem((r) => {
     r.sources["Bad Id"] = { name: "x" };
-  }, /来源的编号/);
+  }, /o identificador da fonte/);
   problem((r) => {
     r.channels.chat.answerers = "me";
-  }, /通道 chat.*answerers/);
+  }, /o canal chat.*answerers/);
   problem((r) => {
     r.elsewhere[0].to = "nobody";
-  }, /定时任务「每周清理」.*to/);
+  }, /a tarefa agendada "limpeza semanal".*to/);
   problem((r) => {
     r.elsewhere[0].source = "nowhere";
-  }, /定时任务「每周清理」.*source/);
+  }, /a tarefa agendada "limpeza semanal".*source/);
   problem((r) => {
     r.elsewhere[0].cron = "nope";
-  }, /定时任务「每周清理」.*cron/);
+  }, /a tarefa agendada "limpeza semanal".*cron/);
   problem((r) => {
-    r.elsewhere[0].name = "意见";
-  }, /定时任务「意见」.*重名/);
+    r.elsewhere[0].name = "opiniões";
+  }, /a tarefa agendada "opiniões" tem o mesmo nome/);
   problem((r) => {
     r.elsewhere[0].model = "";
-  }, /定时任务「每周清理」.*model/);
+  }, /a tarefa agendada "limpeza semanal".*model/);
   problem((r) => {
     r.elsewhere[0].effort = 3;
-  }, /定时任务「每周清理」.*effort/);
+  }, /a tarefa agendada "limpeza semanal".*effort/);
   problem((r) => {
     r.elsewhere[0].skill = "weekly";
-  }, /定时任务「每周清理」.*cwd/);
+  }, /a tarefa agendada "limpeza semanal".*cwd/);
   problem((r) => {
     r.elsewhere[0].cwd = "code/app";
-  }, /定时任务「每周清理」.*cwd/);
+  }, /a tarefa agendada "limpeza semanal".*cwd/);
   problem((r) => {
     r.elsewhere[0].cwd = "~/code/app";
-  }, /定时任务「每周清理」.*skill 和 prompt/);
+  }, /a tarefa agendada "limpeza semanal".*skill e prompt/);
   problem((r) => {
     r.timezone = "Mars/Olympus";
   }, /timezone/);
   problem((r) => {
-    r.askFirst = "删数据";
+    r.askFirst = "apagar dados";
   }, /askFirst/);
-  assert.throws(() => parseRules("{ not json"), /不是 JSON/);
+  assert.throws(() => parseRules("{ not json"), /não é JSON/);
 });
 
-test("types match exactly, by prefix or all", () => {
+test("tipos casam exatamente, por prefixo ou todos", () => {
   assert.ok(typeMatches(["feedback.*"], "feedback.new"));
   assert.ok(!typeMatches(["feedback.*"], "feedbackx.new"));
   assert.ok(typeMatches(["alert.raised"], "alert.raised"));
@@ -220,50 +224,50 @@ test("types match exactly, by prefix or all", () => {
   assert.ok(typeMatches(["*"], "anything"));
 });
 
-test("a null rule is a rules error and leaves the running configuration intact", () => {
+test("uma regra nula é um erro de regras e deixa a configuração em execução intacta", () => {
   problem((r) => {
     r.rules = [null];
-  }, /对象/);
+  }, /deve ser um objeto/);
   const file = join(home, "null-rules.json");
   const broken = good();
   broken.rules = [null];
   writeFileSync(file, JSON.stringify(broken));
-  assert.match(reloadRules(file).problem!, /对象/);
-  assert.equal(ruleNamed("意见")!.to, "a1");
+  assert.match(reloadRules(file).problem!, /objeto/);
+  assert.equal(ruleNamed("opiniões")!.to, "a1");
 });
 
-test("what's loaded can be read back", () => {
-  assert.equal(ruleNamed("早报")!.to, "a1");
-  assert.equal(ruleNamed("没有这条"), undefined);
+test("o que foi carregado pode ser lido de volta", () => {
+  assert.equal(ruleNamed("briefing matinal")!.to, "a1");
+  assert.equal(ruleNamed("não existe"), undefined);
   assert.equal(rules.timezone, "Asia/Shanghai");
 });
 
-test("a good file changing on disk takes effect; a bad one leaves the old rules and says why", () => {
+test("um arquivo bom mudando no disco passa a valer; um ruim deixa as regras antigas e diz o porquê", () => {
   const file = join(home, "rules.json");
   process.env.AGENT_AUTOLOOP_RULES = file;
   const changed = good();
-  changed.rules[0].prompt = "新的说法。";
+  changed.rules[0].prompt = "Novo enunciado.";
   writeFileSync(file, JSON.stringify(changed));
   assert.equal(reloadRules(file).problem, undefined);
-  assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
+  assert.equal(ruleNamed("opiniões")!.prompt, "Novo enunciado.");
   const facts = () => one<{ count: number }>("SELECT COUNT(*) AS count FROM facts")!.count;
   const before = facts();
   assert.equal(reloadRules(file).problem, undefined);
-  assert.equal(facts(), before, "nothing new on disk, so nothing goes in the log");
+  assert.equal(facts(), before, "nada de novo no disco, então nada entra no registro");
   const broken = good();
   broken.rules[0].to = "nobody";
   writeFileSync(file, JSON.stringify(broken));
   assert.match(reloadRules(file).problem!, /nobody/);
-  assert.equal(ruleNamed("意见")!.prompt, "新的说法。", "the old rules keep running");
+  assert.equal(ruleNamed("opiniões")!.prompt, "Novo enunciado.", "as regras antigas continuam rodando");
 });
 
-test("a rules file that can't be read is a problem, not a crash, and the old rules keep running", () => {
-  assert.match(reloadRules(join(home, "gone.json")).problem!, /找不到/);
-  assert.equal(ruleNamed("意见")!.prompt, "新的说法。");
-  assert.match(reloadRules(home).problem!, /读不到/, "a folder where the file should be");
+test("um arquivo de regras que não pode ser lido é um problema, não uma quebra, e as regras antigas continuam rodando", () => {
+  assert.match(reloadRules(join(home, "gone.json")).problem!, /não encontrei/);
+  assert.equal(ruleNamed("opiniões")!.prompt, "Novo enunciado.");
+  assert.match(reloadRules(home).problem!, /não foi possível ler/, "uma pasta onde o arquivo deveria estar");
 });
 
-test("a rules file broken while the hub was down is told at the first tick, unless it's fixed by then", () => {
+test("um arquivo de regras quebrado enquanto a central estava fora do ar é avisado no primeiro tick, a menos que seja corrigido até lá", () => {
   const down = join(home, "down");
   mkdirSync(down);
   const file = join(down, "rules.json");
@@ -289,12 +293,12 @@ test("a rules file broken while the hub was down is told at the first tick, unle
   const broken = good();
   broken.rules[0].to = "nobody";
   writeFileSync(file, JSON.stringify(broken));
-  assert.deepEqual(start(), ["rules.json 写错了，还在用旧规则"]);
+  assert.deepEqual(start(), ["o rules.json está com erro; as regras antigas continuam em uso"]);
   const fix = `(await import("node:fs")).writeFileSync(${JSON.stringify(file)}, ${JSON.stringify(JSON.stringify(good()))})`;
-  assert.deepEqual(start(fix), [], "fixed by then, and the card from before is gone too");
+  assert.deepEqual(start(fix), [], "corrigido até lá, e o cartão de antes também sumiu");
 });
 
-test("a hub restarting without its rules file comes up on the rules it had; a new one without any says why", () => {
+test("uma central que reinicia sem o arquivo de regras sobe com as regras que tinha; uma nova sem nenhuma diz o porquê", () => {
   const start = (env: Record<string, string>) =>
     spawnSync(
       process.execPath,
@@ -303,14 +307,14 @@ test("a hub restarting without its rules file comes up on the rules it had; a ne
         "--input-type=module",
         "-e",
         `const hub = await import(${JSON.stringify(new URL("./hub.ts", import.meta.url).href)});` +
-          `console.log(hub.ruleNamed("意见")?.prompt)`,
+          `console.log(hub.ruleNamed("opiniões")?.prompt)`,
       ],
       { env: { ...process.env, ...env }, encoding: "utf8" },
     );
   const restarted = start({ AGENT_AUTOLOOP_RULES: join(home, "gone.json") });
   assert.equal(restarted.status, 0, restarted.stderr);
-  assert.equal(restarted.stdout.trim(), "新的说法。", "the rules it last loaded, not the fixture's");
+  assert.equal(restarted.stdout.trim(), "Novo enunciado.", "as regras que ela carregou por último, não as do fixture");
   const fresh = start({ AGENT_AUTOLOOP_HOME: join(home, "fresh"), AGENT_AUTOLOOP_RULES: join(home, "gone.json") });
   assert.notEqual(fresh.status, 0);
-  assert.match(fresh.stderr, /找不到/);
+  assert.match(fresh.stderr, /não encontrei/);
 });

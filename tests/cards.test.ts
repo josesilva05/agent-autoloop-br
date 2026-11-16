@@ -1,30 +1,30 @@
-// What reaches the owner. A card's words never change; only its state does. Failure cases: asking the same thing while it
-// is open makes a second card, or closed it blocks asking again; an answer takes a choice that doesn't exist, carries
-// more words or a longer reference than the protocol allows, counts twice,
-// or beats a resolve that came first (only one may change an open card); an answer from someone not on the channel's list,
-// or on a message that isn't the one sent, counts; an answer doesn't wake the thread that asked, wakes another thread, is
-// lost because its run was merged, or doesn't carry the session, the rule's session title and what the asker left for
-// itself; the card doesn't show
-// what was done once its run finishes; a run resolves a card outside what it was given to check, or a bad id spoils its own
-// result; resolving wakes nobody. Delivery: a channel gets a card it has, gets none it should, loses a report and sends a second
-// message (the ref sticks, and a stale report doesn't undo a newer one); a stale failure delays a newer version; a failed
-// send retries at once, or for ever; a channel that never came counts as having failed; a card solved before it was sent
-// bothers the owner; two channels don't each get their own copy; an answer in one channel doesn't update the other.
-// Words on an answer or a notice that aren't text crash instead of being refused; an answer to a card whose rule has gone
-// crashes or starts something; closing or reporting a failure on a card that isn't there, or wasn't handed over, crashes.
-// A stopped run's receipt takes effect, or the answer it carried shows as carried out. A failed run merged with what came
-// in meanwhile loses the session of the answer in it, or has it wiped by what had none. A run with events from two
-// sources is given, or closes, cards that have no source. A channel that takes a card and never reports gets it for ever.
-// A card closed while its first message is on the way never gets that message updated.
-// A rule that lists its channels has its cards, and the notices of its runs, sent to others as well; one that lists none
-// stops reaching every channel; a notice of nobody's rule reaches only some. With defaultChannels, a card that names no
-// channels of its own (a tell, the hub's own alert, a task elsewhere asking, a rule without a list) still reaches every
-// channel, so several channels each repeat it (issue #221); and a rule that lists its own is held to the default.
-// Receipt FYIs must arrive closed without buttons, stay out of later open lists, and never wake work when clicked;
-// ordinary notices, questions, quiet rules, and the one-day FYI delivery window must keep their existing behavior.
-// The why timeline must show receipt FYIs without adding empty closures or repeating hub-generated end notices.
-// The answers material carries the chosen text, or a 0-based choice gets read as the first option (issue #197: an Agent
-// reported 绿色 as 蓝色).
+// O que chega ao titular. As palavras de um cartão nunca mudam; só o estado dele muda. Casos de falha: perguntar a mesma coisa
+// enquanto ela está aberta cria um segundo cartão, ou, fechada, bloqueia perguntar de novo; uma resposta aceita uma opção que
+// não existe, carrega mais palavras ou uma referência mais longa do que o protocolo permite, conta duas vezes, ou vence um
+// resolve que veio primeiro (só um dos dois pode mudar um cartão aberto); uma resposta de alguém que não está na lista do canal,
+// ou sobre uma mensagem que não é a enviada, conta; uma resposta não acorda o assunto que perguntou, acorda outro assunto, se
+// perde porque a rodada dela foi mesclada, ou não carrega a sessão, o título de sessão da regra e o que quem perguntou deixou
+// para si; o cartão não mostra o que foi feito depois que a rodada dele termina; uma rodada encerra um cartão fora do que lhe foi
+// dado para verificar, ou um id inválido estraga o próprio resultado; encerrar não acorda ninguém. Entrega: um canal recebe um
+// cartão que ele tem, não recebe um que deveria, perde um relato e envia uma segunda mensagem (a referência fica, e um relato
+// antigo não desfaz um mais novo); uma falha antiga atrasa uma versão mais nova; um envio que falhou é tentado de novo na hora,
+// ou para sempre; um canal que nunca apareceu conta como tendo falhado; um cartão resolvido antes de ser enviado incomoda o
+// titular; dois canais não recebem cada um a própria cópia; uma resposta num canal não atualiza o outro.
+// Palavras numa resposta ou num aviso que não são texto quebram em vez de ser recusadas; uma resposta a um cartão cuja regra sumiu
+// quebra ou inicia algo; fechar ou relatar uma falha num cartão que não está lá, ou que não foi entregue, quebra.
+// O recibo de uma rodada parada tem efeito, ou a resposta que ele carregava aparece como executada. Uma rodada que falhou, mesclada
+// com o que chegou nesse meio tempo, perde a sessão da resposta que está nela, ou a tem apagada por uma que não tinha nenhuma. Uma
+// rodada com eventos de duas fontes recebe, ou encerra, cartões que não têm fonte. Um canal que pega um cartão e nunca relata o
+// recebe para sempre. Um cartão fechado enquanto a primeira mensagem está a caminho nunca tem aquela mensagem atualizada.
+// Uma regra que lista os próprios canais tem os cartões dela, e os avisos das rodadas dela, enviados a outros também; uma que não
+// lista nenhum para de chegar a todo canal; um aviso de regra nenhuma chega só a alguns. Com defaultChannels, um cartão que não
+// nomeia canais próprios (um tell, o alerta da própria central, uma tarefa em outro lugar perguntando, uma regra sem lista) ainda
+// chega a todo canal, então vários canais cada um o repetem (issue #221); e uma regra que lista os próprios fica presa ao padrão.
+// FYIs de recibo precisam chegar fechados sem botões, ficar fora das listas de abertos seguintes, e nunca acordar trabalho quando
+// clicados; avisos comuns, perguntas, regras silenciosas e a janela de entrega de um dia do FYI precisam manter o comportamento atual.
+// A linha do tempo do why precisa mostrar FYIs de recibo sem acrescentar encerramentos vazios nem repetir avisos de fim gerados pela central.
+// O material de answers carrega o texto escolhido, ou uma opção baseada em 0 é lida como a primeira (issue #197: um Agent relatou
+// verde como azul).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { at, setup } from "./helpers.ts";
@@ -45,25 +45,30 @@ const clean = () => {
 const note = (n: number, step = "new") => ({ id: `feedback:${n}:${step}`, type: `feedback.${step}`, subject: `#${n}` });
 const claim = (worker: string, now: number) => claimNext(worker, `c${Math.random()}`, now);
 const question = {
-  title: "要不要删旧表",
-  text: "占了 10 GB。",
-  options: ["删", "留着"],
+  title: "Apagar a tabela antiga?",
+  text: "Ocupa 10 GB.",
+  options: ["Apagar", "Manter"],
   recommend: 1,
-  about: "表名 old_x，删之前先备份",
+  about: "A tabela é old_x; faça backup antes de apagar",
   key: "drop-old-x",
 };
 const card = (id: number) => one<any>("SELECT * FROM cards WHERE id = ?", [id])!;
 
-/** A run on subject #n that ends by asking. */
+/** Uma rodada no objeto #n que termina perguntando. */
 function asked(n: number, now = at(0)) {
   ingest("app", note(n), now);
   const job = claim("w1", now)!;
   started(job.run, job.token, { session: `s-${n}`, link: `app://s-${n}` }, now);
-  finish(job.run, job.token, { outcome: "done", summary: "等你决定", session: `s-${n}`, ask: [question] }, now);
+  finish(
+    job.run,
+    job.token,
+    { outcome: "done", summary: "aguardando sua decisão", session: `s-${n}`, ask: [question] },
+    now,
+  );
   return { job, id: one<{ id: number }>("SELECT id FROM cards WHERE run_id = ?", [job.run])!.id };
 }
 
-/** Does `then` with the rules changed by `change`, and puts them back. */
+/** Faz `then` com as regras mudadas por `change`, e as põe de volta. */
 function underRules(change: (rules: any) => void, then: () => void) {
   const before = getView().get("config", "rules")!.value;
   const changed = structuredClone(before);
@@ -76,32 +81,32 @@ function underRules(change: (rules: any) => void, then: () => void) {
   }
 }
 
-test("the same question isn't asked twice while it's open, and can be asked again once it's closed", () => {
+test("a mesma pergunta não é feita duas vezes enquanto está aberta, e pode ser feita de novo depois de fechada", () => {
   clean();
   const { id } = asked(1);
   ingest("app", note(1, "followup"), at(1));
   let job = claim("w1", at(1))!;
   finish(job.run, job.token, { outcome: "done", ask: [question] }, at(2));
   assert.equal(all("SELECT id FROM cards").length, 1);
-  resolve(id, "不用了", "owner", at(3));
+  resolve(id, "não precisa mais", "owner", at(3));
   ingest("app", note(1, "decided"), at(4));
   job = claim("w1", at(4))!;
   finish(job.run, job.token, { outcome: "done", ask: [question] }, at(5));
   assert.equal(all("SELECT id FROM cards").length, 2);
-  // The key's scope is the thread: another subject asks on its own.
+  // O escopo da chave é o assunto: outro objeto pergunta por conta própria.
   asked(2, at(6));
   assert.equal(all("SELECT id FROM cards").length, 3);
 });
 
-test("an answer wakes the thread that asked, in its session, with what it left for itself; the card then shows what was done", () => {
+test("uma resposta acorda o assunto que perguntou, na sessão dele, com o que ele deixou para si; o cartão então mostra o que foi feito", () => {
   clean();
   const { id } = asked(1);
-  assert.equal(claim("w1", at(1)), null, "asking ended the run; nothing runs while it waits");
+  assert.equal(claim("w1", at(1)), null, "perguntar encerrou a rodada; nada roda enquanto ela espera");
   assert.equal(answer(id, { choice: 1, by: "me" }, at(2)).changed, true);
   assert.equal(card(id).state, "decided");
   const job = claim("w1", at(2))!;
-  assert.equal(job.rule.name, "意见");
-  assert.equal(job.rule.title, "note-{id}", "the rule's session title goes to the worker as written");
+  assert.equal(job.rule.name, "opiniões");
+  assert.equal(job.rule.title, "note-{id}", "o título de sessão da regra vai ao worker como escrito");
   assert.equal(job.session, "s-1");
   assert.deepEqual(
     job.context.events.map((e) => [e.type, e.subject]),
@@ -109,37 +114,40 @@ test("an answer wakes the thread that asked, in its session, with what it left f
   );
   assert.deepEqual(
     job.context.answers.map((a) => [a.card, a.title, a.options[a.choice!], a.about, a.by]),
-    [[id, "要不要删旧表", "留着", "表名 old_x，删之前先备份", "me"]],
+    [[id, "Apagar a tabela antiga?", "Manter", "A tabela é old_x; faça backup antes de apagar", "me"]],
   );
   const before = card(id).version;
-  finish(job.run, job.token, { outcome: "done", summary: "留着，已记下" }, at(3));
-  assert.deepEqual([card(id).state, card(id).result], ["done", "留着，已记下"]);
+  finish(job.run, job.token, { outcome: "done", summary: "mantida, registrado" }, at(3));
+  assert.deepEqual([card(id).state, card(id).result], ["done", "mantida, registrado"]);
   assert.equal(card(id).version, before + 1);
 });
 
-test("the answers material carries the chosen text so the 0-based choice can't be read as the first option", () => {
+test("o material de answers carrega o texto escolhido para que a opção baseada em 0 não possa ser lida como a primeira", () => {
   clean();
   const { id } = asked(1);
   answer(id, { choice: 1, by: "me" }, at(1));
   const job = claim("w1", at(1))!;
-  assert.deepEqual([job.context.answers[0].choice, job.context.answers[0].chosen], [1, "留着"]);
-  // A free-text answer has no choice: the chosen text is the answer itself.
+  assert.deepEqual([job.context.answers[0].choice, job.context.answers[0].chosen], [1, "Manter"]);
+  // Uma resposta em texto livre não tem opção: o texto escolhido é a própria resposta.
   finish(job.run, job.token, { outcome: "done", ask: [question] }, at(2));
   const second = one<{ id: number }>("SELECT id FROM cards WHERE id != ?", [id])!.id;
-  answer(second, { text: "先备份再删", by: "me" }, at(3));
+  answer(second, { text: "faça backup antes de apagar", by: "me" }, at(3));
   const free = claim("w1", at(3))!;
-  assert.deepEqual([free.context.answers[0].choice, free.context.answers[0].chosen], [null, "先备份再删"]);
+  assert.deepEqual(
+    [free.context.answers[0].choice, free.context.answers[0].chosen],
+    [null, "faça backup antes de apagar"],
+  );
 });
 
-test("an answer while another run holds the thread joins the next run, and a merged run still carries it", () => {
+test("uma resposta enquanto outra rodada segura o assunto entra na próxima rodada, e uma rodada mesclada ainda a carrega", () => {
   clean();
   const { id } = asked(1);
   ingest("app", note(1, "followup"), at(1));
   const going = claim("w1", at(1))!;
   answer(id, { choice: 0, by: "me" }, at(2));
-  assert.equal(claim("w1", at(2)), null, "one run at a time on a thread");
+  assert.equal(claim("w1", at(2)), null, "uma rodada por vez num assunto");
   ingest("app", note(1, "decided"), at(3));
-  finish(going.run, going.token, { outcome: "done", summary: "补充看过了" }, at(4));
+  finish(going.run, going.token, { outcome: "done", summary: "complemento verificado" }, at(4));
   const next = claim("w1", at(4))!;
   assert.deepEqual(
     next.context.events.map((e) => e.type),
@@ -149,27 +157,27 @@ test("an answer while another run holds the thread joins the next run, and a mer
   assert.equal(next.session, "s-1");
 });
 
-test("a failed run that carried an answer keeps it for the retry; the card stays decided until it's carried out", () => {
+test("uma rodada que falhou e carregava uma resposta a mantém para a nova tentativa; o cartão fica decidido até ser executada", () => {
   clean();
   const { id } = asked(1);
   answer(id, { choice: 0, by: "me" }, at(1));
   let job = claim("w1", at(1))!;
-  finish(job.run, job.token, { outcome: "failed", error: "断网" }, at(2));
+  finish(job.run, job.token, { outcome: "failed", error: "sem rede" }, at(2));
   assert.equal(card(id).state, "decided");
   job = claim("w1", at(8))!;
   assert.equal(job.context.answers[0].card, id);
-  finish(job.run, job.token, { outcome: "nothing", summary: "已经有人删了" }, at(9));
-  assert.deepEqual([card(id).state, card(id).result], ["done", "已经有人删了"]);
+  finish(job.run, job.token, { outcome: "nothing", summary: "alguém já apagou" }, at(9));
+  assert.deepEqual([card(id).state, card(id).result], ["done", "alguém já apagou"]);
 });
 
-test("a failed run merged with what came in meanwhile goes on in the asker's session, whichever of them carried it", () => {
+test("uma rodada que falhou, mesclada com o que chegou nesse meio tempo, segue na sessão de quem perguntou, seja qual delas a carregou", () => {
   clean();
-  // The answer comes in while another run holds the thread, so it waits on its own until that run fails.
+  // A resposta chega enquanto outra rodada segura o assunto, então ela espera sozinha até aquela rodada falhar.
   const first = asked(1);
   ingest("app", note(1, "followup"), at(1));
   const going = claim("w1", at(1))!;
   answer(first.id, { choice: 0, by: "me" }, at(2));
-  finish(going.run, going.token, { outcome: "failed", error: "断网" }, at(3));
+  finish(going.run, going.token, { outcome: "failed", error: "sem rede" }, at(3));
   const merged = claim("w1", at(8))!;
   assert.equal(merged.run, going.run);
   assert.equal(merged.session, "s-1");
@@ -177,13 +185,13 @@ test("a failed run merged with what came in meanwhile goes on in the asker's ses
     merged.context.events.map((e) => e.type),
     ["feedback.followup", "card.answered"],
   );
-  // The other way round: the run going is the one with the session, and what waits has none to wipe it with.
+  // Ao contrário: a rodada em curso é a que tem a sessão, e a que espera não tem nenhuma para apagá-la.
   const second = asked(2, at(10));
   answer(second.id, { choice: 0, by: "me" }, at(11));
   const answering = claim("w1", at(11))!;
   assert.equal(answering.session, "s-2");
   ingest("app", note(2, "followup"), at(12));
-  finish(answering.run, answering.token, { outcome: "failed", error: "断网" }, at(13));
+  finish(answering.run, answering.token, { outcome: "failed", error: "sem rede" }, at(13));
   const retried = claim("w1", at(18))!;
   assert.equal(retried.run, answering.run);
   assert.equal(retried.session, "s-2");
@@ -193,7 +201,7 @@ test("a failed run merged with what came in meanwhile goes on in the asker's ses
   );
 });
 
-test("a stopped run's receipt takes no effect, and the answer it carried isn't shown as carried out", () => {
+test("o recibo de uma rodada parada não tem efeito, e a resposta que ele carregava não aparece como executada", () => {
   clean();
   const { id } = asked(1);
   const other = asked(2).id;
@@ -205,11 +213,11 @@ test("a stopped run's receipt takes no effect, and the answer it carried isn't s
     job.token,
     {
       outcome: "cancelled",
-      summary: "已停止",
-      ask: [{ title: "还要问", text: "x", options: ["a", "b"] }],
-      notice: [{ title: "还要说", text: "x" }],
-      resolve: [{ card: other, reason: "顺手结了" }],
-      later: [{ key: "k", at: new Date(at(60)).toISOString(), about: "再看" }],
+      summary: "Interrompida",
+      ask: [{ title: "Ainda preciso perguntar", text: "x", options: ["a", "b"] }],
+      notice: [{ title: "Ainda preciso avisar", text: "x" }],
+      resolve: [{ card: other, reason: "aproveitei e encerrei" }],
+      later: [{ key: "k", at: new Date(at(60)).toISOString(), about: "verificar de novo" }],
     },
     at(3),
   );
@@ -220,12 +228,12 @@ test("a stopped run's receipt takes no effect, and the answer it carried isn't s
   assert.deepEqual(all("SELECT id FROM timers"), []);
 });
 
-test("an answer to a card whose rule has gone still counts, and wakes nobody", () => {
+test("uma resposta a um cartão cuja regra sumiu ainda conta, e não acorda ninguém", () => {
   clean();
   const { id } = asked(1);
   underRules(
     (rules) => {
-      rules.rules = rules.rules.filter((rule: { name: string }) => rule.name !== "意见");
+      rules.rules = rules.rules.filter((rule: { name: string }) => rule.name !== "opiniões");
     },
     () => {
       assert.deepEqual(answer(id, { choice: 1, by: "me" }, at(1)), { changed: true, state: "decided" });
@@ -237,10 +245,10 @@ test("an answer to a card whose rule has gone still counts, and wakes nobody", (
   );
 });
 
-test("a run with events from two sources has nothing to check: a card without a source isn't one of its own", () => {
+test("uma rodada com eventos de duas fontes não tem nada para verificar: um cartão sem fonte não é um dos dela", () => {
   clean();
   const { id } = asked(1);
-  // A worker stopped mentioning a run on #2: the hub's own card about that has the group, but no source.
+  // Um worker parou de mencionar uma rodada em #2: o cartão da própria central sobre isso tem o grupo, mas nenhuma fonte.
   ingest("app", note(2), at(0));
   const quiet = claim("w1", at(0))!;
   heartbeat("w1", [], at(6));
@@ -251,7 +259,7 @@ test("a run with events from two sources has nothing to check: a card without a 
       rules.rules[0].when = { source: "ops", types: ["feedback.*"] };
     },
     () => {
-      // #1 takes an event from the new source, and the answer to what it asked under the old one joins it.
+      // #1 recebe um evento da fonte nova, e a resposta ao que ele perguntou sob a antiga entra junto.
       ingest("ops", { id: "moved", type: "feedback.new", subject: "#1" }, at(7));
       answer(id, { choice: 0, by: "me" }, at(7));
       const job = claim("w1", at(8))!;
@@ -263,7 +271,7 @@ test("a run with events from two sources has nothing to check: a card without a 
       const receipt = finish(
         job.run,
         job.token,
-        { outcome: "done", resolve: [{ card: hubs, reason: "看过了" }] },
+        { outcome: "done", resolve: [{ card: hubs, reason: "verificado" }] },
         at(9),
       );
       assert.deepEqual(
@@ -275,7 +283,7 @@ test("a run with events from two sources has nothing to check: a card without a 
   );
 });
 
-test("an answer counts once; a choice must exist; only one of answering and resolving changes an open card", () => {
+test("uma resposta conta uma vez; uma opção precisa existir; só um entre responder e encerrar muda um cartão aberto", () => {
   clean();
   const { id } = asked(1);
   assert.throws(() => answer(id, { choice: 2, by: "me" }, at(1)), InputError);
@@ -285,58 +293,58 @@ test("an answer counts once; a choice must exist; only one of answering and reso
   assert.equal(answer(id, { choice: 1, by: "me" }, at(2)).changed, false);
   assert.equal(card(id).choice, 0);
   assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 1);
-  assert.equal(resolve(id, "晚了", "owner", at(3)), false, "already decided");
+  assert.equal(resolve(id, "tarde demais", "owner", at(3)), false, "já decidido");
   assert.equal(card(id).state, "decided");
 
   const other = asked(2, at(4)).id;
-  assert.equal(resolve(other, "问题自己好了", "owner", at(5)), true);
+  assert.equal(resolve(other, "o problema se resolveu sozinho", "owner", at(5)), true);
   assert.equal(
     answer(other, { choice: 0, by: "me" }, at(6)).changed,
     false,
-    "resolved first: the late answer starts nothing",
+    "encerrado primeiro: a resposta tardia não inicia nada",
   );
   assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 1);
 });
 
-test("a free-text answer counts as an answer", () => {
+test("uma resposta em texto livre conta como resposta", () => {
   clean();
   const { id } = asked(1);
   assert.throws(() => answer(id, { text: " ", by: "me" }, at(1)), InputError);
-  answer(id, { text: "都不选，改成归档", by: "me" }, at(1));
+  answer(id, { text: "nenhuma das opções; mude para arquivar", by: "me" }, at(1));
   const job = claim("w1", at(1))!;
-  assert.deepEqual([job.context.answers[0].choice, job.context.answers[0].text], [null, "都不选，改成归档"]);
+  assert.deepEqual(
+    [job.context.answers[0].choice, job.context.answers[0].text],
+    [null, "nenhuma das opções; mude para arquivar"],
+  );
 });
 
-test("an answer is bounded by the protocol's limits, and a refused one changes nothing", () => {
+test("uma resposta é limitada pelo protocolo, e uma recusada não muda nada", () => {
   clean();
-  const words = (n: number) => "可".repeat(n);
+  const words = (n: number) => "x".repeat(n);
   const first = asked(1);
   const before = getView().seq;
   assert.throws(() => answer(first.id, { text: words(4001), by: "me" }, at(1)), InputError);
-  assert.throws(() => answer(first.id, { text: "好的", by: "名".repeat(501) }, at(1)), InputError);
-  assert.throws(() => answer(first.id, { text: "好的", by: 42 } as any, at(1)), InputError);
-  assert.throws(() => answer(first.id, { text: "好的", ref: "r".repeat(501) }, at(1)), InputError);
-  assert.throws(() => answer(first.id, { text: "好的", ref: 42 } as any, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "ok", by: "N".repeat(501) }, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "ok", by: 42 } as any, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "ok", ref: "r".repeat(501) }, at(1)), InputError);
+  assert.throws(() => answer(first.id, { text: "ok", ref: 42 } as any, at(1)), InputError);
   assert.throws(() => answer(first.id, { text: 42 } as any, at(1)), InputError);
-  assert.equal(getView().seq, before, "a refused answer writes no fact");
-  assert.equal(card(first.id).state, "open", "a refused answer leaves the card open");
-  // The limit itself is allowed.
-  assert.equal(
-    answer(first.id, { text: words(4000), by: "名".repeat(500), ref: "r".repeat(500) }, at(1)).changed,
-    true,
-  );
-  // A channel's own message id has the same bound.
+  assert.equal(getView().seq, before, "uma resposta recusada não grava nenhum fato");
+  assert.equal(card(first.id).state, "open", "uma resposta recusada deixa o cartão aberto");
+  // O próprio limite é permitido.
+  assert.equal(answer(first.id, { text: words(4000), by: "N".repeat(500), ref: "r".repeat(500) }, at(1)).changed, true);
+  // O id de mensagem do próprio canal tem o mesmo limite.
   const second = asked(2);
   const version = card(second.id).version;
   const beforeDelivery = getView().seq;
   assert.throws(() => delivered("chat", second.id, version, "r".repeat(501), at(2)), InputError);
   assert.throws(() => delivered("chat", second.id, version, 42 as any, at(2)), InputError);
-  assert.equal(getView().seq, beforeDelivery, "a refused report writes no fact");
+  assert.equal(getView().seq, beforeDelivery, "um relato recusado não grava nenhum fato");
   delivered("chat", second.id, version, "r".repeat(500), at(2));
   assert.ok(getView().seq > beforeDelivery);
 });
 
-test("a channel's answer must come from someone on its list, on the message it sent", () => {
+test("a resposta de um canal precisa vir de alguém da lista dele, sobre a mensagem que ele enviou", () => {
   clean();
   const { id } = asked(1);
   const given = nextCard("chat", at(1))!;
@@ -347,17 +355,17 @@ test("a channel's answer must come from someone on its list, on the message it s
   assert.equal(answer(id, { choice: 0, by: "me", channel: "chat", ref: "om_1" }, at(2)).changed, true);
 });
 
-test("a run may resolve only what it was given to check, and a bad id doesn't spoil its own result", () => {
+test("uma rodada só pode encerrar o que lhe foi dado para verificar, e um id inválido não estraga o próprio resultado", () => {
   clean();
   const mine = asked(1).id;
   const elsewhere = (() => {
-    // Same source, other group.
+    // Mesma fonte, outro grupo.
     ingest("ops", { id: "a", type: "alert.raised", subject: "x" }, at(0));
     const w2 = claim("w2", at(0))!;
     const w1 = claim("w1", at(0))!;
     finish(w1.run, w1.token, { outcome: "nothing" }, at(0));
-    finish(w2.run, w2.token, { outcome: "done", notice: [{ title: "别的组", text: "x" }] }, at(0));
-    return one<{ id: number }>("SELECT id FROM cards WHERE title = '别的组'")!.id;
+    finish(w2.run, w2.token, { outcome: "done", notice: [{ title: "Outro grupo", text: "x" }] }, at(0));
+    return one<{ id: number }>("SELECT id FROM cards WHERE title = 'Outro grupo'")!.id;
   })();
   ingest("app", note(2), at(1));
   const job = claim("w1", at(2))!;
@@ -370,11 +378,11 @@ test("a run may resolve only what it was given to check, and a bad id doesn't sp
     job.token,
     {
       outcome: "done",
-      summary: "好了",
+      summary: "pronto",
       resolve: [
-        { card: mine, reason: "原站恢复了" },
-        { card: elsewhere, reason: "越界" },
-        { card: 9999, reason: "没这张" },
+        { card: mine, reason: "o site original voltou" },
+        { card: elsewhere, reason: "fora dos limites" },
+        { card: 9999, reason: "cartão inexistente" },
       ],
     },
     at(3),
@@ -385,51 +393,56 @@ test("a run may resolve only what it was given to check, and a bad id doesn't sp
   );
   assert.deepEqual(
     receipt.rejected.map((r) => r.reason),
-    ["不在本轮核对范围", "不在本轮核对范围"],
+    ["fora do escopo de verificação desta rodada", "fora do escopo de verificação desta rodada"],
   );
   assert.equal(one<{ state: string }>("SELECT state FROM runs WHERE id = ?", [job.run])!.state, "done");
-  assert.deepEqual([card(mine).state, card(mine).result], ["closed", "原站恢复了"]);
+  assert.deepEqual([card(mine).state, card(mine).result], ["closed", "o site original voltou"]);
   assert.equal(card(elsewhere).state, "open");
-  assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 0, "resolving wakes nobody");
+  assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 0, "encerrar não acorda ninguém");
 });
 
-test("a card made after this run was claimed isn't in its scope", () => {
+test("um cartão criado depois de esta rodada ter sido reclamada não está no escopo dela", () => {
   clean();
   ingest("app", note(1), at(0));
   const job = claim("w1", at(0))!;
   ingest("app", note(2), at(1));
   const other = claim("w1", at(1))!;
-  finish(other.run, other.token, { outcome: "done", notice: [{ title: "后来的", text: "x" }] }, at(2));
+  finish(other.run, other.token, { outcome: "done", notice: [{ title: "Criado depois", text: "x" }] }, at(2));
   const later = one<{ id: number }>("SELECT id FROM cards")!.id;
-  const receipt = finish(job.run, job.token, { outcome: "done", resolve: [{ card: later, reason: "看过了" }] }, at(3));
+  const receipt = finish(
+    job.run,
+    job.token,
+    { outcome: "done", resolve: [{ card: later, reason: "verificado" }] },
+    at(3),
+  );
   assert.deepEqual(
     receipt.rejected.map((r) => r.card),
     [later],
   );
 });
 
-test("each channel gets each card once, and an update when its state changes; a lost report sends no second message", () => {
+test("cada canal recebe cada cartão uma vez, e uma atualização quando o estado muda; um relato perdido não envia uma segunda mensagem", () => {
   clean();
   const { id } = asked(1);
   const first = nextCard("chat", at(1))!;
   assert.deepEqual(
     [first.id, first.version, first.ref, first.kind, first.state, first.options, first.recommend],
-    [id, 1, null, "ask", "open", ["删", "留着"], 1],
+    [id, 1, null, "ask", "open", ["Apagar", "Manter"], 1],
   );
-  assert.equal(nextCard("chat", at(1)), null, "out with the channel for a minute");
-  // The report was lost: it comes round again under the same message identity.
+  assert.equal(nextCard("chat", at(1)), null, "fora com o canal por um minuto");
+  // O relato se perdeu: ele volta de novo sob a mesma identidade de mensagem.
   const again = nextCard("chat", at(3))!;
   assert.equal(again.id, id);
   delivered("chat", id, 1, "om_1", at(3));
   assert.equal(nextCard("chat", at(10)), null);
   const plain = nextCard("plain", at(10))!;
-  assert.equal(plain.id, id, "the other channel has its own copy");
+  assert.equal(plain.id, id, "o outro canal tem a própria cópia");
   delivered("plain", id, 1, "p_1", at(10));
   answer(id, { choice: 1, by: "me", channel: "chat", ref: "om_1" }, at(11));
   const update = nextCard("chat", at(11))!;
   assert.deepEqual([update.version, update.ref, update.state, update.choice], [2, "om_1", "decided", 1]);
-  assert.equal(nextCard("plain", at(11))!.ref, "p_1", "and the other channel hears of it too");
-  // A late report of the older version changes nothing.
+  assert.equal(nextCard("plain", at(11))!.ref, "p_1", "e o outro canal também fica sabendo");
+  // Um relato tardio da versão mais antiga não muda nada.
   delivered("chat", id, 2, "om_1", at(12));
   delivered("chat", id, 1, "om_other", at(13));
   const row = one<{ version: number; ref: string }>(
@@ -439,40 +452,40 @@ test("each channel gets each card once, and an update when its state changes; a 
   assert.deepEqual([row.version, row.ref], [2, "om_1"]);
 });
 
-test("a rule that lists channels has its cards go only there; one that lists none, or a notice of no rule, goes to all", () => {
+test("uma regra que lista canais tem os cartões enviados só para lá; uma que não lista nenhum, ou um aviso de regra nenhuma, vai para todos", () => {
   clean();
   underRules(
     (rules) => {
-      rules.rules.find((rule: { name: string }) => rule.name === "意见").channels = ["plain"];
+      rules.rules.find((rule: { name: string }) => rule.name === "opiniões").channels = ["plain"];
     },
     () => {
       const { id } = asked(1);
-      assert.equal(nextCard("chat", at(1)), null, "chat isn't on the rule's list");
+      assert.equal(nextCard("chat", at(1)), null, "chat não está na lista da regra");
       assert.equal(nextCard("plain", at(1))?.id, id);
-      tell("hub:test", "中台", "谁都该知道", at(2));
-      assert.ok(nextCard("chat", at(2)), "a notice of no rule still reaches every channel");
+      tell("hub:test", "central", "todos devem saber", at(2));
+      assert.ok(nextCard("chat", at(2)), "um aviso de regra nenhuma ainda chega a todo canal");
     },
   );
   clean();
   const { id } = asked(2);
-  assert.equal(nextCard("chat", at(1))?.id, id, "without a list, every channel gets it");
+  assert.equal(nextCard("chat", at(1))?.id, id, "sem lista, todo canal recebe");
   assert.equal(nextCard("plain", at(1))?.id, id);
 });
 
-test("defaultChannels takes every card that names no channels of its own; a rule's own list still wins", () => {
+test("defaultChannels fica com todo cartão que não nomeia canais próprios; a lista da regra ainda vence", () => {
   clean();
   underRules(
     (rules) => {
       rules.defaultChannels = ["plain"];
-      rules.rules.find((rule: { name: string }) => rule.name === "意见").channels = ["chat"];
+      rules.rules.find((rule: { name: string }) => rule.name === "opiniões").channels = ["chat"];
     },
     () => {
-      const told = tell("source:app:k", "应用", "只说一次", at(1)).card;
-      assert.equal(nextCard("chat", at(1)), null, "a tell isn't repeated on chat");
+      const told = tell("source:app:k", "aplicativo", "dito uma única vez", at(1)).card;
+      assert.equal(nextCard("chat", at(1)), null, "um tell não é repetido no chat");
       assert.equal(nextCard("plain", at(1))?.id, told);
       delivered("plain", told, 1, "p_1", at(1));
       const { id } = asked(1);
-      assert.equal(nextCard("chat", at(2))?.id, id, "the rule's own list, not the default");
+      assert.equal(nextCard("chat", at(2))?.id, id, "a lista da própria regra, não o padrão");
       assert.equal(nextCard("plain", at(2)), null);
     },
   );
@@ -483,45 +496,45 @@ test("defaultChannels takes every card that names no channels of its own; a rule
     },
     () => {
       const { id } = asked(2);
-      assert.equal(nextCard("chat", at(1)), null, "a rule without a list goes where the default says");
+      assert.equal(nextCard("chat", at(1)), null, "uma regra sem lista vai para onde o padrão diz");
       assert.equal(nextCard("plain", at(1))?.id, id);
     },
   );
 });
 
-test("a failed send is retried further and further apart, then given up within the hour; a channel that never came hasn't failed", () => {
+test("um envio que falha é tentado de novo com intervalos cada vez maiores, e então desistido dentro da hora; um canal que nunca apareceu não falhou", () => {
   clean();
-  const id = tell("source:app:k", "应用", "周报来了", at(0)).card;
+  const id = tell("source:app:k", "aplicativo", "o relatório semanal chegou", at(0)).card;
   const tries = [0, 1, 3, 7, 15, 25, 35, 45, 55];
   for (const minute of tries) {
     const given = nextCard("chat", at(minute));
-    assert.equal(given?.id, id, `try at ${minute}`);
+    assert.equal(given?.id, id, `tentativa em ${minute}`);
     assert.equal(nextCard("chat", at(minute)), null);
-    failed("chat", id, given!.version, "飞书挂了", at(minute));
+    failed("chat", id, given!.version, "o Feishu caiu", at(minute));
   }
   assert.equal(nextCard("chat", at(56)), null);
-  assert.equal(nextCard("chat", at(500)), null, "given up");
+  assert.equal(nextCard("chat", at(500)), null, "desistiu");
   assert.equal(one<{ given_up: number }>("SELECT given_up FROM deliveries WHERE channel = 'chat'")!.given_up, 1);
-  // Past an hour a channel can no longer drop a repeat, so it stops; the channel that hasn't come still gets it.
+  // Passada uma hora um canal não pode mais descartar uma repetição, então ele para; o canal que não apareceu ainda o recebe.
   assert.equal(nextCard("plain", at(500))?.id, id);
-  // A failure of an older version doesn't hold back the newer one.
+  // Uma falha de uma versão mais antiga não segura a mais nova.
   clean();
   const { id: asking } = asked(1, at(0));
   const v1 = nextCard("chat", at(0))!;
   delivered("chat", asking, v1.version, "om_1", at(0));
   answer(asking, { choice: 0, by: "me", channel: "chat", ref: "om_1" }, at(1));
   const v2 = nextCard("chat", at(1))!;
-  failed("chat", asking, 1, "旧的失败", at(1));
-  assert.ok(nextCard("chat", at(1)), "a stale failure doesn't delay the update");
+  failed("chat", asking, 1, "falha antiga", at(1));
+  assert.ok(nextCard("chat", at(1)), "uma falha antiga não atrasa a atualização");
   assert.equal(v2.version, 2);
 });
 
-test("a channel that takes a card and never reports stops getting it: after the last try, or once an hour is up", () => {
+test("um canal que pega um cartão e nunca relata para de o receber: depois da última tentativa, ou passada uma hora", () => {
   clean();
-  const id = tell("source:app:k", "应用", "周报", at(0)).card;
+  const id = tell("source:app:k", "aplicativo", "relatório semanal", at(0)).card;
   for (const minute of [0, 1, 2, 3, 4, 5, 6, 7, 8])
-    assert.equal(nextCard("chat", at(minute))?.id, id, `try at ${minute}`);
-  assert.equal(nextCard("chat", at(9)), null, "that was the last try");
+    assert.equal(nextCard("chat", at(minute))?.id, id, `tentativa em ${minute}`);
+  assert.equal(nextCard("chat", at(9)), null, "aquela foi a última tentativa");
   const givenUp = (channel: string) =>
     one<{ given_up: number }>("SELECT given_up FROM deliveries WHERE channel = ?", [channel])?.given_up;
   assert.equal(givenUp("chat"), 1);
@@ -530,25 +543,25 @@ test("a channel that takes a card and never reports stops getting it: after the 
   clean();
   const { id: asking } = asked(1, at(60));
   assert.equal(nextCard("chat", at(60))?.id, asking);
-  assert.equal(nextCard("chat", at(60 + 58)), null, "too late for a channel to drop a repeat");
+  assert.equal(nextCard("chat", at(60 + 58)), null, "tarde demais para um canal descartar uma repetição");
   assert.equal(givenUp("chat"), 1);
-  assert.equal(nextCard("plain", at(60 + 58))?.id, asking, "the channel that hasn't come still gets it");
+  assert.equal(nextCard("plain", at(60 + 58))?.id, asking, "o canal que não apareceu ainda o recebe");
 });
 
-test("closing a card that isn't there, or reporting a failure on one the channel doesn't have, is refused", () => {
+test("fechar um cartão que não está lá, ou relatar uma falha num que o canal não tem, é recusado", () => {
   clean();
   const { id } = asked(1);
-  assert.throws(() => resolve(9999, "没这张", "owner", at(1)), NotFound);
-  assert.throws(() => failed("chat", 9999, 1, "挂了", at(1)), NotFound);
-  assert.throws(() => failed("chat", id, 1, "挂了", at(1)), NotFound, "it was never handed to this channel");
+  assert.throws(() => resolve(9999, "cartão inexistente", "owner", at(1)), NotFound);
+  assert.throws(() => failed("chat", 9999, 1, "caiu", at(1)), NotFound);
+  assert.throws(() => failed("chat", id, 1, "caiu", at(1)), NotFound, "ele nunca foi entregue a este canal");
   assert.deepEqual(all("SELECT card_id FROM deliveries"), []);
 });
 
-test("a card closed while its first message is on the way still gets that message updated", () => {
+test("um cartão fechado enquanto a primeira mensagem está a caminho ainda tem aquela mensagem atualizada", () => {
   clean();
   const { id } = asked(1);
   const out = nextCard("chat", at(1))!;
-  resolve(id, "问题自己好了", "owner", at(2));
+  resolve(id, "o problema se resolveu sozinho", "owner", at(2));
   delivered("chat", id, out.version, "om_1", at(3));
   const update = nextCard("chat", at(3))!;
   assert.deepEqual([update.id, update.state, update.ref, update.version], [id, "closed", "om_1", 2]);
@@ -556,64 +569,79 @@ test("a card closed while its first message is on the way still gets that messag
   assert.equal(nextCard("chat", at(4)), null);
 });
 
-test("a notice's handling note must be words, and one that isn't changes nothing", () => {
+test("a nota de tratamento de um aviso precisa ser texto, e uma que não é não muda nada", () => {
   clean();
   ingest("app", note(1), at(0));
   const job = claim("w1", at(0))!;
-  finish(job.run, job.token, { outcome: "done", notice: [{ title: "要你做一件事", text: "开权限" }] }, at(0));
+  finish(
+    job.run,
+    job.token,
+    { outcome: "done", notice: [{ title: "Preciso de uma ação sua", text: "liberar permissão" }] },
+    at(0),
+  );
   const { id } = one<{ id: number }>("SELECT id FROM cards")!;
   assert.throws(() => answer(id, { text: 42 } as any, at(1)), InputError);
   assert.equal(card(id).state, "open");
 });
 
-test("a card solved before it was sent doesn't bother the owner; a closed one already sent is updated", () => {
+test("um cartão resolvido antes de ser enviado não incomoda o titular; um fechado já enviado é atualizado", () => {
   clean();
   const { id } = asked(1);
-  resolve(id, "问题自己好了", "owner", at(1));
+  resolve(id, "o problema se resolveu sozinho", "owner", at(1));
   assert.equal(nextCard("chat", at(2)), null);
   const sent = asked(2, at(3)).id;
   const v1 = nextCard("chat", at(3))!;
   delivered("chat", sent, v1.version, "om_2", at(3));
-  resolve(sent, "问题自己好了", "owner", at(4));
+  resolve(sent, "o problema se resolveu sozinho", "owner", at(4));
   const update = nextCard("chat", at(4))!;
   assert.deepEqual(
     [update.id, update.state, update.ref, update.options, update.result],
-    [sent, "closed", "om_2", ["删", "留着"], "问题自己好了"],
+    [sent, "closed", "om_2", ["Apagar", "Manter"], "o problema se resolveu sozinho"],
   );
 });
 
-test("a notice has one button that closes it; something only to know has none and isn't left open", () => {
+test("um aviso tem um botão que o fecha; algo só para saber não tem nenhum e não fica aberto", () => {
   clean();
   ingest("app", note(1), at(0));
   const job = claim("w1", at(0))!;
-  finish(job.run, job.token, { outcome: "done", notice: [{ title: "要你做一件事", text: "开权限" }] }, at(0));
+  finish(
+    job.run,
+    job.token,
+    { outcome: "done", notice: [{ title: "Preciso de uma ação sua", text: "liberar permissão" }] },
+    at(0),
+  );
   const id = one<{ id: number }>("SELECT id FROM cards")!.id;
   const shown = nextCard("chat", at(0))!;
-  assert.deepEqual([shown.kind, shown.options], ["notice", ["已处理"]]);
+  assert.deepEqual([shown.kind, shown.options], ["notice", ["Resolvido"]]);
   delivered("chat", id, shown.version, "om_1", at(0));
   assert.equal(answer(id, { choice: 0, by: "me", channel: "chat", ref: "om_1" }, at(1)).changed, true);
   assert.equal(card(id).state, "closed");
-  assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 0, "nothing to wake");
+  assert.equal(all("SELECT id FROM events WHERE type = 'card.answered'").length, 0, "nada para acordar");
   const closed = nextCard("chat", at(1))!;
-  assert.deepEqual([closed.id, closed.state, closed.options], [id, "closed", []], "its message loses the button");
+  assert.deepEqual([closed.id, closed.state, closed.options], [id, "closed", []], "a mensagem dele perde o botão");
   delivered("chat", id, closed.version, "om_1", at(1));
-  const fyi = tell("source:app:k2", "应用", "只是告诉你", at(2)).card;
+  const fyi = tell("source:app:k2", "aplicativo", "apenas para você saber", at(2)).card;
   const given = nextCard("chat", at(2))!;
   assert.deepEqual([given.id, given.state, given.options], [fyi, "closed", []]);
 });
 
-test("a card closed as it's made says when, or whatever reads the state takes it for still waiting", () => {
+test("um cartão fechado ao ser criado diz quando, senão o que quer que leia o estado o toma por ainda esperando", () => {
   clean();
-  tell("source:app:k3", "应用", "只是告诉你", at(1));
+  tell("source:app:k3", "aplicativo", "apenas para você saber", at(1));
   ingest("app", note(1), at(2));
   const job = claim("w1", at(2))!;
-  finish(job.run, job.token, { outcome: "done", notice: [{ title: "已设好", text: "每天九点", fyi: true }] }, at(3));
+  finish(
+    job.run,
+    job.token,
+    { outcome: "done", notice: [{ title: "Configurado", text: "todos os dias às nove", fyi: true }] },
+    at(3),
+  );
   const [told, receipt] = [nextCard("chat", at(3))!, nextCard("chat", at(3))!];
   assert.deepEqual([told.state, told.closedAt], ["closed", new Date(at(1)).toISOString()]);
   assert.deepEqual([receipt.state, receipt.closedAt], ["closed", new Date(at(3)).toISOString()]);
 });
 
-test("receipt FYIs arrive as grey closed cards; ordinary notices and questions still need handling", () => {
+test("FYIs de recibo chegam como cartões cinzas fechados; avisos comuns e perguntas ainda precisam de tratamento", () => {
   clean();
   ingest("app", note(1), at(0));
   const job = claim("w1", at(0))!;
@@ -624,9 +652,9 @@ test("receipt FYIs arrive as grey closed cards; ordinary notices and questions s
       outcome: "done",
       ask: [question],
       notice: [
-        { title: "已设好", text: "每天九点检查", fyi: true },
-        { title: "要开权限", text: "请开通权限" },
-        { title: "要查告警", text: "请查看日志", fyi: false },
+        { title: "Configurado", text: "verificação todos os dias às nove", fyi: true },
+        { title: "Permissão a liberar", text: "Libere a permissão, por favor" },
+        { title: "Alerta a verificar", text: "Verifique os logs, por favor", fyi: false },
       ],
     },
     at(1),
@@ -636,16 +664,16 @@ test("receipt FYIs arrive as grey closed cards; ordinary notices and questions s
     shown.map((c) => [c.title, c.state, c.options]),
     [
       [question.title, "open", question.options],
-      ["已设好", "closed", []],
-      ["要开权限", "open", ["已处理"]],
-      ["要查告警", "open", ["已处理"]],
+      ["Configurado", "closed", []],
+      ["Permissão a liberar", "open", ["Resolvido"]],
+      ["Alerta a verificar", "open", ["Resolvido"]],
     ],
   );
   for (const c of shown) delivered("chat", c.id, c.version, `om_${c.id}`, at(1));
   const fyi = shown[1];
   const grey = render(fyi);
   assert.equal(grey.header.template, "grey");
-  assert.doesNotMatch(JSON.stringify(grey), /callback|已处理/);
+  assert.doesNotMatch(JSON.stringify(grey), /callback|Resolvido/);
   for (const c of [shown[0], shown[2], shown[3]]) {
     assert.equal(render(c).header.template, "blue");
     assert.match(JSON.stringify(render(c)), /callback/);
@@ -654,7 +682,7 @@ test("receipt FYIs arrive as grey closed cards; ordinary notices and questions s
     changed: false,
     state: "closed",
   });
-  assert.equal(claim("w1", at(2)), null, "a closed FYI cannot wake another round");
+  assert.equal(claim("w1", at(2)), null, "um FYI fechado não pode acordar outra rodada");
   ingest("app", note(1, "followup"), at(3));
   const next = claim("w1", at(3))!;
   assert.deepEqual(
@@ -664,14 +692,14 @@ test("receipt FYIs arrive as grey closed cards; ordinary notices and questions s
   assert.deepEqual(next.context.answers, []);
   assert.deepEqual(
     next.context.open.map((c) => c.title),
-    [question.title, "要开权限", "要查告警"],
+    [question.title, "Permissão a liberar", "Alerta a verificar"],
   );
   finish(
     next.run,
     next.token,
     {
       outcome: "done",
-      resolve: [{ card: shown[2].id, reason: "权限已开通" }],
+      resolve: [{ card: shown[2].id, reason: "permissão liberada" }],
     },
     at(4),
   );
@@ -685,7 +713,7 @@ test("receipt FYIs arrive as grey closed cards; ordinary notices and questions s
   );
 });
 
-test("a run that keeps failing says its FYI once, and the third failure in a row is still told", () => {
+test("uma rodada que continua falhando diz o FYI dela uma vez, e a terceira falha seguida ainda é contada", () => {
   clean();
   ingest("app", note(1), at(0));
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -693,7 +721,11 @@ test("a run that keeps failing says its FYI once, and the third failure in a row
     finish(
       job.run,
       job.token,
-      { outcome: "failed", error: "boom", notice: [{ title: "已试过", text: "还在试", key: "retry", fyi: true }] },
+      {
+        outcome: "failed",
+        error: "boom",
+        notice: [{ title: "Já tentei", text: "ainda tentando", key: "retry", fyi: true }],
+      },
       at(attempt * 120 + 1),
     );
   }
@@ -702,7 +734,7 @@ test("a run that keeps failing says its FYI once, and the third failure in a row
   assert.equal(cards.filter((card) => card.key.endsWith(":failing") && card.state === "open").length, 1);
 });
 
-test("why shows receipt FYIs while keeping hub end notices and empty closures hidden", () => {
+test("why mostra os FYIs de recibo mantendo ocultos os avisos de fim da central e os encerramentos vazios", () => {
   clean();
   ingest("ops", { id: "why-fyi", type: "alert.raised", subject: "probe" }, at(0));
   const job = claim("w2", at(0))!;
@@ -711,24 +743,24 @@ test("why shows receipt FYIs while keeping hub end notices and empty closures hi
     job.token,
     {
       outcome: "done",
-      summary: "本轮检查完成",
+      summary: "verificação desta rodada concluída",
       notice: [
-        { title: "仅告知的结果", text: "已经完成核实", fyi: true },
-        { title: "仍需处理的结果", text: "请检查日志" },
+        { title: "resultado apenas informativo", text: "verificação concluída", fyi: true },
+        { title: "resultado que ainda exige tratamento", text: "verifique os logs" },
       ],
     },
     at(1),
   );
   const output = formatWhy(job.run, why(job.run));
-  assert.match(output, /通知：仅告知的结果/);
-  assert.match(output, /已经完成核实/);
-  assert.match(output, /通知：仍需处理的结果/);
-  assert.match(output, /结束：本轮检查完成/);
-  assert.doesNotMatch(output, /通知：告警|结案：仅告知的结果/);
-  assert.equal(output.split("本轮检查完成").length - 1, 1);
+  assert.match(output, /Notificação: resultado apenas informativo/);
+  assert.match(output, /verificação concluída/);
+  assert.match(output, /Notificação: resultado que ainda exige tratamento/);
+  assert.match(output, /Fim: verificação desta rodada concluída/);
+  assert.doesNotMatch(output, /Notificação: alerta|Encerrado: resultado apenas informativo/);
+  assert.equal(output.split("verificação desta rodada concluída").length - 1, 1);
 });
 
-test("a receipt FYI is deliverable for one day even though it starts closed", () => {
+test("um FYI de recibo fica entregável por um dia mesmo começando fechado", () => {
   clean();
   ingest("app", note(1), at(0));
   const job = claim("w1", at(0))!;
@@ -737,7 +769,7 @@ test("a receipt FYI is deliverable for one day even though it starts closed", ()
     job.token,
     {
       outcome: "done",
-      notice: [{ title: "已上线", text: "可以使用了", fyi: true }],
+      notice: [{ title: "No ar", text: "já pode ser usado", fyi: true }],
     },
     at(0),
   );
@@ -746,7 +778,7 @@ test("a receipt FYI is deliverable for one day even though it starts closed", ()
 });
 
 for (const fyi of [undefined, false, true]) {
-  test(`tell never keeps receipt notices quiet with fyi=${fyi} while questions still arrive`, () => {
+  test(`tell nunca mantém avisos de recibo silenciosos com fyi=${fyi}, enquanto perguntas ainda chegam`, () => {
     clean();
     ingest("ops", { id: "alert", type: "alert.raised", subject: "probe" }, at(0));
     const job = claim("w1", at(0))!;
@@ -756,49 +788,49 @@ for (const fyi of [undefined, false, true]) {
       {
         outcome: "done",
         ask: [question],
-        notice: [{ title: "记下了", text: "留作记录", ...(fyi !== undefined && { fyi }) }],
+        notice: [{ title: "registrado", text: "fica para o registro", ...(fyi !== undefined && { fyi }) }],
       },
       at(0),
     );
     const shown = nextCard("chat", at(1))!;
     assert.deepEqual([shown.kind, shown.state, shown.options], ["ask", "open", question.options]);
     delivered("chat", shown.id, shown.version, "om_ask", at(1));
-    assert.equal(nextCard("chat", at(2)), null, "quiet notices never reach the channel");
+    assert.equal(nextCard("chat", at(2)), null, "avisos silenciosos nunca chegam ao canal");
   });
 }
 
-test("what only needed saying is told once per key; given up, it can be told again", () => {
+test("o que só precisava ser dito é dito uma vez por chave; desistido, pode ser dito de novo", () => {
   clean();
-  const first = tell("source:app:k", "应用", "周报", at(0));
+  const first = tell("source:app:k", "aplicativo", "relatório semanal", at(0));
   assert.equal(first.duplicate, false);
-  assert.equal(tell("source:app:k", "应用", "周报", at(1)).duplicate, true);
+  assert.equal(tell("source:app:k", "aplicativo", "relatório semanal", at(1)).duplicate, true);
   for (const minute of [0, 1, 3, 7, 15, 25, 35, 45, 55])
-    failed("chat", first.card, nextCard("chat", at(minute))!.version, "挂了", at(minute));
+    failed("chat", first.card, nextCard("chat", at(minute))!.version, "caiu", at(minute));
   assert.equal(nextCard("chat", at(60)), null);
-  const again = tell("source:app:k", "应用", "周报（更新）", at(70));
+  const again = tell("source:app:k", "aplicativo", "relatório semanal (atualizado)", at(70));
   assert.deepEqual(
     [again.card, again.duplicate],
     [first.card, false],
-    "told again, it goes out at once with its new words",
+    "dito de novo, ele sai na hora com as palavras novas",
   );
-  assert.equal(nextCard("chat", at(70))?.text, "周报（更新）");
-  assert.equal(nextCard("plain", at(70))?.text, "周报（更新）");
+  assert.equal(nextCard("chat", at(70))?.text, "relatório semanal (atualizado)");
+  assert.equal(nextCard("plain", at(70))?.text, "relatório semanal (atualizado)");
 });
 
-test("what only needed saying goes stale: a channel coming back after a day doesn't get yesterday's", () => {
+test("o que só precisava ser dito envelhece: um canal que volta depois de um dia não recebe o de ontem", () => {
   clean();
-  tell("source:app:k", "应用", "昨天的事", at(0));
+  tell("source:app:k", "aplicativo", "assunto de ontem", at(0));
   assert.equal(nextCard("chat", at(25 * 60)), null);
   const { id } = asked(1, at(25 * 60));
-  assert.equal(nextCard("chat", at(25 * 60))?.id, id, "what still needs an answer does");
+  assert.equal(nextCard("chat", at(25 * 60))?.id, id, "o que ainda precisa de resposta recebe");
 });
 
-test("a card's link goes only to a channel that allows it, and opens only that card", () => {
+test("o link de um cartão vai só a um canal que o permite, e abre só aquele cartão", () => {
   clean();
   const { id } = asked(1);
   const link = nextCard("plain", at(1))!.link!;
   assert.match(link, /^https:\/\/hub\.test\/c\/[\w-]+$/);
-  assert.equal(nextCard("chat", at(1))!.link, null, "a channel with buttons has no use for a link that answers");
+  assert.equal(nextCard("chat", at(1))!.link, null, "um canal com botões não tem uso para um link que responde");
   assert.equal(cardByToken(new URL(link).pathname.slice("/c/".length))!.id, id);
   assert.equal(cardByToken("made-up"), undefined);
 });

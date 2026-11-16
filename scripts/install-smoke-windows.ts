@@ -1,5 +1,5 @@
-// Failure modes: a clean Windows install cannot be invoked, cannot complete ask/answer/resume, or uninstall removes data
-// or leaves a running hub. The Agent and notification transport are stand-ins; no real message or desktop alert is sent.
+// Modos de falha: uma instalação limpa do Windows não poder ser invocada, não completar perguntar/responder/retomar, ou o uninstall
+// apagar dados ou deixar uma central rodando. O Agent e o transporte de notificação são dublês; nenhuma mensagem nem alerta real é enviado.
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
@@ -40,7 +40,7 @@ async function until(check: () => boolean | Promise<boolean>) {
     if (await check()) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Windows install smoke timed out");
+  throw new Error("O smoke de instalação no Windows expirou");
 }
 
 try {
@@ -66,7 +66,7 @@ try {
     { env, encoding: "utf8", timeout: 60_000 },
   );
   assert.equal(installed.status, 0, installed.stderr || installed.stdout);
-  assert.match(installed.stdout, /先运行/);
+  assert.match(installed.stdout, /Primeiro rode/);
   assert.ok(existsSync(path.join(home, "app/bin/agent-autoloop.cmd")));
   const expected = spawnSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim();
   assert.ok(run("--version").includes(expected));
@@ -76,7 +76,7 @@ try {
     script,
     `import { readFileSync } from 'node:fs';
 const context = JSON.parse(readFileSync(process.env.AGENT_AUTOLOOP_CONTEXT, 'utf8'));
-console.log(context.answers.length ? '你选了绿色，试跑通过' : '问了一个问题\\n\\n\`\`\`agent-autoloop\\n' + JSON.stringify({ask:[{title:'试跑：选一个颜色',text:'这是一次试跑',options:['蓝色','绿色'],key:'try-color'}]}) + '\\n\`\`\`');`,
+console.log(context.answers.length ? 'Você escolheu verde, execução de teste aprovada' : 'Fiz uma pergunta\\n\\n\`\`\`agent-autoloop\\n' + JSON.stringify({ask:[{title:'Execução de teste: escolha uma cor',text:'Esta é uma execução de teste',options:['Azul','Verde'],key:'try-color'}]}) + '\\n\`\`\`');`,
   );
   const rulesFile = path.join(home, "rules.json");
   const rules = JSON.parse(readFileSync(rulesFile, "utf8"));
@@ -114,15 +114,15 @@ await hub.delivered(card.id,card.version,'test-'+card.id); } }`,
   assert.ok(card, tried);
   await until(() => existsSync(path.join(work, "notified")));
   run("answer", card, "2");
-  await until(() => run("status").includes("试跑通过"));
+  await until(() => run("status").includes("execução de teste aprovada"));
   console.log(run("status"));
   run("update");
   run("uninstall", "--yes");
   if (up.exitCode === null) await once(up, "exit");
-  assert.ok(existsSync(configFile), "uninstall removed data");
-  assert.ok(!existsSync(path.join(home, "app")), "uninstall left the program");
-  assert.equal(await healthy(), false, "uninstall left the hub running");
-  console.log("install-smoke: Windows install, ask, answer, resume, update and uninstall passed.");
+  assert.ok(existsSync(configFile), "uninstall apagou os dados");
+  assert.ok(!existsSync(path.join(home, "app")), "uninstall deixou o programa");
+  assert.equal(await healthy(), false, "uninstall deixou a central em execução");
+  console.log("install-smoke: instalação no Windows, pergunta, resposta, retomada, update e uninstall aprovados.");
 } finally {
   if (up && up.exitCode === null) {
     up.kill();

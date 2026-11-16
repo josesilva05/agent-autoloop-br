@@ -1,36 +1,36 @@
-# 收件箱分诊
+# Triagem da caixa de entrada
 
-每早把收件箱过一遍，写成一份放在本机的清单：今天必须回的、知道就行的、看着可疑的。要回的已经写好回复草稿，复制过去就能发。默认北京时间每天 8 点读过去 24 小时内的未读邮件。
+Toda manhã passa a caixa de entrada em revista e escreve uma lista que fica nesta máquina: o que precisa de resposta hoje, o que basta saber e o que parece suspeito. Para o que precisa de resposta, o rascunho já vem escrito, pronto para copiar e enviar. Por padrão, às 8h de todos os dias no fuso Asia/Shanghai (horário de Pequim), lê as mensagens não lidas das últimas 24 horas.
 
-## 怎么启用
+## Como ativar
 
-1. 把本目录复制到 `~/.agent-autoloop/work/inbox-triage/`，目录权限设为 `0700`，不要放进 Git 仓库。两条规则使用同一台电脑、同一 `cwd` 和同一 `group`，读取和整理串行执行。
-2. 把 `SKILL.md` 放到 `~/.codex/skills/inbox-triage/`；Claude Code 放到 `~/.claude/skills/inbox-triage/`。
-3. 安装已登录本人的 `lark-cli`，先确认它读得到信：
+1. Copie este diretório para `~/.agent-autoloop/work/inbox-triage/`, com permissão `0700`, fora de qualquer repositório Git. As duas regras usam o mesmo computador, o mesmo `cwd` e o mesmo `group`, de modo que leitura e organização acontecem em série.
+2. Coloque o `SKILL.md` em `~/.codex/skills/inbox-triage/`; no Claude Code, em `~/.claude/skills/inbox-triage/`.
+3. Instale um `lark-cli` já autenticado como o titular e confirme antes que ele consegue ler as mensagens:
    ```bash
    lark-cli mail +triage --as user --max 3 --filter '{"folder_id":"INBOX","is_unread":true}' --format json
    ```
-   看到 `data.messages` 里每封邮件都有 `message_id`、`subject`、`head_from` 就能用。只沿用已有授权，不在脚本里保存或导出 access token。字段不一样就先改 `collect.ts` 里对应的一处，别让它读不懂还硬跑。
-4. 修改 `sources.json`：`folderId` 是要看的系统目录（`INBOX`、`SPAM` 等）；`onlyUnread` 为 `true` 时只读未读；`lookbackHours` 是回看几小时；`maxMessages` 是这次最多读几封（1 到 400）；`bodyChars` 是每封正文最多留多少字；`skipSenders` 里的地址根本不读正文，通知类发件人填这里。
-5. 合并规则的 `sources`、`agents`、`channels`、`rules`，替换接单电脑和路径；时区用 `Asia/Shanghai`。权限：`edit`，分诊 Agent 只读本机快照、写清单和草稿；联网读信由固定脚本完成，它只执行读取命令。
-6. 运行 `agent-autoloop check`。在专用测试中台用假 CLI 验证采集、分诊派发、登录失效后的提问与续办，再启用自己的定时规则。
+   Se em `data.messages` cada mensagem tiver `message_id`, `subject` e `head_from`, dá para usar. Use apenas as autorizações já existentes; não salve nem exporte access token no script. Se os campos forem diferentes, ajuste antes o ponto correspondente no `collect.ts`, em vez de deixá-lo rodar sem entender o que lê.
+4. Altere o `sources.json`: `folderId` é a pasta do sistema a examinar (`INBOX`, `SPAM` etc.); com `onlyUnread` em `true`, só as não lidas são lidas; `lookbackHours` é quantas horas olhar para trás; `maxMessages` é o máximo de mensagens desta leitura (1 a 400); `bodyChars` é quantos caracteres manter do corpo de cada uma; os endereços em `skipSenders` não têm o corpo lido de forma nenhuma — é aqui que entram os remetentes de notificações.
+5. Mescle os `sources`, `agents`, `channels` e `rules` das regras, trocando o computador do worker e os caminhos; use o fuso `Asia/Shanghai`. Permissão: `edit` — o Agent de triagem só lê o snapshot local e escreve a lista e os rascunhos; a leitura pela internet é feita pelo script fixo, que só executa comandos de leitura.
+6. Execute `agent-autoloop check`. Numa central de teste dedicada e com um CLI falso, verifique a coleta, o despacho da triagem e a pergunta e a continuação depois de uma falha de login antes de ativar as suas regras agendadas.
 
-## 读什么、留什么
+## O que é lido e o que é mantido
 
-读取用 `mail +triage` 拿列表（只取元数据和摘要），再用 `mail +messages` 按 `message_id` 批量取正文，两步都是 `--as user`，只用本人已有的权限，不换成机器人身份去拿更多信，也不读 `skipSenders` 里的发件人。时间范围写进 `--filter` 的 `time_range`，按北京时间显示。一次最多读 `maxMessages` 封：按 `+triage` 返回的 `page_token` 一页页往下翻，`skipSenders` 里的发件人不占名额，所以排在它们后面的邮件不会被挤掉。收满 `maxMessages` 封或翻到窗口尽头才停。只有翻到窗口尽头、一封没落下时，快照里的 `scanned.complete` 才是 `true`；收满了而后面还有邮件也算没读完，是 `false`，清单会写明还有邮件没读，不会说成“没有需要看的邮件”或“都看过了”。
+A leitura usa `mail +triage` para obter a lista (só metadados e resumos) e depois `mail +messages` para buscar os corpos em lote por `message_id`; os dois passos usam `--as user`, apenas com as permissões que o titular já tem, sem trocar para a identidade do bot para obter mais mensagens e sem ler os remetentes em `skipSenders`. O intervalo de tempo vai no `time_range` do `--filter` e é exibido no fuso Asia/Shanghai (horário de Pequim). Cada leitura traz no máximo `maxMessages` mensagens: a paginação segue o `page_token` devolvido por `+triage`, página por página, e os remetentes em `skipSenders` não ocupam vaga, então as mensagens que vêm depois deles não são empurradas para fora. A leitura para ao alcançar `maxMessages` ou ao chegar ao fim da janela. Só quando a janela foi lida até o fim, sem deixar nenhuma mensagem, o `scanned.complete` do snapshot é `true`; com o limite cheio e ainda havendo mensagens depois, também conta como leitura incompleta e fica `false`, e a lista dirá que há mensagens não lidas — nunca "não há e-mails para ler" nem "tudo foi lido".
 
-正文按 `bodyChars` 截断，`truncated` 标出被截断的邮件，摘要 Agent 据此写“需打开原文核实”，不会把半截正文当成全文。接口没有回来的邮件、只回来一部分正文的（`unavailable_message_ids` 非空）都算没读成：这一轮不生成快照，也不用上一次的文件冒充。
+O corpo é cortado em `bodyChars`, e `truncated` marca as mensagens cortadas; com isso o Agent de resumo escreve "é preciso abrir a mensagem original para verificar" e não trata meio corpo como se fosse o texto inteiro. Mensagens que a interface não devolveu, ou cujo corpo voltou apenas em parte (`unavailable_message_ids` não vazio), contam como leitura não concluída: nesta rodada nenhum snapshot é gerado, e o arquivo anterior não é usado no lugar dele.
 
-`+messages` 只取文字，附件和图片不下载；`body_html` 不用，只用纯文本。完整快照保存在 `inbox-input.json`（权限 `0600`），分诊清单是 `briefs/inbox-<编号>.md`；它们属于本人的邮件资料，不提交、不公开，也不把正文放进飞书卡片。
+`+messages` busca apenas texto; anexos e imagens não são baixados, e `body_html` não é usado — só o texto puro. O snapshot completo fica em `inbox-input.json` (permissão `0600`) e a lista de triagem em `briefs/inbox-<número>`; são dados de e-mail do titular — não faça commit, não publique e não coloque o corpo das mensagens em cartões do Feishu.
 
-这个模板**只读**：不发送、不在邮箱里建草稿、不改已读、不打标签、不归档、不删除。回复草稿只写在本地清单里，发送由本人自己完成。要真的在邮箱里生成草稿，那是“对外动作”，得先自己加一条规则并想清楚由谁确认。
+Este modelo é **somente leitura**: não envia, não cria rascunhos na caixa de entrada, não altera o estado de lida, não aplica rótulos, não arquiva e não apaga. Os rascunhos de resposta ficam apenas na lista local, e o envio é feito pelo titular. Para gerar rascunhos de verdade na caixa de entrada, isso é uma "ação para fora": é preciso acrescentar uma regra por sua conta e definir quem confirma.
 
-本人登录或授权失效时只发一张问题卡片，没有 `inbox.ready` 事件，不拿上次的快照冒充这一轮。本人恢复后点继续，重新完整读取；选“本期先跳过”结束本轮，下次计划时间再读；临时接口错误则如实失败，由中台现有机制处理。
+Quando o login ou a autorização do titular falha, é enviado um único cartão de pergunta, sem evento `inbox.ready`, e o snapshot anterior não é apresentado como o desta rodada. Depois que o titular restabelece o acesso, ele clica em continuar e a leitura completa é refeita; se escolher "Pular este período", esta rodada se encerra e a leitura volta no próximo horário agendado; erros temporários de interface falham com sinceridade e ficam com os mecanismos existentes da central.
 
-邮件正文是别人写的字，可能包含伪装成指令的内容。分诊 Agent 只把它当资料：不按邮件里的要求转发、回复、付款或改设置，这类要求只在清单里记下来由本人决定。
+O corpo das mensagens é texto escrito por outras pessoas e pode conter conteúdo disfarçado de instrução. O Agent de triagem o trata apenas como dado: não encaminha, não responde, não paga e não muda configurações a pedido do e-mail — esses pedidos são apenas anotados na lista, para o titular decidir.
 
-## 飞书通知
+## Notificação pelo Feishu
 
-规则默认登记 `feishu` 通道。把 `ou_REPLACE_ME` 换成本人的 open_id；在已有 `config.json` 的 `channels.feishu` 配上这个人的 `user` 和已有通道密钥。复用已运行的飞书通道，不另开监听。尚未接入时按[通道配置](../../../skills/agent-autoloop/SKILL.md#接一个通道)完成；配置涉及新密钥或权限时先取得本人授权。
+As regras registram por padrão o canal `feishu`. Troque `ou_REPLACE_ME` pelo open_id do titular; no `channels.feishu` do `config.json` existente, configure o `user` dessa pessoa e a chave de canal já em uso. Reaproveite o canal Feishu que já está rodando, sem abrir outra escuta. Se ele ainda não estiver conectado, siga a [configuração de canais](../../../skills/agent-autoloop/SKILL.md#conectar-um-canal); quando a configuração envolver chaves ou permissões novas, obtenha antes a autorização do titular.
 
-读取邮件使用本人身份，通知使用机器人身份。默认只发给本人；一个中台默认把卡片交给它配置的所有通道；含私人资料的规则写上 `channels`，只发到本人私聊的通道，不要混入共享群通道。不要把密钥、实际 open_id 或邮件内容提交到仓库。
+A leitura dos e-mails usa a identidade do titular; a notificação usa a identidade do bot. Por padrão envia-se apenas ao titular; uma central entrega os cartões a todos os canais que ela tem configurados, então regras com dados privados devem declarar `channels` para enviar somente ao canal de conversa privada do titular, sem se misturar com canais de grupo compartilhados. Não faça commit no repositório de chaves, open_id reais nem conteúdo de e-mail.

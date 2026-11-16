@@ -1,14 +1,15 @@
-// The channels that ship and the webhook adapter. No real listener runs here: only one can hold an app's card clicks.
-// Failure cases: a first send uses a key that changes with the version, or an update sends a new message; a failed send
-// isn't reported; a click that isn't a card's is taken; a card's options don't show while it's open or still show after;
-// the listener dying isn't started again, or a listener that can't start takes the whole hub down. A GitHub webhook with
-// a bad signature, or with none, is taken; what isn't an identifier reaches the subject; a ping makes an event;
-// replacement tokens in card text rewrite a webhook template. A settled card Feishu won't let the bot change stays at the
-// version before the answer; an open one is sent again with buttons that don't count.
-// A slow CLI call must not block the hub's HTTP loop while looking up a user, sending or updating a card.
-// An ask card that only takes choices loses the account someone would type; words without a choice must still answer.
-// A U+2028 or U+2029 in what someone typed, which JSON leaves as it is, cuts the click's line and loses the click.
-// Older lark-cli releases reject `--content -`, so a first card must not depend on that stdin convention.
+// Os canais que já vêm prontos e o adaptador de webhook. Nenhum listener real roda aqui: só um pode deter os cliques
+// nos cartões de um aplicativo. Casos de falha: um primeiro envio usa uma chave que muda com a versão, ou uma
+// atualização envia uma mensagem nova; um envio que falhou não é reportado; um clique que não é de um cartão é aceito;
+// as opções de um cartão não aparecem enquanto ele está aberto, ou continuam aparecendo depois; o listener que morre
+// não é iniciado de novo, ou um listener que não consegue iniciar derruba a central inteira. Um webhook do GitHub com
+// assinatura errada, ou sem assinatura, é aceito; o que não é identificador chega ao subject; um ping gera um evento;
+// tokens de substituição no texto do cartão reescrevem um modelo de webhook. Um cartão já resolvido que o Feishu não
+// deixa o bot alterar fica na versão anterior à resposta; um aberto é enviado de novo com botões que não contam.
+// Uma chamada de CLI lenta não pode bloquear o loop HTTP da central ao consultar um usuário, enviar ou atualizar cartão.
+// Um cartão de pergunta que só aceita escolhas perde a conta que alguém digitaria; texto sem escolha ainda responde.
+// Um U+2028 ou U+2029 no que alguém digitou, que o JSON deixa como está, corta a linha do clique e perde o clique.
+// Versões mais antigas do lark-cli rejeitam `--content -`, então um primeiro cartão não pode depender dessa convenção.
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -31,9 +32,9 @@ const base: Card = {
   ref: null,
   kind: "ask",
   state: "open",
-  title: "要不要删",
-  text: "占了 10 GB",
-  options: ["删", "留着"],
+  title: "Apagar ou não",
+  text: "Ocupa 10 GB",
+  options: ["Apagar", "Manter"],
   recommend: 1,
   choice: null,
   answer: null,
@@ -41,53 +42,63 @@ const base: Card = {
   link: "https://hub.test/c/x",
 };
 
-test("a card says which rule or task it came from, in every state, unless its title already does", () => {
+test("um cartão diz de que regra ou tarefa veio, em qualquer estado, a menos que o título já diga", () => {
   const from = (card: Card) => (render(card).header as any).subtitle?.content;
-  assert.equal(from({ ...base, rule: "开源站每日巡检" }), "来源：开源站每日巡检");
+  assert.equal(from({ ...base, rule: "inspeção diária do site aberto" }), "Fonte: inspeção diária do site aberto");
   assert.equal(
-    from({ ...base, rule: "开源站每日巡检", state: "done", choice: 0, result: "删了" }),
-    "来源：开源站每日巡检",
+    from({ ...base, rule: "inspeção diária do site aberto", state: "done", choice: 0, result: "apagado" }),
+    "Fonte: inspeção diária do site aberto",
   );
-  assert.equal(from(base), undefined, "the hub's own cards name no rule");
-  assert.equal(from({ ...base, kind: "notice", rule: "AIHOT 告警", title: "AIHOT 告警" }), undefined);
+  assert.equal(from(base), undefined, "os cartões da própria central não nomeiam regra");
+  assert.equal(from({ ...base, kind: "notice", rule: "alerta AIHOT", title: "alerta AIHOT" }), undefined);
 });
 
-test("a card shows its options while it's open, and what became of it after", () => {
+test("um cartão mostra suas opções enquanto aberto, e o que foi feito dele depois", () => {
   const open = render(base);
   const blocks = open.body.elements.filter((e) => e.tag === "interactive_container") as any[];
   assert.equal(blocks.length, 2);
   assert.deepEqual(blocks[1].behaviors[0].value, { card: 5, choice: 1 });
-  assert.equal(blocks[1].border_color, "blue", "what's recommended stands out");
+  assert.equal(blocks[1].border_color, "blue", "o recomendado se destaca");
   const said = (card: Card) => JSON.stringify(render(card).body.elements);
-  assert.match(said({ ...base, state: "decided", choice: 1 }), /你选了「留着」，已记录/);
+  assert.match(said({ ...base, state: "decided", choice: 1 }), /Você escolheu Manter\. Registrado/);
   assert.ok(!said({ ...base, state: "decided", choice: 1 }).includes("callback"));
-  assert.match(said({ ...base, state: "done", choice: 0, result: "删了" }), /你选了「删」。已执行：删了/);
-  assert.match(said({ ...base, state: "decided", answer: "归档" }), /你选了「归档」/);
-  assert.match(said({ ...base, state: "closed", result: "问题自己好了" }), /不用决定了：问题自己好了/);
-  assert.match(said({ ...base, kind: "notice", state: "closed", options: [], result: "已处理" }), /已处理/);
+  assert.match(
+    said({ ...base, state: "done", choice: 0, result: "apagado" }),
+    /Você escolheu Apagar\. Executado: apagado/,
+  );
+  assert.match(said({ ...base, state: "decided", answer: "arquivar" }), /Você escolheu arquivar/);
+  assert.match(
+    said({ ...base, state: "closed", result: "o problema se resolveu sozinho" }),
+    /Não precisa mais decidir: o problema se resolveu sozinho/,
+  );
+  assert.match(said({ ...base, kind: "notice", state: "closed", options: [], result: "Resolvido" }), /Resolvido/);
   const noticeOpen = JSON.stringify(render({ ...base, kind: "notice", options: [] }).body.elements);
-  assert.ok(noticeOpen.includes('"tag":"form"'), "a notice can take a line of your own");
-  assert.ok(noticeOpen.includes("handling_note_submit_5"), "the submit button carries the card's number");
-  assert.ok(noticeOpen.includes('"name":"note"'), "the form's field has a name, so its words come back");
+  assert.ok(noticeOpen.includes('"tag":"form"'), "uma notificação pode receber uma linha escrita por você");
+  assert.ok(noticeOpen.includes("handling_note_submit_5"), "o botão de envio carrega o número do cartão");
+  assert.ok(noticeOpen.includes('"name":"note"'), "o campo do formulário tem nome, então o texto dele volta");
   assert.ok(
     noticeOpen.includes('"form_action_type":"submit"'),
-    "the way a Feishu 2.0 card marks a form's submit button",
+    "é assim que um cartão Feishu 2.0 marca o botão de envio de um formulário",
   );
   const askOpen = JSON.stringify(render(base).body.elements);
-  assert.ok(askOpen.includes("ask_text_submit_5"), "an ask card can take words too, not only a choice");
-  assert.ok(askOpen.includes('"name":"note"'), "the ask form's field has a name, so its words come back");
+  assert.ok(askOpen.includes("ask_text_submit_5"), "um cartão de pergunta também recebe texto, não só uma escolha");
+  assert.ok(askOpen.includes('"name":"note"'), "o campo do formulário da pergunta tem nome, então o texto volta");
   assert.ok(
     !said({ ...base, state: "decided", choice: 1 }).includes('"tag":"form"'),
-    "a settled ask card has no form left to submit",
+    "um cartão de pergunta já resolvido não deixa formulário para enviar",
   );
   assert.match(
-    said({ ...base, kind: "notice", state: "closed", options: [], result: "已处理", answer: "清了 3GB" }),
-    /处理说明：清了 3GB/,
+    said({ ...base, kind: "notice", state: "closed", options: [], result: "Resolvido", answer: "limpei 3GB" }),
+    /Nota de tratamento: limpei 3GB/,
   );
-  assert.ok(!said({ ...base, kind: "notice", state: "closed", options: [], result: "已处理" }).includes("处理说明"));
+  assert.ok(
+    !said({ ...base, kind: "notice", state: "closed", options: [], result: "Resolvido" }).includes(
+      "Nota de tratamento",
+    ),
+  );
 });
 
-test("feishu CLI calls leave the HTTP loop available", async () => {
+test("as chamadas de CLI do feishu deixam o loop HTTP disponível", async () => {
   let requests = 0;
   const server = createServer((_req, res) => {
     requests++;
@@ -131,7 +142,7 @@ else {
     await feishu({ hub: hub as any, options: { lark }, log: () => {}, signal: stop.signal });
     assert.deepEqual(failed, []);
     assert.equal(delivered, 2);
-    assert.equal(requests, 3, "user lookup, send and patch each allowed HTTP to respond");
+    assert.equal(requests, 3, "consulta de usuário, envio e patch deixaram o HTTP responder, cada um por si");
   } finally {
     stop.abort();
     server.closeAllConnections();
@@ -139,7 +150,7 @@ else {
   }
 });
 
-test("feishu: a lark-cli that can't be started is said, not left to take the hub down", async () => {
+test("feishu: um lark-cli que não consegue iniciar é avisado, não deixado derrubar a central", async () => {
   const stop = new AbortController();
   const lines: string[] = [];
   const hub = { nextCard: () => new Promise((resolve) => setTimeout(() => resolve({ card: null }), 5)) };
@@ -147,14 +158,14 @@ test("feishu: a lark-cli that can't be started is said, not left to take the hub
     lines.push(line);
     stop.abort();
   };
-  // Returning shows the listener's loop went on past the failure, to where it would start again. Without the time limit
-  // a crash, which the test runner catches, would leave this waiting for good.
+  // Retornar mostra que o loop do listener seguiu além da falha, até onde iniciaria de novo. Sem o limite de tempo,
+  // uma exceção, que o executor de testes captura, deixaria isto esperando para sempre.
   const signal = AbortSignal.any([stop.signal, AbortSignal.timeout(5_000)]);
   await feishu({ hub: hub as any, options: { user: "ou_me", lark: join(dir, "not-there") }, log, signal });
   assert.match(lines[0] ?? "", /ENOENT/);
 });
 
-test("feishu: a first card works without lark-cli's stdin content convention", async () => {
+test("feishu: um primeiro cartão funciona sem a convenção de conteúdo por stdin do lark-cli", async () => {
   const lark = join(dir, "lark-cli-no-stdin-content");
   writeFileSync(
     lark,
@@ -200,10 +211,10 @@ esac
   assert.deepEqual(delivered, [[5, 1, "om_5"]]);
 });
 
-test("feishu: sends once per card, updates in place, reports failure, and only real clicks count", async () => {
+test("feishu: envia uma vez por cartão, atualiza no lugar, reporta falha e só cliques reais contam", async () => {
   const log = join(dir, "lark.log");
   const lark = join(dir, "lark-cli");
-  // A stand-in for lark-cli: records each call; `event consume` prints two clicks and waits to be stopped.
+  // Um substituto do lark-cli: anota cada chamada; `event consume` imprime dois cliques e espera ser parado.
   writeFileSync(
     lark,
     `#!/bin/sh
@@ -246,7 +257,7 @@ esac
       return { changed: true };
     },
   };
-  // A card that can't be sent: lark-cli is told to fail by the words in it.
+  // Um cartão que não pode ser enviado: o texto dentro dele manda o lark-cli falhar.
   writeFileSync(
     lark,
     readFileSync(lark, "utf8").replace(
@@ -257,11 +268,11 @@ esac
   await feishu({ hub: hub as any, options: { user: "ou_me", lark }, log: () => {}, signal: stop.signal });
   const lines = readFileSync(log, "utf8").trim().split("\n");
   const sends = lines.filter((l) => l.includes("+messages-send"));
-  assert.ok(sends[0].includes("--idempotency-key agent-autoloop-card-5"), "the key doesn't change with the version");
+  assert.ok(sends[0].includes("--idempotency-key agent-autoloop-card-5"), "a chave não muda com a versão");
   assert.ok(sends[0].includes("--user-id ou_me"));
   assert.ok(
     lines.some((l) => l.includes("messages patch --message-id om_5")),
-    "an update changes the message that was sent",
+    "uma atualização altera a mensagem que foi enviada",
   );
   assert.deepEqual(
     calls.find((c) => c[0] === "delivered" && c[2] === 1),
@@ -281,14 +292,14 @@ esac
   );
 });
 
-test("feishu: U+2028 and U+2029 in a handling note don't lose the click", async () => {
+test("feishu: U+2028 e U+2029 numa nota de tratamento não perdem o clique", async () => {
   const lark = join(dir, "lark-cli-separators");
   writeFileSync(
     lark,
     `#!/bin/sh
 case "$*" in
   *"event consume"*)
-    echo '{"action_name":"handling_note_submit_8","action_value":"","form_value":"{\\"note\\":\\"第一行 第二行 第三行\\"}","operator_id":"ou_me","message_id":"om_8"}'
+    echo '{"action_name":"handling_note_submit_8","action_value":"","form_value":"{\\"note\\":\\"primeira linha segunda linha terceira linha\\"}","operator_id":"ou_me","message_id":"om_8"}'
     exec sleep 30 ;;
   *) cat > /dev/null; echo '{"ok":true,"data":{"message_id":"om_8"}}' ;;
 esac
@@ -301,7 +312,7 @@ esac
   const click = new Promise<void>((resolve) => (answered = resolve));
   const hub = {
     async nextCard() {
-      // Until the click comes, however busy this machine is, or until it's clear it won't.
+      // Até o clique chegar, por mais ocupada que esta máquina esteja, ou até ficar claro que ele não vem.
       await Promise.race([click, new Promise((resolve) => setTimeout(resolve, 2_000))]);
       stop.abort();
       return { card: null };
@@ -313,20 +324,22 @@ esac
     },
   };
   await feishu({ hub: hub as any, options: { user: "ou_me", lark }, log: () => {}, signal: stop.signal });
-  assert.deepEqual(answers, [[8, { choice: 0, by: "ou_me", ref: "om_8", text: "第一行 第二行 第三行" }]]);
+  assert.deepEqual(answers, [
+    [8, { choice: 0, by: "ou_me", ref: "om_8", text: "primeira linha segunda linha terceira linha" }],
+  ]);
 });
 
-test("feishu: a form submit carries the handling note, and the button's name finds its card", async () => {
+test("feishu: o envio de um formulário leva a nota de tratamento, e o nome do botão acha o cartão", async () => {
   const log = join(dir, "lark-note.log");
   const lark = join(dir, "lark-cli-note");
-  // A form submit has an empty action_value: the card's number is in the button's name, the note in form_value.
+  // O envio de um formulário tem action_value vazio: o número do cartão está no nome do botão, a nota no form_value.
   writeFileSync(
     lark,
     `#!/bin/sh
 echo "$*" >> "${log}"
 case "$*" in
   *"event consume"*)
-    echo '{"action_name":"handling_note_submit_7","action_tag":"button","action_value":"","form_value":"{\\"note\\":\\"已回他，下周发视频\\"}","operator_id":"ou_me","message_id":"om_7"}'
+    echo '{"action_name":"handling_note_submit_7","action_tag":"button","action_value":"","form_value":"{\\"note\\":\\"respondi a ele, o vídeo sai na semana que vem\\"}","operator_id":"ou_me","message_id":"om_7"}'
     echo '{"action_name":"handling_note_submit_7","action_value":"{\\"card\\":7,\\"choice\\":0}","operator_id":"ou_me","message_id":"om_7"}'
     exec sleep 30 ;;
   *) cat > /dev/null; echo '{"ok":true,"data":{"message_id":"om_7"}}' ;;
@@ -359,24 +372,24 @@ esac
   assert.deepEqual(
     calls.filter((c) => c[0] === "answer"),
     [
-      ["answer", 7, { choice: 0, by: "ou_me", ref: "om_7", text: "已回他，下周发视频" }],
+      ["answer", 7, { choice: 0, by: "ou_me", ref: "om_7", text: "respondi a ele, o vídeo sai na semana que vem" }],
       ["answer", 7, { choice: 0, by: "ou_me", ref: "om_7" }],
     ],
-    "a submitted note and a plain click both count, the click with no empty text",
+    "uma nota enviada e um clique simples contam os dois, o clique sem texto vazio",
   );
 });
 
-test("feishu: an ask card's text form answers with the words and no choice", async () => {
+test("feishu: o formulário de texto de um cartão de pergunta responde com o texto e sem escolha", async () => {
   const log = join(dir, "lark-free.log");
   const lark = join(dir, "lark-cli-free");
-  // A free-text submit has no choice: the words are the answer, and an empty one answers nothing.
+  // Um envio de texto livre não tem escolha: o texto é a resposta, e um vazio não responde nada.
   writeFileSync(
     lark,
     `#!/bin/sh
 echo "$*" >> "${log}"
 case "$*" in
   *"event consume"*)
-    echo '{"action_name":"ask_text_submit_7","action_tag":"button","action_value":"","form_value":"{\\"note\\":\\"账号 test-ops 密码 s3cret\\"}","operator_id":"ou_me","message_id":"om_7"}'
+    echo '{"action_name":"ask_text_submit_7","action_tag":"button","action_value":"","form_value":"{\\"note\\":\\"conta test-ops senha s3cret\\"}","operator_id":"ou_me","message_id":"om_7"}'
     echo '{"action_name":"ask_text_submit_7","action_tag":"button","action_value":"","form_value":"{\\"note\\":\\"   \\"}","operator_id":"ou_me","message_id":"om_7"}'
     exec sleep 30 ;;
   *) cat > /dev/null; echo '{"ok":true,"data":{"message_id":"om_7"}}' ;;
@@ -408,12 +421,12 @@ esac
   await feishu({ hub: hub as any, options: { user: "ou_me", lark }, log: () => {}, signal: stop.signal });
   assert.deepEqual(
     calls.filter((c) => c[0] === "answer"),
-    [["answer", 7, { by: "ou_me", ref: "om_7", text: "账号 test-ops 密码 s3cret" }]],
-    "the words count without a choice, and an empty submit doesn't answer",
+    [["answer", 7, { by: "ou_me", ref: "om_7", text: "conta test-ops senha s3cret" }]],
+    "o texto conta sem escolha, e um envio vazio não responde",
   );
 });
 
-test("a webhook channel posts words and the link once, and has nothing to do for an update", async () => {
+test("um canal webhook posta o texto e o link uma vez, e não tem nada a fazer numa atualização", async () => {
   const seen: any[] = [];
   const target = createServer((req, res) => {
     let text = "";
@@ -464,8 +477,8 @@ test("a webhook channel posts words and the link once, and has nothing to do for
   });
   target.close();
   assert.equal(seen.length, 2);
-  assert.equal(seen[0].text.content, `${base.title}\n\n${literal}\n\n1. 删\n2. 留着\n\n${base.link}`);
-  assert.match(seen[0].text.content, /要不要删[\s\S]*1\. 删[\s\S]*https:\/\/hub\.test\/c\/x/);
+  assert.equal(seen[0].text.content, `${base.title}\n\n${literal}\n\n1. Apagar\n2. Manter\n\n${base.link}`);
+  assert.match(seen[0].text.content, /Apagar ou não[\s\S]*1\. Apagar[\s\S]*https:\/\/hub\.test\/c\/x/);
   assert.deepEqual(calls, [
     ["delivered", 5, 1, "sent-5"],
     ["delivered", 5, 2, "sent-5"],
@@ -473,11 +486,11 @@ test("a webhook channel posts words and the link once, and has nothing to do for
   ]);
 });
 
-test("GitHub: signed or not taken, and what it says becomes a plain event", () => {
+test("GitHub: com assinatura errada ou sem ela é recusado, e o que ele diz vira um evento simples", () => {
   const secret = "s3cret";
   const body = JSON.stringify({
     action: "opened",
-    issue: { number: 12, title: "首页打不开", body: "详情", html_url: "https://github.com/a/b/issues/12" },
+    issue: { number: 12, title: "a home não abre", body: "detalhes", html_url: "https://github.com/a/b/issues/12" },
     repository: { full_name: "a/b", html_url: "https://github.com/a/b" },
   });
   const headers = (b: string, over: object = {}) => ({
@@ -491,14 +504,14 @@ test("GitHub: signed or not taken, and what it says becomes a plain event", () =
       id: "d-1",
       type: "issues.opened",
       subject: "a/b#12",
-      summary: "首页打不开",
-      detail: "详情",
+      summary: "a home não abre",
+      detail: "detalhes",
       link: "https://github.com/a/b/issues/12",
     },
   ]);
   assert.throws(() => github({ headers: headers(body, { "x-hub-signature-256": "sha256=00" }), body, secret }));
   assert.throws(() => github({ headers: { "x-github-event": "issues" }, body, secret }));
-  assert.throws(() => github({ headers: headers(body), body, secret: "" }), "no secret set up takes nothing");
+  assert.throws(() => github({ headers: headers(body), body, secret: "" }), "sem segredo configurado, nada é aceito");
   assert.deepEqual(github({ headers: headers("{}", { "x-github-event": "ping" }), body: "{}", secret }), []);
   const odd = JSON.stringify({ repository: { full_name: "a/b c" } });
   assert.match(
@@ -507,7 +520,7 @@ test("GitHub: signed or not taken, and what it says becomes a plain event", () =
   );
 });
 
-/** A Feishu channel handed these cards, with a lark-cli that refuses every update: what it ran, and what it told the hub. */
+/** Um canal Feishu que recebe estes cartões, com um lark-cli que recusa toda atualização: o que rodou e o que reportou. */
 async function refusedUpdates(given: Card[]) {
   const log = join(dir, "lark-patch.log");
   const lark = join(dir, "lark-patch");
@@ -550,26 +563,26 @@ esac
   return { lines: readFileSync(log, "utf8").trim().split("\n"), calls };
 }
 
-test("feishu: a settled card that can't be updated is sent again, once for each version", async () => {
-  // Failure this guards: the bot didn't send the message being updated, so Feishu refuses and the update is dropped once the
-  // tries run out. The reader is then stuck looking at the version before the answer.
+test("feishu: um cartão já resolvido que não pode ser atualizado é enviado de novo, uma vez por versão", async () => {
+  // Falha que isto evita: o bot não enviou a mensagem que está sendo atualizada, então o Feishu recusa e a atualização
+  // é descartada quando as tentativas acabam. Quem lê fica então preso na versão anterior à resposta.
   const { lines, calls } = await refusedUpdates([{ ...base, version: 2, ref: "om_old", state: "decided", choice: 1 }]);
   assert.ok(
     lines.some((l) => l.includes("messages patch --message-id om_old")),
-    "the message that was sent is tried first",
+    "a mensagem que foi enviada é tentada primeiro",
   );
   const sends = lines.filter((l) => l.includes("+messages-send"));
-  assert.equal(sends.length, 1, "a refused update falls back to a new message");
-  assert.ok(sends[0].includes("--idempotency-key agent-autoloop-card-5-v2 "), "the second message is this version's");
-  assert.deepEqual(calls, [["delivered", 5, 2, "om_old"]], "the hub goes on knowing the message it first heard of");
+  assert.equal(sends.length, 1, "uma atualização recusada cai para uma mensagem nova");
+  assert.ok(sends[0].includes("--idempotency-key agent-autoloop-card-5-v2 "), "a segunda mensagem é desta versão");
+  assert.deepEqual(calls, [["delivered", 5, 2, "om_old"]], "a central segue com a mensagem de que ouviu primeiro");
 });
 
-test("feishu: an open card that can't be updated isn't sent again, and a first message is keyed by the card alone", async () => {
-  // Failure this guards: the hub only counts answers on the first message, so buttons on a second one would do nothing; a
-  // first message keyed by its version comes twice when a report is lost and the card has moved on.
+test("feishu: cartão aberto que não pode ser atualizado não é reenviado, e a 1ª chave é só o cartão", async () => {
+  // Falha que isto evita: a central só conta respostas na primeira mensagem, então botões numa segunda não fariam
+  // nada; uma primeira mensagem com a versão na chave chega duas vezes quando um relatório se perde e o cartão seguiu.
   const open = await refusedUpdates([{ ...base, version: 2, ref: "om_old" }]);
   assert.equal(open.lines.filter((l) => l.includes("+messages-send")).length, 0);
-  assert.deepEqual(open.calls, [["failed", 5, 2]], "it's tried again later");
+  assert.deepEqual(open.calls, [["failed", 5, 2]], "nova tentativa mais tarde");
 
   const first = await refusedUpdates([{ ...base, version: 3, ref: null }]);
   const [send] = first.lines.filter((l) => l.includes("+messages-send"));

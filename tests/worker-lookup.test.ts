@@ -1,10 +1,11 @@
-// Failure modes: the worker cannot run ps at all (the sandbox forbids it, or it is missing or not executable), and it
-// reports a run that is still going as finished because the failed lookup was read as "the process is gone"; or, unable
-// to look, it holds a stuck or stopped run forever because its timeout and its stop wait on a sighting that never comes;
-// or it holds back the result of a run that has ended, stopping a process group it can't see anything left in; or, unable
-// to see a group it stopped itself because the turn was over, it throws away the answer the turn gave and the hub runs
-// the work again. Or, waiting on a slow lookup (PowerShell takes over a second to start on Windows), it holds up the
-// hub that shares its process, so the state, the stream and answers to cards stall while any run is going.
+// Modos de falha: o worker não consegue rodar o ps de jeito nenhum (o sandbox proíbe, ou ele está ausente ou não é
+// executável) e reporta uma rodada ainda em execução como concluída porque a consulta que falhou foi lida como "o
+// processo se foi"; ou, sem conseguir olhar, segura para sempre uma rodada travada ou parada porque seu estouro de tempo
+// e sua parada esperam uma observação que nunca chega; ou segura o resultado de uma rodada que terminou, parando um grupo
+// de processos no qual não consegue ver nada que tenha sobrado; ou, sem conseguir ver um grupo que ele mesmo parou porque
+// o turno acabou, joga fora a resposta que o turno deu e a central refaz o trabalho. Ou, esperando por uma consulta lenta
+// (o PowerShell leva mais de um segundo para iniciar no Windows), segura a central que compartilha seu processo, de modo
+// que o estado, o stream e as respostas aos cartões travam enquanto qualquer rodada estiver em execução.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -24,7 +25,7 @@ process.env.SHELL = "/bin/sh";
 after(() => rmSync(scratch, { recursive: true, force: true }));
 const { createWorker } = await import("../worker/worker.ts");
 
-/** Put a ps in front of the real one that answers the question the way a gone process does. */
+/** Coloca um ps na frente do real que responde à pergunta do jeito que um processo que se foi responde. */
 function psSaysGone() {
   writeFileSync(join(bin, "ps"), `#!/bin/sh\nexit 1\n`, { mode: 0o755 });
   chmodSync(join(bin, "ps"), 0o755);
@@ -32,8 +33,8 @@ function psSaysGone() {
 }
 
 /**
- * Put a ps in front of the real one that fails the way one that cannot run does. A file without the execute bit would
- * not do: the lookup skips it and finds the real ps further along PATH, so outside a sandbox the test would check nothing.
+ * Coloca um ps na frente do real que falha do jeito que um que não consegue rodar falha. Um arquivo sem o bit de execução
+ * não serviria: a consulta o pula e encontra o ps real mais adiante no PATH, então fora de um sandbox o teste não verificaria nada.
  */
 function psCannotRun() {
   writeFileSync(join(bin, "ps"), `#!/bin/sh\nexit 126\n`, { mode: 0o755 });
@@ -62,7 +63,7 @@ function workerThatReports(results: any[], job: any, now: () => number = Date.no
   });
 }
 
-/** Each run gets its own number so one run's exit file is never read as another's. */
+/** Cada rodada recebe seu próprio número para que o arquivo de saída de uma nunca seja lido como o de outra. */
 function jobFor(run: number, seconds: number, timeout?: number) {
   return {
     run,
@@ -70,7 +71,7 @@ function jobFor(run: number, seconds: number, timeout?: number) {
     attempt: 1,
     session: null,
     askFirst: [],
-    rule: { name: "lookup", cwd: project, prompt: "Read the input." },
+    rule: { name: "lookup", cwd: project, prompt: "Leia a entrada." },
     agent: {
       id: "a",
       name: "Agent",
@@ -83,7 +84,7 @@ function jobFor(run: number, seconds: number, timeout?: number) {
   };
 }
 
-test("looking at a run's process holds up nothing else in the process", async () => {
+test("olhar o processo de uma rodada não segura nada mais no processo", async () => {
   writeFileSync(join(bin, "ps"), `#!/bin/sh\nsleep 0.5\nexit 1\n`, { mode: 0o755 });
   chmodSync(join(bin, "ps"), 0o755);
   process.env.PATH = `${bin}:${process.env.PATH ?? ""}`;
@@ -97,10 +98,10 @@ test("looking at a run's process holds up nothing else in the process", async ()
   } finally {
     clearInterval(beat);
   }
-  assert.ok(beats >= 10, `the process was held up while it looked: ${beats} beats in half a second`);
+  assert.ok(beats >= 10, `o processo ficou seguro enquanto olhava: ${beats} batidas em meio segundo`);
 });
 
-test("a run whose process is gone is reported as finished", async () => {
+test("uma rodada cujo processo se foi é reportada como concluída", async () => {
   psSaysGone();
   const results: any[] = [];
   const worker = workerThatReports(results, jobFor(12, 0));
@@ -108,11 +109,11 @@ test("a run whose process is gone is reported as finished", async () => {
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 1, "the finished run was never reported");
+  assert.equal(results.length, 1, "a rodada concluída nunca foi reportada");
 });
 
-test("a run that is gone with no exit, and a group that can't be looked at, is reported without waiting", async () => {
-  // Still really going, so there's no exit file whatever the machine's speed: only the lookup says it's gone.
+test("uma rodada que se foi sem saída, e um grupo que não pode ser consultado, é reportada sem esperar", async () => {
+  // Ainda está realmente em execução, então não há arquivo de saída seja qual for a velocidade da máquina: só a consulta diz que se foi.
   psSaysGone();
   const results: any[] = [];
   const worker = workerThatReports(results, jobFor(16, 1));
@@ -120,10 +121,10 @@ test("a run that is gone with no exit, and a group that can't be looked at, is r
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 1, "it was held back");
+  assert.equal(results.length, 1, "ela ficou segurada");
 });
 
-test("a run that failed, and a group that can't be looked at, is reported without waiting", async () => {
+test("uma rodada que falhou, e um grupo que não pode ser consultado, é reportada sem esperar", async () => {
   psCannotRun();
   const results: any[] = [];
   const job = jobFor(17, 0);
@@ -133,11 +134,11 @@ test("a run that failed, and a group that can't be looked at, is reported withou
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 1, "it was held back");
-  assert.match(results[0].error, /退出码 3：boom/);
+  assert.equal(results.length, 1, "ela ficou segurada");
+  assert.match(results[0].error, /código de saída 3: boom/);
 });
 
-test("a run that cannot be looked up is not reported as finished", async () => {
+test("uma rodada que não pode ser consultada não é reportada como concluída", async () => {
   psCannotRun();
   const results: any[] = [];
   const worker = workerThatReports(results, jobFor(11, 30));
@@ -145,18 +146,18 @@ test("a run that cannot be looked up is not reported as finished", async () => {
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 0, "the run was reported before it finished");
+  assert.equal(results.length, 0, "a rodada foi reportada antes de terminar");
   process.kill(-JSON.parse(readFileSync(join(home, "worker", "runs", "11-1", "entry.json"), "utf8")).pid, "SIGKILL");
 });
 
-test("a stuck run that cannot be looked up still times out and is reported", async () => {
+test("uma rodada travada que não pode ser consultada ainda estoura o tempo e é reportada", async () => {
   psCannotRun();
   const results: any[] = [];
   let moment = Date.now();
   const worker = workerThatReports(results, jobFor(15, 30, 1), () => moment);
   await worker.tick();
   await worker.tick();
-  assert.equal(results.length, 0, "the run was reported before its timeout");
+  assert.equal(results.length, 0, "a rodada foi reportada antes do seu estouro de tempo");
   moment += 61_000;
   await worker.tick();
   moment += 11_000;
@@ -164,10 +165,10 @@ test("a stuck run that cannot be looked up still times out and is reported", asy
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 1, "the timed-out run was never reported");
+  assert.equal(results.length, 1, "a rodada que estourou o tempo nunca foi reportada");
 });
 
-test("a run that cannot be looked up is reported once its exit file shows up", async () => {
+test("uma rodada que não pode ser consultada é reportada assim que seu arquivo de saída aparece", async () => {
   psCannotRun();
   const results: any[] = [];
   const worker = workerThatReports(results, jobFor(14, 0));
@@ -175,12 +176,12 @@ test("a run that cannot be looked up is reported once its exit file shows up", a
     await worker.tick();
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(results.length, 1, "the finished run was never reported");
+  assert.equal(results.length, 1, "a rodada concluída nunca foi reportada");
 });
 
 const runs = join(home, "worker", "runs");
 
-/** A child in a process group of its own, the way a run's shell is started. */
+/** Um filho num grupo de processos só dele, do jeito que o shell de uma rodada é iniciado. */
 function ownGroup() {
   const child = spawn("/bin/sh", ["-c", "sleep 30"], { detached: true, stdio: "ignore" });
   const gone = new Promise<void>((resolve) => child.once("exit", () => resolve()));
@@ -197,7 +198,7 @@ function ownGroup() {
   };
 }
 
-/** A run that was already stopped, so that only confirming its group gone is left to do. */
+/** Uma rodada que já foi parada, de modo que só falta confirmar que seu grupo se foi. */
 function stoppedRun(run: number, pid: number, how: object = { why: "cancel" }) {
   const dir = join(runs, `${run}-1`);
   mkdirSync(dir, { recursive: true });
@@ -222,7 +223,7 @@ function stoppedRun(run: number, pid: number, how: object = { why: "cancel" }) {
   return () => rmSync(dir, { recursive: true, force: true });
 }
 
-/** Claims nothing: these tests are about runs that are already in hand. */
+/** Não pega nada: estes testes são sobre rodadas que já estão em mãos. */
 function idleWorker(results: any[]) {
   return createWorker({
     name: "test",
@@ -238,7 +239,7 @@ function idleWorker(results: any[]) {
   });
 }
 
-test("a stopped run whose group can't be seen is reported as failed, never as cancelled", async () => {
+test("uma rodada parada cujo grupo não pode ser visto é reportada como falha, nunca como cancelada", async () => {
   psCannotRun();
   const group = ownGroup();
   const clean = stoppedRun(18, group.pid);
@@ -259,16 +260,16 @@ test("a stopped run whose group can't be seen is reported as failed, never as ca
     group.kill();
     clean();
   }
-  assert.equal(results.length, 1, "the run was never handed in");
+  assert.equal(results.length, 1, "a rodada nunca foi entregue");
   assert.equal(
     results[0].outcome,
     "failed",
-    "cancelled would release the item while a process may still be running in it",
+    "cancelled liberaria o assunto enquanto um processo ainda pode estar rodando nele",
   );
-  assert.match(String(results[0].error), /没能确认/, "the reason has to say what wasn't seen");
+  assert.match(String(results[0].error), /não confirmei o fim do grupo/, "o motivo tem de dizer o que não foi visto");
 });
 
-test("a stopped run whose group is gone is cancelled even when ps can't run", async () => {
+test("uma rodada parada cujo grupo se foi é cancelada mesmo quando o ps não consegue rodar", async () => {
   psCannotRun();
   const group = ownGroup();
   group.kill();
@@ -280,10 +281,10 @@ test("a stopped run whose group is gone is cancelled even when ps can't run", as
   } finally {
     clean();
   }
-  assert.equal(results[0]?.outcome, "cancelled", "a group that is gone is a stop that can be confirmed");
+  assert.equal(results[0]?.outcome, "cancelled", "um grupo que se foi é uma parada que pode ser confirmada");
 });
 
-test("a stopped run whose group is still there is not handed in until it has gone", async () => {
+test("uma rodada parada cujo grupo ainda está lá não é entregue até ele se ir", async () => {
   psCannotRun();
   const group = ownGroup();
   const clean = stoppedRun(20, group.pid);
@@ -291,21 +292,21 @@ test("a stopped run whose group is still there is not handed in until it has gon
   const worker = idleWorker(results);
   try {
     await worker.tick();
-    assert.equal(results.length, 0, "reported before the group was seen gone");
+    assert.equal(results.length, 0, "reportada antes de o grupo ser visto como ido");
     await group.gone;
     await worker.tick();
   } finally {
     clean();
     group.kill();
   }
-  assert.equal(results[0]?.outcome, "cancelled", "the stop was confirmed once the group had gone");
+  assert.equal(results[0]?.outcome, "cancelled", "a parada foi confirmada assim que o grupo se foi");
 });
 
-test("a run stopped because its turn was over keeps its answer when its group can't be seen", async () => {
+test("uma rodada parada porque seu turno acabou mantém sua resposta quando seu grupo não pode ser visto", async () => {
   psCannotRun();
   const group = ownGroup();
   const clean = stoppedRun(21, group.pid, { why: "finished", finishedAt: Date.now() - 30_000 });
-  writeFileSync(join(runs, "21-1", "stdout-1.log"), "做完了");
+  writeFileSync(join(runs, "21-1", "stdout-1.log"), "Concluído");
   const results: any[] = [];
   const originalKill = process.kill;
   try {
@@ -323,7 +324,7 @@ test("a run stopped because its turn was over keeps its answer when its group ca
     group.kill();
     clean();
   }
-  assert.equal(results.length, 1, "the run was never handed in");
-  assert.notEqual(results[0].outcome, "failed", "a failed run is tried again, and the work it did is done twice");
-  assert.match(String(results[0].summary), /做完了/);
+  assert.equal(results.length, 1, "a rodada nunca foi entregue");
+  assert.notEqual(results[0].outcome, "failed", "uma falha é tentada de novo e o trabalho seria feito duas vezes");
+  assert.match(String(results[0].summary), /Concluído/);
 });

@@ -1,5 +1,5 @@
-// A project's delivery settings and what they say about a release. The Ship action runs from a copy of this file in the
-// project, so it imports nothing beyond Node.
+// As configurações de entrega de um projeto e o que elas dizem sobre uma publicação. A action Ship roda a partir de uma
+// cópia deste arquivo no projeto, por isso não importa nada além do Node.
 import { execFileSync, spawnSync } from "node:child_process";
 
 export type Settings = {
@@ -13,27 +13,28 @@ export type Settings = {
     xhigh: string[];
     status: string;
     command?: string[];
-    /** Who reviews what each agent wrote; null for nobody. */
+    /** Quem revisa o que cada Agent escreveu; null para ninguém. */
     agents: Record<string, Reviewer | null>;
-    /** The GitHub accounts, by id, whose word on which agent wrote a change counts. */
+    /** As contas do GitHub, por id, cuja palavra sobre qual Agent escreveu uma mudança é a que vale. */
     trusted: number[];
   };
   health?: { url: string; require: Record<string, unknown>; field: string; pattern: string };
 };
-/** The built-in Codex review with this model and depth, or a command in its place. */
+/** A revisão integrada do Codex com este modelo e esta profundidade, ou um comando no lugar dela. */
 export type Reviewer = { model?: string; effort?: string; command?: string[] };
 export type Live = { sha: string; release: string };
 
 export const REPO = /^[\w.-]+\/[\w.-]+$/;
 export const AGENT = /^[a-z][a-z0-9-]{0,31}$/;
-/** A file that isn't executable or a link, or isn't there: only such a change can be left out of a review or a release. */
+/** Um arquivo que não é executável nem link, ou que não existe: só uma mudança assim fica de fora de uma revisão ou de
+ * uma publicação. */
 export const PLAIN_FILE_MODES = ["000000", "100644"];
 const SETTINGS_KEYS = ["repo", "internal", "admin_merge", "check", "ship", "review", "health"];
 const isWords = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((word) => typeof word === "string" && word.length > 0);
 const isPaths = (value: unknown) =>
   isWords(value) && value.every((path) => !path.startsWith("/") && !path.split("/").includes(".."));
-/** A model and a depth go onto Codex's command line: neither may read as an option. */
+/** Um modelo e uma profundidade vão para a linha de comando do Codex: nenhum dos dois pode ser lido como opção. */
 function isReviewer(value: any) {
   if (value === null) return true;
   if (typeof value !== "object" || Array.isArray(value)) return false;
@@ -44,12 +45,12 @@ function isReviewer(value: any) {
   const named = model === undefined || (typeof model === "string" && /^[A-Za-z0-9][\w.-]*$/.test(model));
   return named && (effort === undefined || (typeof effort === "string" && /^[a-z]+$/.test(effort)));
 }
-/** Settings may write a named group the way Python does; JavaScript only reads the other way. */
+/** As configurações podem escrever um grupo nomeado do jeito do Python; o JavaScript só lê do outro jeito. */
 const jsPattern = (pattern: string) => pattern.replace("(?P<sha>", "(?<sha>");
 
 export function settings(value: any, testLocalHealth = false): Settings {
   const bad = () => {
-    throw new Error("ops/delivery.json 的设置不正确");
+    throw new Error("As configurações em ops/delivery.json estão incorretas");
   };
   if (!value || !REPO.test(value.repo ?? "") || !isPaths(value.internal)) bad();
   if (Object.keys(value).some((key) => !SETTINGS_KEYS.includes(key))) bad();
@@ -61,7 +62,8 @@ export function settings(value: any, testLocalHealth = false): Settings {
   if (!agents || typeof agents !== "object" || Array.isArray(agents)) bad();
   if (!Object.entries(agents).every(([name, reviewer]) => AGENT.test(name) && isReviewer(reviewer))) bad();
   if (!Array.isArray(trusted) || !trusted.every((id) => Number.isSafeInteger(id) && id > 0)) bad();
-  // Anyone who can write a commit status, a workflow of the PR's own included, could otherwise name its agent.
+  // Qualquer um que consiga escrever um status de commit, inclusive um workflow do próprio PR, poderia sem isso
+  // declarar o nome do próprio Agent.
   if (Object.keys(agents).length && !trusted.length) bad();
   if (value.admin_merge !== undefined && !isWords(value.admin_merge)) bad();
   for (const workflow of [value.check?.workflow, value.ship?.workflow]) {
